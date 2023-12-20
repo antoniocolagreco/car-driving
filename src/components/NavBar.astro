@@ -1,0 +1,12 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+import NavLink from './NavLink.astro';
+type Props = HTMLAttributes<'nav'>
+const { class: className, ...otherProps } = Astro.props
+---
+
+<nav class:list={['', className]} {...otherProps}>
+    <ul class='flex gap-4'>
+        <li><NavLink href='/'>Home</NavLink></li><li><NavLink href='/drive'>Self Driving Car</NavLink></li><li></li>
+    </ul>
+</nav>

@@ -1,0 +1,31 @@
+---
+import Button from '../components/Button.astro'
+import Modal from '../components/Modal.astro'
+import DefaultLayout from '../layouts/DefaultLayout.astro'
+---
+
+<script>
+    document.addEventListener('astro:page-load', () => {
+        const dialog = document.getElementById('hello-dialog') as HTMLDialogElement | undefined
+        const openDialogButton = document.getElementById('open-button') as HTMLButtonElement | undefined
+        const closeDialogButton = document.getElementById('close-button') as HTMLButtonElement | undefined
+
+        const handleButtonClick = () => {
+            dialog?.showModal()
+        }
+        const handleDialogClick = () => {
+            dialog?.close()
+        }
+
+        openDialogButton?.addEventListener('click', handleButtonClick)
+        closeDialogButton?.addEventListener('click', handleDialogClick)
+    })
+</script>
+
+<DefaultLayout title='Home'>
+    <Modal id='hello-dialog' slot='dialog' title='Modal'>
+        <p>Hello World!</p>
+        <Button id='close-button' slot='controls'>Close</Button>
+    </Modal>
+    <Button id='open-button'>Hello</Button>
+</DefaultLayout>
