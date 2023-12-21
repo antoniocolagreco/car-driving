@@ -1,4 +1,5 @@
 import { Car } from '../models/Car'
+import Position from '../models/Position'
 
 export function init(canvas: HTMLCanvasElement) {
     window.onresize = () => resizeCanvas()
@@ -11,15 +12,16 @@ export function init(canvas: HTMLCanvasElement) {
     resizeCanvas()
 
     const ctx = canvas.getContext('2d')
-    const car = new Car()
-    car.takeControl()
+    if (!ctx) return
+    const car = new Car(ctx, new Position(0, 0))
+    car.controls.drive()
 
     animate()
 
     function animate() {
         resizeCanvas()
         car.update()
-        car.draw(ctx, { width: canvas.width, height: canvas.height })
+        car.draw()
         requestAnimationFrame(animate)
     }
 }

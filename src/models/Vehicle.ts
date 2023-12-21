@@ -1,43 +1,33 @@
 import Controls from './Controls'
-import type { Position, Size } from './definitions'
+import Drawable from './Drawable'
+import type Position from './Position'
+import type Size from './Size'
+import type VehicleStats from './VehicleStats'
 
-export default class Vehicle {
-    position: Position
-    size: Size
-    controls: Controls = new Controls()
+export default class Vehicle extends Drawable {
+    speed: number
+    stats: VehicleStats
+    controls: Controls
 
-    constructor(size: Size) {
-        this.position = { x: 0, y: 0 }
-        this.size = size
+    constructor(context: CanvasRenderingContext2D, position: Position, size: Size, stats: VehicleStats) {
+        super(context, position, size)
+        this.speed = 0
+        this.stats = stats
+        this.controls = new Controls()
     }
 
     update() {
-        if (this.controls.forward) {
-            this.position.y -= 2
-        }
         if (this.controls.reverse) {
-            this.position.y += 2
+            if (this.speed > -this.stats.maxReverse) this.speed -= this.stats.breakPower
+        } else if (this.controls.forward) {
+            if (this.speed < this.stats.maxSpeed) this.speed += this.stats.acceleration
+        } else {
+            if (this.speed > 0) {
+                this.speed -= 0.01
+            } else if (this.speed < 0) {
+                this.speed += 0.01
+            }
         }
-    }
-
-    draw(ctx: CanvasRenderingContext2D | null, canvasSize: Size) {
-        if (!ctx) return
-        ctx.beginPath()
-        ctx.rect(
-            canvasSize.width / 2 + this.position.x - this.size.width / 2,
-            canvasSize.height / 2 + this.position.y - this.size.height / 2,
-            this.size.width,
-            this.size.height
-        )
-
-        ctx.fill()
-    }
-
-    takeControl() {
-        this.controls.install()
-    }
-
-    releaseControl() {
-        this.controls.unistall()
+        this.position.y -= this.speed
     }
 }

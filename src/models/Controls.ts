@@ -38,12 +38,12 @@ export default class Controls {
         }
     }
 
-    install = () => {
+    drive = () => {
         document.onkeydown = (event: KeyboardEvent) => this.#handleKeyDown(event.key)
         document.onkeyup = (event: KeyboardEvent) => this.#handleKeyUp(event.key)
     }
 
-    unistall = () => {
+    release = () => {
         document.onkeydown = (event: KeyboardEvent) => this.#handleKeyDown(event.key)
         document.onkeyup = (event: KeyboardEvent) => this.#handleKeyUp(event.key)
     }
