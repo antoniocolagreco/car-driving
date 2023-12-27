@@ -6,17 +6,33 @@ import type VehicleStats from './VehicleStats'
 
 export default class Vehicle extends Drawable {
     speed: number
+    angle: number
     stats: VehicleStats
     controls: Controls
 
     constructor(context: CanvasRenderingContext2D, position: Position, size: Size, stats: VehicleStats) {
         super(context, position, size)
         this.speed = 0
+        this.angle = 0
         this.stats = stats
         this.controls = new Controls()
     }
 
     update() {
+        if (this.controls.left) {
+            this.angle -= 0.03
+        } else if (this.controls.right) {
+            this.angle += 0.03
+        } else {
+            if (this.angle < -0.01) {
+                this.angle += 0.01
+            } else if (this.angle > 0.01) {
+                this.angle -= 0.01
+            } else {
+                this.angle = 0
+            }
+        }
+
         if (this.controls.reverse) {
             if (this.speed > -this.stats.maxReverse) this.speed -= this.stats.breakPower
         } else if (this.controls.forward) {

@@ -1,12 +1,33 @@
 ---
-import type { HTMLAttributes } from 'astro/types';
-import NavLink from './NavLink.astro';
+import type { HTMLAttributes } from 'astro/types'
+import { readdirSync } from 'fs'
+import NavLink from './NavLink.astro'
 type Props = HTMLAttributes<'nav'>
 const { class: className, ...otherProps } = Astro.props
+
+const pages: string[] = []
+
+try {
+    pages.push(...(readdirSync('./src/pages') as string[]).map((t) => t.split('.')[0]))
+    console.log(pages)
+} catch (error) {}
 ---
 
 <nav class:list={['', className]} {...otherProps}>
-    <ul class='flex gap-4'>
-        <li><NavLink href='/'>Home</NavLink></li><li><NavLink href='/drive'>Self Driving Car</NavLink></li><li></li>
+    <ul class='flex gap-4 mx-1'>
+        <li>
+            <NavLink href='/'>Home</NavLink>
+        </li>
+        {
+            pages.map((page) => {
+                if (page !== 'index') {
+                    return (
+                        <li>
+                            <NavLink href={`/${page}`}>{page}</NavLink>
+                        </li>
+                    )
+                }
+            })
+        }
     </ul>
 </nav>
