@@ -55,13 +55,13 @@ export default class Vehicle extends Drawable {
     }
 
     objectDrawingFunction(context: CanvasRenderingContext2D): void {
-        context.fillRect(-this.size.width / 2, -this.size.height / 2, this.size.width, this.size.height)
+        context.fillRect(0 - this.size.width / 2, 0 - this.size.height / 2, this.size.width, this.size.height)
 
         context.beginPath()
         context.strokeStyle = '#fff'
         context.lineWidth = 3
-        context.moveTo(0, 0)
-        context.lineTo(0, -this.size.height / 2)
+        context.moveTo(0, 0 - this.size.height / 2)
+        context.lineTo(0, 0)
         context.stroke()
     }
 

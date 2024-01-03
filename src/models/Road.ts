@@ -24,8 +24,9 @@ export default class Road extends Drawable {
 
     getLaneCenter(index: number) {
         if (index < 0) index = 0
-        if (index > this.lanesCount) index = this.lanesCount - 1
-        return -this.position.x + (this.laneWidth * index) / 2
+        if (index + 1 > this.lanesCount) index = this.lanesCount
+
+        return -this.size.width / 2 + (this.laneWidth * (index + 1)) / 2
     }
 
     objectDrawingFunction(context: CanvasRenderingContext2D): void {

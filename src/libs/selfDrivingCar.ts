@@ -19,37 +19,50 @@ export function init(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d')
     const background = new Background()
     const road = new Road(new Position(0, 0), new Size(300, 1000000))
-    const car = new Car(new Position(road.getLaneCenter(3), 0))
+    const car = new Car(new Position(road.getLaneCenter(0), 0))
     car.controls.drive()
 
-    let interval = 1000 / 60
-    let last = 0
+    let framesInterval = 1000 / 60
+    let lastFrameTimestamp = 0
+
+    let fpsInterval = 1000
+    let lastFpsTimestamp = 0
+    let countedFrames = 0
+    let fpsLabel = 0
 
     function animate(timestamp: number) {
         if (!ctx) return
 
-        if (timestamp - last < interval) {
+        if (timestamp - lastFrameTimestamp < framesInterval) {
             requestAnimationFrame(animate)
             return
         }
+        lastFrameTimestamp = timestamp
 
         resizeCanvas()
 
-        ctx.save()
+        // ctx.save()
 
-        ctx.translate(-car.position.x, -car.position.y)
+        // ctx.translate(-car.position.x, -car.position.y)
 
         background.drawIn(ctx)
         road.drawIn(ctx)
         car.drawIn(ctx)
-        ctx.restore()
+        // ctx.restore()
+
+        countedFrames += 1
+        if (timestamp - lastFpsTimestamp >= fpsInterval) {
+            lastFpsTimestamp = timestamp
+            fpsLabel = countedFrames
+            countedFrames = 0
+        }
 
         ctx.fillStyle = '#fff'
         ctx.font = '20px monospace'
-        ctx.fillText(`Speed: ${Math.abs(car.speed).toFixed(2)}`, 50, canvas.height - 50)
-        ctx.fillText(`Steering: ${car.steeringPower.toFixed(2)}`, 50, canvas.height - 30)
+        ctx.fillText(`FPS: ${fpsLabel % 60} (frames per second)`, 50, canvas.height - 70)
+        ctx.fillText(`Speed: ${Math.abs(car.speed).toFixed(2)} (pixels per frame)`, 50, canvas.height - 50)
+        ctx.fillText(`Steering: ${car.steeringPower.toFixed(2)} (radiants per frame)`, 50, canvas.height - 30)
 
-        last = timestamp
         requestAnimationFrame(animate)
     }
 
