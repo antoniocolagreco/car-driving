@@ -9,8 +9,9 @@ const pages: string[] = []
 
 try {
     pages.push(...(readdirSync('./src/pages') as string[]).map((t) => t.split('.')[0]))
-    console.log(pages)
-} catch (error) {}
+} catch (error: any) {
+    console.error(error.message)
+}
 ---
 
 <nav class:list={['', className]} {...otherProps}>

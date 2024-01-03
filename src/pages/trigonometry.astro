@@ -5,13 +5,11 @@ import DefaultLayout from '../layouts/DefaultLayout.astro'
 <script>
     import { init } from '../libs/trigonometry'
     document.addEventListener('astro:page-load', () => {
-        const canvas = document.querySelector('#trigonometry') as HTMLCanvasElement | undefined
-        if (canvas) init(canvas)
+        const container = document.querySelector('#trigonometry-container') as HTMLDivElement | undefined
+        if (container) init(container)
     })
 </script>
 
 <DefaultLayout title='Trigonometry'>
-    <div class='h-full overflow-hidden'>
-        <canvas id='trigonometry' class="cursor-none"></canvas>
-    </div>
+    <div class='h-full overflow-hidden relative' id='trigonometry-container'></div>
 </DefaultLayout>

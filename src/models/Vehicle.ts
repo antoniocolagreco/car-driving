@@ -6,34 +6,28 @@ import type VehicleStats from './VehicleStats'
 
 export default class Vehicle extends Drawable {
     speed: number
-    angle: number
+    steeringPower: number
     stats: VehicleStats
     controls: Controls
 
-    constructor(context: CanvasRenderingContext2D, position: Position, size: Size, stats: VehicleStats) {
-        super(context, position, size)
+    constructor(position: Position, size: Size, stats: VehicleStats) {
+        super(position, size)
         this.speed = 0
-        this.angle = 0
+        this.steeringPower = 0
         this.stats = stats
         this.controls = new Controls()
     }
 
-    update() {
-        if (this.controls.left) {
-            this.angle -= 0.03
-        } else if (this.controls.right) {
-            this.angle += 0.03
-        } else {
-            if (this.angle < -0.01) {
-                this.angle += 0.01
-            } else if (this.angle > 0.01) {
-                this.angle -= 0.01
+    #move() {
+        if (this.controls.brake) {
+            if (this.speed > 0.1) {
+                this.speed -= this.stats.breakPower
+            } else if (this.speed < -0.1) {
+                this.speed += this.stats.breakPower
             } else {
-                this.angle = 0
+                this.speed = 0
             }
-        }
-
-        if (this.controls.reverse) {
+        } else if (this.controls.reverse) {
             if (this.speed > -this.stats.maxReverse) this.speed -= this.stats.breakPower
         } else if (this.controls.forward) {
             if (this.speed < this.stats.maxSpeed) this.speed += this.stats.acceleration
@@ -42,8 +36,37 @@ export default class Vehicle extends Drawable {
                 this.speed -= 0.01
             } else if (this.speed < 0) {
                 this.speed += 0.01
+            } else if (this.speed < 0.02 && this.speed > -0.02) {
+                this.speed = 0
             }
         }
-        this.position.y -= this.speed
+
+        this.steeringPower = this.speed > 1 ? -0.005 * this.speed + 0.035 : 0.03 * this.speed - 0.003
+        // const steeringDirection = this.speed > 0 ? 1 : -1
+
+        if (this.controls.left) {
+            this.angle -= this.steeringPower
+        } else if (this.controls.right) {
+            this.angle += this.steeringPower
+        }
+
+        this.position.x += Math.sin(this.angle) * this.speed
+        this.position.y -= Math.cos(this.angle) * this.speed
+    }
+
+    objectDrawingFunction(context: CanvasRenderingContext2D): void {
+        context.fillRect(-this.size.width / 2, -this.size.height / 2, this.size.width, this.size.height)
+
+        context.beginPath()
+        context.strokeStyle = '#fff'
+        context.lineWidth = 3
+        context.moveTo(0, 0)
+        context.lineTo(0, -this.size.height / 2)
+        context.stroke()
+    }
+
+    drawIn(context: CanvasRenderingContext2D) {
+        this.#move()
+        super.drawIn(context)
     }
 }

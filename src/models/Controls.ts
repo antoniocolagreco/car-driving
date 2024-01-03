@@ -3,6 +3,7 @@ export default class Controls {
     reverse: boolean = false
     left: boolean = false
     right: boolean = false
+    brake: boolean = false
 
     #handleKeyDown(key: string) {
         switch (key) {
@@ -17,6 +18,9 @@ export default class Controls {
                 break
             case 'ArrowRight':
                 this.right = true
+                break
+            case ' ':
+                this.brake = true
                 break
         }
     }
@@ -34,6 +38,9 @@ export default class Controls {
                 break
             case 'ArrowRight':
                 this.right = false
+                break
+            case ' ':
+                this.brake = false
                 break
         }
     }
