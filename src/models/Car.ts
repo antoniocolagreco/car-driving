@@ -1,10 +1,18 @@
-import type Position from './Position'
 import Size from './Size'
-import Vehicle from './Vehicle'
-import VehicleStats from './VehicleStats'
+import Stats from './Stats'
+import Vehicle, { type VehicleProps } from './Vehicle'
+
+export type CarProps = Omit<VehicleProps, 'stats'> & {
+    stats?: Stats
+}
 
 export class Car extends Vehicle {
-    constructor(position: Position) {
-        super(position, new Size(30, 50), new VehicleStats(5, 0.02, 1, 0.05))
+    constructor(props: CarProps) {
+        const { stats, size, ...otherProps } = props
+        super({
+            ...otherProps,
+            size: size ?? new Size(30, 50),
+            stats: stats ?? new Stats({ maxSpeed: 5, acceleration: 0.02, maxReverse: 1, breakPower: 0.05 }),
+        })
     }
 }

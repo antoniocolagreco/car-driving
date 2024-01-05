@@ -1,5 +1,5 @@
 /**@class Default to 0,0 */
-export default class Position {
+export default class Point {
     x: number
     y: number
 

@@ -1,4 +1,4 @@
-import Position from '../models/Position'
+import Point from '../models/Point'
 
 export const init = (container: HTMLElement) => {
     const mainCanvas = document.createElement('canvas')
@@ -20,13 +20,13 @@ export const init = (container: HTMLElement) => {
 
     if (!mainContext || !chartContext) return
 
-    const mainCanvasData: CanvasData = { center: new Position(0, 0), left: 0, right: 0, top: 0, bottom: 0 }
-    const chartCanvasData: CanvasData = { center: new Position(0, 0), left: 0, right: 0, top: 0, bottom: 0 }
+    const mainCanvasData: CanvasData = { center: new Point(0, 0), left: 0, right: 0, top: 0, bottom: 0 }
+    const chartCanvasData: CanvasData = { center: new Point(0, 0), left: 0, right: 0, top: 0, bottom: 0 }
 
     const mainTriangleData: TriangleData = {
-        A: new Position(0, 0),
-        B: new Position(100, -100),
-        C: new Position(100, 0),
+        A: new Point(0, 0),
+        B: new Point(100, -100),
+        C: new Point(100, 0),
         c: 0,
         b: 0,
         a: 0,
@@ -167,7 +167,7 @@ type Shadow = {
 
 type DrawTextProps = {
     text: string
-    position: Position | SimplePosition
+    position: Point | SimplePosition
     align?: CanvasTextAlign
     baseline?: CanvasTextBaseline
     fill?: string
@@ -177,27 +177,27 @@ type DrawTextProps = {
 }
 
 type DrawCircleProps = {
-    position: Position | SimplePosition
+    position: Point | SimplePosition
     radius?: number
     color?: string
 }
 
 type DrawLineProps = {
-    positions: (Position | SimplePosition)[]
+    positions: (Point | SimplePosition)[]
     thickness?: number
     dash?: number[]
     color?: string
 }
 
 type DrawSquareProps = {
-    coords?: [Position | SimplePosition, Position | SimplePosition]
+    coords?: [Point | SimplePosition, Point | SimplePosition]
     thickness?: number
     fillColor?: string
     strokeColor?: string
 }
 
 type DrawArcProps = {
-    position: Position | SimplePosition
+    position: Point | SimplePosition
     startAngle: number
     endAngle: number
     counterClockwise?: boolean
@@ -210,14 +210,14 @@ type DrawArcProps = {
 type DrawCornerProps = Omit<DrawArcProps, 'position' | 'startAngle' | 'endAngle'> & {}
 
 type CanvasData = {
-    center: Position
+    center: Point
     left: number
     right: number
     top: number
     bottom: number
 }
 
-type TriangleData = { A: Position; B: Position; C: Position; c: number; b: number; a: number }
+type TriangleData = { A: Point; B: Point; C: Point; c: number; b: number; a: number }
 
 type AngleData = { theta: number; sin: number; cos: number; tan: number }
 
@@ -249,17 +249,17 @@ const handleMouseMove = (
     angleData.theta = Math.asin(angleData.sin)
 }
 
-const calculateAverage = (p1: Position, p2: Position) => {
+const calculateAverage = (p1: Point, p2: Point) => {
     const x = (p1.x + p2.x) / 2
     const y = (p1.y + p2.y) / 2
-    return new Position(x, y)
+    return new Point(x, y)
 }
 
 const convertToDegree = (value: number) => {
     return value * (180 / Math.PI)
 }
 
-const calculateDistance = (p1: Position, p2: Position) => {
+const calculateDistance = (p1: Point, p2: Point) => {
     // const distance= Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2))
     const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y)
 
@@ -339,7 +339,7 @@ const drawSquare = (ctx: CanvasRenderingContext2D, props?: DrawSquareProps) => {
 const drawCoordinateSystem = (ctx: CanvasRenderingContext2D, canvasData: CanvasData) => {
     drawSquare(ctx, { fillColor: '#fff' })
 
-    for (let index = canvasData.center.x; index < canvasData.right + 10; index += 10) {
+    for (let index = 0; index < canvasData.right + 10; index += 10) {
         drawLine(ctx, {
             positions: [
                 { x: index, y: canvasData.bottom },
@@ -348,7 +348,7 @@ const drawCoordinateSystem = (ctx: CanvasRenderingContext2D, canvasData: CanvasD
             color: Boolean(index % 100) ? '#eee' : '#ddd',
         })
     }
-    for (let index = canvasData.center.x; index > canvasData.left - 10; index -= 10) {
+    for (let index = 0; index > canvasData.left - 10; index -= 10) {
         drawLine(ctx, {
             positions: [
                 { x: index, y: canvasData.bottom },
