@@ -4,6 +4,7 @@ import Shape from './Shape'
 
 export type RoadProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle'> & {
     lanesCount?: number
+    oneWay?: boolean
 }
 
 export default class Road extends Drawable {
@@ -11,15 +12,17 @@ export default class Road extends Drawable {
     laneWidth: number
     roadMargins: number
     laneSeparatorWidth: number
+    oneWay: boolean | undefined
     borders: Shape[] = []
 
     constructor(props: RoadProps) {
-        const { lanesCount, ...otherProps } = props
+        const { lanesCount, oneWay, ...otherProps } = props
         super(otherProps)
         this.lanesCount = lanesCount ?? 4
         this.laneWidth = this.size.width / this.lanesCount
         this.roadMargins = 10
         this.laneSeparatorWidth = 5
+        this.oneWay = oneWay
         const topLeft = new Point(-this.size.width / 2, -this.size.height / 2)
         const bottomLeft = new Point(-this.size.width / 2, this.size.height)
         const topRight = new Point(this.size.width / 2, -this.size.height / 2)
@@ -56,7 +59,7 @@ export default class Road extends Drawable {
         context.setLineDash([20, 10])
         context.beginPath()
         for (let index = 1; index < this.lanesCount; index++) {
-            context.moveTo(x + this.laneWidth * index, y)
+            if (this.lanesCount) context.moveTo(x + this.laneWidth * index, y)
             context.lineTo(x + this.laneWidth * index, this.size.height)
         }
         context.stroke()

@@ -2,8 +2,8 @@ import Collision from '../models/Collision'
 import Point from '../models/Point'
 import Shape from '../models/Shape'
 
-const lerp = (start: number, end: number, value: number) => {
-    return start + (end - start) * value
+export const lerp = (start: number, end: number, slice: number) => {
+    return start + (end - start) * slice
 }
 
 export const getIntersection = (A: Shape, B: Shape) => {
@@ -45,7 +45,8 @@ export const checkPolygonsIntersection = (A: Shape, B: Shape) => {
 
 export const getRandomColor = (): string => {
     const colorsArray = Object.values(colors)
-    return colorsArray[Math.round(Math.random() * colorsArray.length)]
+    const color = colorsArray[Math.floor(Math.random() * colorsArray.length)]
+    return color
 }
 
 export const colors = {

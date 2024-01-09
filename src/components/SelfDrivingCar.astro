@@ -2,18 +2,15 @@
 import type { HTMLAttributes } from 'astro/types'
 
 type Props = HTMLAttributes<'div'>
-
-const { ...otherProps } = Astro.props
+const { class: className, ...otherProps } = Astro.props
 ---
 
 <script>
     import { init } from '../libs/selfDrivingCar'
     document.addEventListener('astro:page-load', () => {
-        const canvasElement = document.querySelector('#drive') as HTMLCanvasElement
-        if (canvasElement) init(canvasElement)
+        const drive = document.querySelector('#drive') as HTMLElement
+        if (drive) init(drive)
     })
 </script>
 
-<div {...otherProps}>
-    <canvas id='drive'></canvas>
-</div>
+<div id='drive' class:list={[className]} {...otherProps}></div>

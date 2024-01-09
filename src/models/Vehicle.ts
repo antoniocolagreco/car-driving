@@ -1,6 +1,8 @@
-import { checkPolygonsIntersection } from '../libs/utils'
+import AudioPlayer from '../libs/audioPlayer'
+import { checkPolygonsIntersection, getRandomColor } from '../libs/utils'
 import Controls from './Controls'
 import Drawable, { type DrawableProps } from './Drawable'
+import NeuralNetwork from './NeuralNetwork'
 import Sensor from './Sensor'
 import type Shape from './Shape'
 import type Stats from './Stats'
@@ -8,26 +10,32 @@ import type Stats from './Stats'
 export type VehicleProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle'> & {
     stats: Stats
     color?: string
-    withSensor?: boolean
+    driver?: NeuralNetwork
+    sensor?: Sensor
 }
 
 export default class Vehicle extends Drawable {
     speed: number
     steeringPower: number
     stats: Stats
+    damaged: boolean
     controls: Controls
     sensor: Sensor | undefined
-    damaged: boolean
+    driver: NeuralNetwork | undefined
 
     constructor(props: VehicleProps) {
-        const { stats, color, withSensor, ...otherProps } = props
-        super({ ...otherProps, fillStyle: color })
+        const { stats, color, driver, sensor, ...otherProps } = props
+        super({ ...otherProps, fillStyle: color ?? getRandomColor() })
         this.speed = 0
         this.steeringPower = 0
         this.stats = stats
         this.controls = new Controls()
-        this.sensor = withSensor ? new Sensor({ position: this.position }) : undefined
         this.damaged = false
+        this.driver = driver
+        this.sensor = sensor
+        if (this.sensor) {
+            this.sensor.position = this.position
+        }
     }
 
     #move() {
@@ -70,25 +78,45 @@ export default class Vehicle extends Drawable {
         this.sensor?.syncDirection(this.direction)
     }
 
-    #assessDamage(obstacles: Array<Shape>) {
-        for (let obstacle of obstacles) {
-            if (checkPolygonsIntersection(obstacle, this.polygon)) {
+    #assessDamage(shapes: Array<Shape>) {
+        for (let shape of shapes) {
+            if (checkPolygonsIntersection(shape, this.shape)) {
                 return true
             }
         }
         return false
     }
 
-    checkCollisions(safeObstacle: Shape[], dangerousObstacles: Shape[]) {
-        const damaged = this.#assessDamage(dangerousObstacles)
-        if (damaged) {
-            this.damaged = damaged
+    checkCollisions(...shapes: Array<Shape>) {
+        const damaged = this.#assessDamage(shapes)
+        if (damaged && !this.damaged) {
+            this.crash()
         }
-        this.sensor?.checkCollisions([...safeObstacle, ...dangerousObstacles])
+        this.sensor?.checkCollisions(shapes)
+    }
+
+    crash() {
+        this.damaged = true
+        this.speed = 0
+        this.steeringPower = 0
+        this.fillStyle = 'darkgray'
+        AudioPlayer.play().scratch()
+    }
+
+    #autoPilot() {
+        if (!this.driver || !this.sensor) return
+        const offsets = this.sensor.collisions.map((collision) => (collision === null ? 0 : 1 - collision.offset))
+        const outputs = NeuralNetwork.feedForward(offsets, this.driver)
+        this.controls.forward = Boolean(outputs[0])
+        this.controls.reverse = Boolean(outputs[1])
+        this.controls.left = Boolean(outputs[2])
+        this.controls.right = Boolean(outputs[3])
+        this.controls.brake = Boolean(outputs[4])
     }
 
     beforeDrawing(context: CanvasRenderingContext2D): void {
         if (!this.damaged) {
+            this.#autoPilot()
             this.#move()
             this.sensor?.drawIn(context)
         }

@@ -5,9 +5,9 @@ import Point from './Point'
 import Shape from './Shape'
 
 export type SensorProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle' | 'size'> & {
-    rayCount?: number
-    rayLength?: number
-    raySpread?: number
+    rayCount: number
+    rayLength: number
+    raySpread: number
 }
 
 export default class Sensor extends Drawable {
@@ -20,9 +20,9 @@ export default class Sensor extends Drawable {
     constructor(props: SensorProps) {
         const { rayCount, rayLength, raySpread, ...otherProps } = props
         super(otherProps)
-        this.rayCount = rayCount ?? 7
-        this.rayLength = rayLength ?? 400
-        this.raySpread = raySpread ?? Math.PI / 2
+        this.rayCount = rayCount
+        this.rayLength = rayLength
+        this.raySpread = raySpread
         this.rays = []
         this.collisions = []
     }
@@ -44,8 +44,6 @@ export default class Sensor extends Drawable {
         const flattedObstacles = obstacles.map((o) => o.toArrayOfLines()).flat(2)
 
         for (let obstacle of flattedObstacles) {
-            console.log(obstacle.isLine())
-
             const touch: Collision | null = getIntersection(ray, obstacle)
             if (touch) {
                 touches.push(touch)
