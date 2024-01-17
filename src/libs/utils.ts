@@ -43,6 +43,18 @@ export const checkPolygonsIntersection = (A: Shape, B: Shape) => {
     return false
 }
 
+export const normalize = (value: number, min: number, max: number, newMin: number, newMax: number): number => {
+    const oldScale = max - min
+    const newScale = newMax - newMin
+    const result = Math.min(newMax, Math.max(newMin, ((value - min) / oldScale) * newScale))
+    return result
+}
+
+export const normalizeToHex = (value: number, min: number, max: number): string => {
+    const normalizedValue = Math.floor(normalize(value, min, max, 0, 255))
+    return normalizedValue.toString(16).padStart(2, '00')
+}
+
 export const getRandomColor = (): string => {
     const colorsArray = Object.values(colors)
     const color = colorsArray[Math.floor(Math.random() * colorsArray.length)]

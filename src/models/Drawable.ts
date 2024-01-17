@@ -57,6 +57,7 @@ export default class Drawable {
     }
 
     beforeDrawing(context: CanvasRenderingContext2D) {}
+    afterDrawing(context: CanvasRenderingContext2D) {}
 
     drawInstructions(context: CanvasRenderingContext2D) {
         context.beginPath()
@@ -76,5 +77,6 @@ export default class Drawable {
         this.beforeDrawing(context)
         this.shape = this.#createShape()
         this.drawInstructions(context)
+        this.afterDrawing(context)
     }
 }

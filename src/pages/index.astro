@@ -5,6 +5,8 @@ import DefaultLayout from '../layouts/DefaultLayout.astro'
 ---
 
 <script>
+    import { normalizeToHex } from '../libs/utils'
+
     document.addEventListener('astro:page-load', () => {
         const dialog = document.getElementById('hello-dialog') as HTMLDialogElement | undefined
         const openDialogButton = document.getElementById('open-button') as HTMLButtonElement | undefined
@@ -20,6 +22,8 @@ import DefaultLayout from '../layouts/DefaultLayout.astro'
         openDialogButton?.addEventListener('click', handleButtonClick)
         closeDialogButton?.addEventListener('click', handleDialogClick)
     })
+
+    console.log(normalizeToHex(-0.9, -1, 1))
 </script>
 
 <DefaultLayout title='Home'>

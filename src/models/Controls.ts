@@ -4,6 +4,7 @@ export default class Controls {
     left: boolean = false
     right: boolean = false
     brake: boolean = false
+    private active: boolean = false
 
     #handleKeyDown(key: string) {
         switch (key) {
@@ -72,10 +73,14 @@ export default class Controls {
     drive = () => {
         document.onkeydown = (event: KeyboardEvent) => this.#handleKeyDown(event.key)
         document.onkeyup = (event: KeyboardEvent) => this.#handleKeyUp(event.key)
+        this.active = true
     }
 
     release = () => {
         document.onkeydown = (event: KeyboardEvent) => this.#handleKeyDown(event.key)
         document.onkeyup = (event: KeyboardEvent) => this.#handleKeyUp(event.key)
+        this.active = false
     }
+
+    isActive = () => this.active
 }

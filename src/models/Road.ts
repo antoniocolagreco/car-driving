@@ -30,13 +30,13 @@ export default class Road extends Drawable {
         this.borders.push(new Shape(topLeft, bottomLeft), new Shape(topRight, bottomRight))
     }
 
-    getLaneCenter(index: number) {
+    getLanePosition(index: number, offset = 0) {
         if (index < 0) index = 0
         if (index + 1 > this.lanesCount) index = this.lanesCount - 1
 
         const x = -(this.size.width / 2) + (this.laneWidth * (index + 1) - this.laneWidth / 2)
 
-        return x
+        return new Point(x, Math.floor(this.size.height / 2) - 5000 + offset)
     }
 
     drawInstructions(context: CanvasRenderingContext2D): void {

@@ -11,8 +11,8 @@ import Visualizer from '../models/Visualizer'
 export function init(container: HTMLElement) {
     const carCanvas = document.createElement('canvas')
     const networkCanvas = document.createElement('canvas')
-    const carContext = carCanvas.getContext('2d')
-    const networkContext = networkCanvas.getContext('2d')
+    const carContext = carCanvas.getContext('2d', { alpha: false })
+    const networkContext = networkCanvas.getContext('2d', { alpha: false })
 
     container.appendChild(carCanvas)
     container.appendChild(networkCanvas)
@@ -40,28 +40,29 @@ export function init(container: HTMLElement) {
 
     const map = new Map({
         position: new Point(carCanvas.width / 2, carCanvas.height / 2),
-        size: new Size(1000000, 1000000),
+        size: new Size(1000, 100000),
     })
-    const road = new Road({ position: new Point(map.position.x, map.position.y), size: new Size(300, map.size.height) })
+    const road = new Road({
+        position: new Point(carCanvas.width / 2, carCanvas.height / 2),
+        size: new Size(300, map.size.height),
+    })
 
-    const myPosition = new Point(road.getLaneCenter(1), 0)
-    const myStats = new Stats({ maxSpeed: 10, acceleration: 0.03, maxReverse: 1, breakPower: 0.05 })
-    const mySensor = new Sensor({ rayCount: 5, rayLength: 400, raySpread: Math.PI / 2 })
-    const myDriver = new NeuralNetwork(5, 6, 5)
-    const myCar = new Car({ position: myPosition, stats: myStats, sensor: mySensor, driver: myDriver })
+    const cars = generateCars(100, road)
+
+    let activeCar = cars[0]
 
     const traffic = [
-        new Car({ position: new Point(road.getLaneCenter(0), -2000), direction: Math.PI }),
-        new Car({ position: new Point(road.getLaneCenter(1), -1000), direction: Math.PI }),
-        new Car({ position: new Point(road.getLaneCenter(2), 2000) }),
-        new Car({ position: new Point(road.getLaneCenter(3), 1000) }),
+        new Car({ position: road.getLanePosition(0, -250) }),
+        new Car({ position: road.getLanePosition(1, -500) }),
+        new Car({ position: road.getLanePosition(2, -750) }),
+        new Car({ position: road.getLanePosition(3, -1000) }),
     ]
+
+    console.log(traffic)
 
     for (let vehicle of traffic) {
         vehicle.controls.forward = true
     }
-
-    myCar.controls.drive()
 
     let targetFPS = 60
     let framesInterval = 1000 / targetFPS
@@ -70,6 +71,8 @@ export function init(container: HTMLElement) {
     let lastFpsCountTimestamp = 0
     let countedFrames = 0
     let currentFps = 0
+
+    requestAnimationFrame(animate)
 
     function animate(timestamp: number) {
         if (!carContext) return
@@ -82,20 +85,29 @@ export function init(container: HTMLElement) {
 
         resizeCanvas()
 
-        myCar.checkCollisions(...road.borders, ...traffic.map((v) => v.shape))
+        activeCar.sensor!.visibleRays = false
+        activeCar.controls.release()
+        activeCar = getBestCar(cars)
+        activeCar.controls.drive()
 
-        const translateY = -myCar.position.y + carCanvas.height * 0.7
+        for (let car of cars) {
+            car.checkCollisions(...road.borders, ...traffic.map((v) => v.shape))
+        }
+
+        const translateY = -activeCar.position.y + carCanvas.height * 0.7
         const translateX = carCanvas.width / 2
 
         carContext.translate(translateX, translateY)
 
         map.drawIn(carContext)
         road.drawIn(carContext)
-        myCar.drawIn(carContext)
 
-        for (let vehicle of traffic) {
-            vehicle.checkCollisions(myCar.shape)
-            vehicle.drawIn(carContext)
+        for (let car of cars) {
+            car.drawIn(carContext)
+            for (let vehicle of traffic) {
+                vehicle.checkCollisions(car.shape)
+                vehicle.drawIn(carContext)
+            }
         }
 
         carContext.translate(-translateX, -translateY)
@@ -112,16 +124,43 @@ export function init(container: HTMLElement) {
         carContext.textAlign = 'left'
         carContext.textBaseline = 'bottom'
         carContext.fillText(`FPS: ${currentFps}`, 10, carCanvas.height - 70)
-        carContext.fillText(`PPF: ${Math.abs(myCar.speed).toFixed(2)}`, 10, carCanvas.height - 50)
-        carContext.fillText(`PPS: ${Math.abs(myCar.speed * currentFps).toFixed(2)}`, 10, carCanvas.height - 30)
-        carContext.fillText(`RPF: ${myCar.steeringPower.toFixed(2)}`, 10, carCanvas.height - 10)
+        carContext.fillText(`PPF: ${Math.abs(activeCar.speed).toFixed(2)}`, 10, carCanvas.height - 50)
+        carContext.fillText(`PPS: ${(activeCar.speed * currentFps).toFixed(2)}`, 10, carCanvas.height - 30)
+        carContext.fillText(`RPF: ${activeCar.steeringPower.toFixed(2)}`, 10, carCanvas.height - 10)
 
-        if (networkContext && myCar.driver) {
-            Visualizer.drawNetworkIn(networkContext, myCar.driver)
+        if (networkContext && activeCar.network) {
+            Visualizer.drawNetworkIn(networkContext, activeCar.network)
         }
 
-        requestAnimationFrame(animate)
+        requestAnimationFrame((t) => animate(t))
     }
+}
 
-    animate(performance.now())
+const generateCars = (n: number, road: Road) => {
+    const cars = []
+
+    const stats = new Stats({ maxSpeed: 10, acceleration: 0.03, maxReverse: 1, breakPower: 0.05 })
+
+    for (let index = 0; index < n; index++) {
+        const position = road.getLanePosition(Math.floor(Math.random() * 4))
+        const sensor = new Sensor({ rayCount: 5, rayLength: 400, raySpread: Math.PI / 2 })
+        const network = new NeuralNetwork(sensor.rayCount + 1, 6, 5)
+        const car = new Car({ position, stats, sensor, network })
+        cars.push(car)
+    }
+    return cars
+}
+
+const getBestCar = (cars: Array<Car>) => {
+    const car = cars.find((car) => car.position.y === Math.min(...cars.map((c) => c.position.y)))!
+    car.sensor!.visibleRays = true
+    return car
+}
+
+const saveNetwork = (network: NeuralNetwork) => {
+    localStorage.setItem('best-network', JSON.stringify(network))
+}
+
+const deleteNetwork = () => {
+    localStorage.removeItem('best-network')
 }

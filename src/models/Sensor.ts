@@ -8,6 +8,7 @@ export type SensorProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle' | 'siz
     rayCount: number
     rayLength: number
     raySpread: number
+    visibleRays?: boolean
 }
 
 export default class Sensor extends Drawable {
@@ -16,15 +17,17 @@ export default class Sensor extends Drawable {
     raySpread: number
     rays: Array<Shape>
     collisions: Array<Collision | null>
+    visibleRays: boolean
 
     constructor(props: SensorProps) {
-        const { rayCount, rayLength, raySpread, ...otherProps } = props
+        const { rayCount, rayLength, raySpread, visibleRays, ...otherProps } = props
         super(otherProps)
         this.rayCount = rayCount
         this.rayLength = rayLength
         this.raySpread = raySpread
         this.rays = []
         this.collisions = []
+        this.visibleRays = visibleRays ?? false
     }
 
     syncDirection(direction: number) {
@@ -68,12 +71,14 @@ export default class Sensor extends Drawable {
                 this.position.y - Math.cos(rayDirection + this.direction) * this.rayLength
             )
 
-            this.rays.push(new Shape(start, end))
+            this.rays.unshift(new Shape(start, end))
         }
     }
 
     drawInstructions(context: CanvasRenderingContext2D): void {
         this.#castRays()
+
+        if (!this.visibleRays) return
 
         for (let i = 0; i < this.rayCount; i++) {
             const start = this.rays[i].getFirst()
