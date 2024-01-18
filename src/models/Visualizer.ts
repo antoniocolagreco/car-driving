@@ -34,7 +34,7 @@ export default class Visualizer {
         for (let i = 0; i < inputs.length; i++) {
             for (let j = 0; j < outputs.length; j++) {
                 ctx.beginPath()
-                ctx.lineWidth = Math.floor(normalize(weights[i][j], -1, 1, 1, 5))
+                ctx.lineWidth = Math.floor(normalize(weights[i][j], -1, 1, 1, 6))
 
                 const r = weights[i][j] < 0 ? normalizeToHex(weights[i][j], -1, 0) : '00'
                 const g = weights[i][j] > 0 ? normalizeToHex(weights[i][j], 0, 1) : '00'
@@ -61,13 +61,15 @@ export default class Visualizer {
             const r = inputs[index] < 0 ? normalizeToHex(inputs[index], -1, 0) : '00'
             const g = inputs[index] > 0 ? normalizeToHex(inputs[index], 0, 1) : '00'
             const b = '00'
+            
             ctx.fillStyle = `#${r}${g}${b}`
             ctx.lineWidth = 1
             ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2)
             ctx.fill()
+
             ctx.beginPath()
             ctx.setLineDash([])
-            ctx.strokeStyle = 'gray'
+            ctx.strokeStyle = '#550'
             ctx.lineWidth = 2
             ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2)
             ctx.stroke()
@@ -94,8 +96,8 @@ export default class Visualizer {
 
             if (outputs[index] > biases[index]) {
                 ctx.beginPath()
-                ctx.strokeStyle = 'white'
-                ctx.lineWidth = 2
+                ctx.strokeStyle = '#ff0'
+                ctx.lineWidth = 4
                 ctx.arc(x, yOutput, NODE_SIZE, 0, Math.PI * 2)
                 ctx.stroke()
             }

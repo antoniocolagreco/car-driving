@@ -11,7 +11,7 @@ export class Car extends Vehicle {
         const { stats, size, ...otherProps } = props
         super({
             ...otherProps,
-            size: size ?? new Size(30, 50),
+            size: size ?? new Size(40, 70),
             stats: stats ?? new Stats({ maxSpeed: 5, acceleration: 0.02, maxReverse: 1, breakPower: 0.05 }),
         })
     }

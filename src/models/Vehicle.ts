@@ -1,4 +1,3 @@
-import AudioPlayer from '../libs/audioPlayer'
 import { checkPolygonsIntersection, getRandomColor, normalize } from '../libs/utils'
 import Controls from './Controls'
 import Drawable, { type DrawableProps } from './Drawable'
@@ -102,7 +101,7 @@ export default class Vehicle extends Drawable {
         this.speed = 0
         this.steeringPower = 0
         this.fillStyle = 'darkgray'
-        AudioPlayer.play().scratch()
+        // AudioPlayer.play().scratch()
     }
 
     #autoPilot() {
@@ -122,7 +121,7 @@ export default class Vehicle extends Drawable {
     }
 
     beforeDrawing(context: CanvasRenderingContext2D): void {
-        if (!this.controls.isActive()) {
+        if (this.isGhost()) {
             context.globalAlpha = 0.5
         }
         if (!this.damaged) {
@@ -134,5 +133,12 @@ export default class Vehicle extends Drawable {
 
     afterDrawing(context: CanvasRenderingContext2D): void {
         context.globalAlpha = 1
+    }
+
+    setGhost(value: boolean): void {
+        super.setGhost(value)
+        if (this.sensor) {
+            this.sensor.visibleRays = !value
+        }
     }
 }

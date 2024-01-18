@@ -8,6 +8,7 @@ export type DrawableProps = {
     direction?: number
     fillStyle?: string | CanvasGradient | CanvasPattern
     strokeStyle?: string | CanvasGradient | CanvasPattern
+    ghost?: boolean
 }
 
 export default class Drawable {
@@ -17,13 +18,16 @@ export default class Drawable {
     shape: Shape
     fillStyle: string | CanvasGradient | CanvasPattern
     strokeStyle: string | CanvasGradient | CanvasPattern
+    private ghost: boolean
 
     constructor(props: DrawableProps) {
-        this.position = props.position ?? new Point()
-        this.size = props.size ?? new Size(0, 0)
-        this.direction = props.direction ?? 0
-        this.fillStyle = props.fillStyle ?? '#000'
-        this.strokeStyle = props.strokeStyle ?? '#000'
+        const { direction, fillStyle, ghost, position, size, strokeStyle } = props
+        this.position = position ?? new Point()
+        this.size = size ?? new Size(0, 0)
+        this.direction = direction ?? 0
+        this.fillStyle = fillStyle ?? '#000'
+        this.strokeStyle = strokeStyle ?? '#000'
+        this.ghost = ghost ?? false
         this.shape = this.#createShape()
     }
 
@@ -57,9 +61,11 @@ export default class Drawable {
     }
 
     beforeDrawing(context: CanvasRenderingContext2D) {}
-    afterDrawing(context: CanvasRenderingContext2D) {}
 
     drawInstructions(context: CanvasRenderingContext2D) {
+        if (this.ghost) {
+            context.globalAlpha = 0.5
+        }
         context.beginPath()
         context.fillStyle = this.fillStyle
         context.strokeStyle = this.strokeStyle
@@ -71,12 +77,20 @@ export default class Drawable {
             }
             context.fill()
         }
+        context.globalAlpha = 1
     }
 
     drawIn(context: CanvasRenderingContext2D) {
         this.beforeDrawing(context)
         this.shape = this.#createShape()
         this.drawInstructions(context)
-        this.afterDrawing(context)
+    }
+
+    setGhost(value: boolean) {
+        this.ghost = value
+    }
+
+    isGhost() {
+        return this.ghost
     }
 }

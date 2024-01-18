@@ -1,3 +1,4 @@
+import { deepCopy, weightedAverage } from '../libs/utils'
 import Layer from './Layer'
 
 export default class NeuralNetwork {
@@ -19,5 +20,26 @@ export default class NeuralNetwork {
             outputs = Layer.feedForward(outputs, network.layers[i])
         }
         return outputs
+    }
+
+    static getMutatedNetwork(network: NeuralNetwork, amount: number) {
+        const mutatedNetwork = deepCopy(network)
+        mutatedNetwork.layers.forEach((layer) => {
+            for (let i = 0; i < layer.biases.length; i++) {
+                layer.biases[i] = weightedAverage(
+                    { value: layer.biases[i], weight: 0.9 },
+                    { value: Math.random() * 2 - 1, weight: 0.1 }
+                )
+            }
+            for (let i = 0; i < layer.weights.length; i++) {
+                for (let j = 0; j < layer.weights[i].length; j++) {
+                    layer.weights[i][j] = weightedAverage(
+                        { value: layer.weights[i][j], weight: 0.9 },
+                        { value: Math.random() * 2 - 1, weight: 0.1 }
+                    )
+                }
+            }
+        })
+        return mutatedNetwork
     }
 }

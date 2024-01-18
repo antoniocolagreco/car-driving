@@ -5,7 +5,7 @@ import DefaultLayout from '../layouts/DefaultLayout.astro'
 ---
 
 <script>
-    import { normalizeToHex } from '../libs/utils'
+    import { weightedAverage } from '../libs/utils'
 
     document.addEventListener('astro:page-load', () => {
         const dialog = document.getElementById('hello-dialog') as HTMLDialogElement | undefined
@@ -23,7 +23,7 @@ import DefaultLayout from '../layouts/DefaultLayout.astro'
         closeDialogButton?.addEventListener('click', handleDialogClick)
     })
 
-    console.log(normalizeToHex(-0.9, -1, 1))
+    console.log(weightedAverage({ value: 10, weight: 0.333333 }, { value: 5, weight: 0.333333 }, { value: 3, weight: 0.333333 }))
 </script>
 
 <DefaultLayout title='Home'>

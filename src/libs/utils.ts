@@ -55,6 +55,31 @@ export const normalizeToHex = (value: number, min: number, max: number): string 
     return normalizedValue.toString(16).padStart(2, '00')
 }
 
+export const weightedAverage = (...values: Array<{ value: number; weight: number }>): number => {
+    let sum = 0
+    for (let value of values) {
+        sum += value.value * value.weight
+    }
+    return sum
+}
+
+export const deepCopy = <T>(obj: T): T => {
+    if (obj === null || typeof obj !== 'object') return obj
+
+    if (Array.isArray(obj)) {
+        return obj.map((item) => deepCopy(item)) as any
+    }
+
+    const newObj: Record<string, any> = {}
+    for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+            newObj[key] = deepCopy(obj[key])
+        }
+    }
+
+    return newObj as T
+}
+
 export const getRandomColor = (): string => {
     const colorsArray = Object.values(colors)
     const color = colorsArray[Math.floor(Math.random() * colorsArray.length)]

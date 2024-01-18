@@ -1,11 +1,13 @@
 ---
 import type { HTMLAttributes } from 'astro/types'
+import Button from '../components/Button.astro'
 
 type Props = HTMLAttributes<'div'>
 const { class: className, ...otherProps } = Astro.props
 ---
 
 <script>
+    // import { init } from "../libs/selfDrivingCar"
     import { init } from '../libs/selfDrivingCar'
     document.addEventListener('astro:page-load', () => {
         const drive = document.querySelector('#drive') as HTMLElement
@@ -13,4 +15,11 @@ const { class: className, ...otherProps } = Astro.props
     })
 </script>
 
-<div id='drive' class:list={[className]} {...otherProps}></div>
+<div class='h-full flex flex-col grow'>
+    <div class='flex gap-4 mb-2 w-full'>
+        <Button id='save-network'>Save</Button>
+        <Button id='discard-network'>Discard</Button>
+        <Button id='restart-network'>Restart</Button>
+    </div>
+    <div id='drive' class:list={[className]} {...otherProps}></div>
+</div>
