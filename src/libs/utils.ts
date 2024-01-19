@@ -56,11 +56,26 @@ export const normalizeToHex = (value: number, min: number, max: number): string 
 }
 
 export const weightedAverage = (...values: Array<{ value: number; weight: number }>): number => {
-    let sum = 0
-    for (let value of values) {
-        sum += value.value * value.weight
+    let sumValues = 0
+    let sumWeights = 0
+
+    for (let item of values) {
+        sumValues += item.value * item.weight
+        sumWeights += item.weight
     }
-    return sum
+
+    return sumValues / sumWeights
+}
+
+export const sigmoid = (sum: number, bias: number) => 1 / (1 + Math.exp(-(sum + bias)))
+
+export const threshold = (sum: number, bias: number) => (sum > bias ? 1 : 0)
+
+export const tanh = (sum: number, bias: number): number => {
+    const exponent = sum + bias
+    const numerator = Math.exp(exponent) - Math.exp(-exponent)
+    const denominator = Math.exp(exponent) + Math.exp(-exponent)
+    return numerator / denominator
 }
 
 export const deepCopy = <T>(obj: T): T => {
@@ -78,6 +93,30 @@ export const deepCopy = <T>(obj: T): T => {
     }
 
     return newObj as T
+}
+
+export const areObjectsEqual = (obj1: Record<string, any>, obj2: Record<string, any>): boolean => {
+    const keys1 = Object.keys(obj1)
+    const keys2 = Object.keys(obj2)
+
+    if (keys1.length !== keys2.length) {
+        return false
+    }
+
+    for (const key of keys1) {
+        const value1 = obj1[key]
+        const value2 = obj2[key]
+
+        if (typeof value1 === 'object' && value1 !== null && typeof value2 === 'object' && value2 !== null) {
+            if (!areObjectsEqual(value1, value2)) {
+                return false
+            }
+        } else if (value1 !== value2) {
+            return false
+        }
+    }
+
+    return true
 }
 
 export const getRandomColor = (): string => {
@@ -104,4 +143,17 @@ export const colors = {
     fuchsia: '#c026d3',
     pink: '#db2777',
     rose: '#e11d48',
+}
+
+export const generateId = (): string => {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    const idLength = 8
+    let generatedId = ''
+
+    for (let i = 0; i < idLength; i++) {
+        const randomIndex = Math.floor(Math.random() * characters.length)
+        generatedId += characters.charAt(randomIndex)
+    }
+
+    return generatedId
 }

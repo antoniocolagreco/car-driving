@@ -1,35 +1,8 @@
 ---
-import Button from '../components/Button.astro'
-import Modal from '../components/Modal.astro'
-import DefaultLayout from '../layouts/DefaultLayout.astro'
+import SelfDrivingCar from '@components/SelfDrivingCar.astro';
+import DefaultLayout from '../layouts/DefaultLayout.astro';
 ---
 
-<script>
-    import { weightedAverage } from '../libs/utils'
-
-    document.addEventListener('astro:page-load', () => {
-        const dialog = document.getElementById('hello-dialog') as HTMLDialogElement | undefined
-        const openDialogButton = document.getElementById('open-button') as HTMLButtonElement | undefined
-        const closeDialogButton = document.getElementById('close-button') as HTMLButtonElement | undefined
-
-        const handleButtonClick = () => {
-            dialog?.showModal()
-        }
-        const handleDialogClick = () => {
-            dialog?.close()
-        }
-
-        openDialogButton?.addEventListener('click', handleButtonClick)
-        closeDialogButton?.addEventListener('click', handleDialogClick)
-    })
-
-    console.log(weightedAverage({ value: 10, weight: 0.333333 }, { value: 5, weight: 0.333333 }, { value: 3, weight: 0.333333 }))
-</script>
-
-<DefaultLayout title='Home'>
-    <Modal id='hello-dialog' slot='dialog' title='Modal'>
-        <p>Hello World!</p>
-        <Button id='close-button' slot='controls'>Close</Button>
-    </Modal>
-    <Button id='open-button'>Hello</Button>
+<DefaultLayout title='Self Driving Car'>
+    <SelfDrivingCar class='h-full w-full' />
 </DefaultLayout>

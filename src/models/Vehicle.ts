@@ -1,13 +1,13 @@
 import { checkPolygonsIntersection, getRandomColor, normalize } from '../libs/utils'
 import Controls from './Controls'
 import Drawable, { type DrawableProps } from './Drawable'
+import type Features from './Features'
 import NeuralNetwork from './NeuralNetwork'
 import Sensor from './Sensor'
 import type Shape from './Shape'
-import type Stats from './Stats'
 
 export type VehicleProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle'> & {
-    stats: Stats
+    features: Features
     color?: string
     network?: NeuralNetwork
     sensor?: Sensor
@@ -16,18 +16,20 @@ export type VehicleProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle'> & {
 export default class Vehicle extends Drawable {
     speed: number
     steeringPower: number
-    stats: Stats
+    features: Features
     damaged: boolean
     controls: Controls
     sensor: Sensor | undefined
     network: NeuralNetwork | undefined
+    points: number = 0
+    aliveFor: number
 
     constructor(props: VehicleProps) {
-        const { stats, color, network, sensor, ...otherProps } = props
+        const { features, color, network, sensor, ...otherProps } = props
         super({ ...otherProps, fillStyle: color ?? getRandomColor() })
         this.speed = 0
         this.steeringPower = 0
-        this.stats = stats
+        this.features = features
         this.controls = new Controls()
         this.damaged = false
         this.network = network
@@ -35,21 +37,22 @@ export default class Vehicle extends Drawable {
         if (this.sensor) {
             this.sensor.position = this.position
         }
+        this.aliveFor = 1
     }
 
     #move() {
         if (this.controls.brake) {
             if (this.speed > 0.1) {
-                this.speed -= this.stats.breakPower
+                this.speed -= this.features.breakPower
             } else if (this.speed < -0.1) {
-                this.speed += this.stats.breakPower
+                this.speed += this.features.breakPower
             } else {
                 this.speed = 0
             }
         } else if (this.controls.reverse) {
-            if (this.speed > -this.stats.maxReverse) this.speed -= this.stats.breakPower
+            if (this.speed > -this.features.maxReverse) this.speed -= this.features.breakPower
         } else if (this.controls.forward) {
-            if (this.speed < this.stats.maxSpeed) this.speed += this.stats.acceleration
+            if (this.speed < this.features.maxSpeed) this.speed += this.features.acceleration
         } else {
             if (this.speed < 0.02 && this.speed > -0.02) {
                 this.speed = 0
@@ -88,15 +91,29 @@ export default class Vehicle extends Drawable {
         return false
     }
 
-    checkCollisions(...shapes: Array<Shape>) {
+    updateStatus(traffic: Array<Vehicle>, obstacles: Array<Shape>) {
+        const shapes = [...traffic.map((v) => v.shape), ...obstacles]
         const damaged = this.#assessDamage(shapes)
         if (damaged && !this.damaged) {
             this.crash()
         }
+        this.#calculatePoints(traffic)
         this.sensor?.checkCollisions(shapes)
     }
 
+    #calculatePoints(traffic: Array<Vehicle>) {
+        let newPoints = 0
+        for (let trafficVehicle of traffic) {
+            if (trafficVehicle.position.y > this.position.y) {
+                newPoints += 1
+            }
+        }
+        if (newPoints < this.points) return
+        this.points = newPoints
+    }
+
     crash() {
+        if (!this.network) return
         this.damaged = true
         this.speed = 0
         this.steeringPower = 0
@@ -109,15 +126,15 @@ export default class Vehicle extends Drawable {
         const offsets = this.sensor.collisions.map((collision) => (collision === null ? 0 : 1 - collision.offset))
 
         //Aggiunge Speed tra i sensori
-        const normalizedSpeed = normalize(this.speed, -this.stats.maxReverse, this.stats.maxSpeed, 0, 1)
+        const normalizedSpeed = normalize(this.speed, -this.features.maxReverse, this.features.maxSpeed, 0, 1)
         offsets.push(normalizedSpeed)
 
         const outputs = NeuralNetwork.feedForward(offsets, this.network)
-        this.controls.forward = Boolean(outputs[0])
-        this.controls.reverse = Boolean(outputs[1])
-        this.controls.left = Boolean(outputs[2])
-        this.controls.right = Boolean(outputs[3])
-        this.controls.brake = Boolean(outputs[4])
+        this.controls.forward = outputs[0] > 0
+        this.controls.reverse = outputs[1] > 0
+        this.controls.left = outputs[2] > 0
+        this.controls.right = outputs[3] > 0
+        this.controls.brake = outputs[4] > 0
     }
 
     beforeDrawing(context: CanvasRenderingContext2D): void {
@@ -127,6 +144,7 @@ export default class Vehicle extends Drawable {
         if (!this.damaged) {
             this.#autoPilot()
             this.#move()
+
             this.sensor?.drawIn(context)
         }
     }

@@ -1,3 +1,6 @@
+import { tanh } from '../libs/utils'
+import { getRandomSimmetricalValue } from './NeuralNetwork'
+
 export default class Layer {
     /**
      * Questo array rappresenta gli input della rete neurale.
@@ -61,12 +64,12 @@ export default class Layer {
     static #randomize(layer: Layer) {
         for (let i = 0; i < layer.inputs.length; i++) {
             for (let j = 0; j < layer.outputs.length; j++) {
-                layer.weights[i][j] = Math.random() * 2 - 1
+                layer.weights[i][j] = getRandomSimmetricalValue()
             }
         }
 
         for (let i = 0; i < layer.biases.length; i++) {
-            layer.biases[i] = Math.random() * 2 - 1
+            layer.biases[i] = getRandomSimmetricalValue()
         }
     }
 
@@ -95,11 +98,8 @@ export default class Layer {
             //se la somma è superiore al bias, l'output (il neurone) si attiva.
             //Questa funzione di attivazione del neurone si chiama "hyperplane", che è molto semplice, ma ce ne sono tante:
             // sigmoid, hyperbolic tangent, ReLU etc
-            if (sum > layer.biases[i]) {
-                layer.outputs[i] = 1
-            } else {
-                layer.outputs[i] = 0
-            }
+
+            layer.outputs[i] = tanh(sum, layer.biases[i])
         }
         return layer.outputs
     }

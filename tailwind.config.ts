@@ -6,7 +6,7 @@ const config: Config = {
     theme: {
         extend: { fontFamily: { sans: ['Nunito Variable', ...defaultTheme.fontFamily.sans] } },
     },
-    plugins: [],
+    plugins: [require('@tailwindcss/forms')],
 }
 
 export default config

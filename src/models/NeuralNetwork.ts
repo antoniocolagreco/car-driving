@@ -1,8 +1,18 @@
-import { deepCopy, weightedAverage } from '../libs/utils'
+import { deepCopy, generateId, weightedAverage } from '../libs/utils'
 import Layer from './Layer'
+
+export const getRandomSimmetricalValue = () => {
+    return Math.random() * 2 - 1
+}
+
+export const getRandomUnitarianValue = () => {
+    return Math.random()
+}
 
 export default class NeuralNetwork {
     layers: Array<Layer>
+    survivedRounds: number = 1
+    id = generateId()
 
     // L'array che gli passiamo imposta il numero di neuroni per ogni layer
     constructor(...numberOfNeurons: Array<number>) {
@@ -23,23 +33,27 @@ export default class NeuralNetwork {
     }
 
     static getMutatedNetwork(network: NeuralNetwork, amount: number) {
-        const mutatedNetwork = deepCopy(network)
+        const mutatedNetwork = new NeuralNetwork()
+        mutatedNetwork.layers = deepCopy(network.layers)
+
         mutatedNetwork.layers.forEach((layer) => {
             for (let i = 0; i < layer.biases.length; i++) {
                 layer.biases[i] = weightedAverage(
-                    { value: layer.biases[i], weight: 0.9 },
-                    { value: Math.random() * 2 - 1, weight: 0.1 }
+                    { value: layer.biases[i], weight: 1 - amount },
+                    { value: getRandomSimmetricalValue(), weight: amount }
                 )
             }
+
             for (let i = 0; i < layer.weights.length; i++) {
                 for (let j = 0; j < layer.weights[i].length; j++) {
                     layer.weights[i][j] = weightedAverage(
-                        { value: layer.weights[i][j], weight: 0.9 },
-                        { value: Math.random() * 2 - 1, weight: 0.1 }
+                        { value: layer.weights[i][j], weight: 1 - amount },
+                        { value: getRandomSimmetricalValue(), weight: amount }
                     )
                 }
             }
         })
+
         return mutatedNetwork
     }
 }

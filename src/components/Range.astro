@@ -1,0 +1,9 @@
+---
+import type { HTMLAttributes } from 'astro/types'
+
+type Props = HTMLAttributes<'input'>
+
+const { class: className, ...otherProps } = Astro.props
+---
+
+<input type='range' class:list={['bg-rose-700 accent-rose-700', className]} {...otherProps} />

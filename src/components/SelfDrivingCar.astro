@@ -1,13 +1,15 @@
 ---
 import type { HTMLAttributes } from 'astro/types'
 import Button from '../components/Button.astro'
+import Input from '../components/Input.astro'
+import Range from '../components/Range.astro'
 
 type Props = HTMLAttributes<'div'>
 const { class: className, ...otherProps } = Astro.props
 ---
 
 <script>
-    // import { init } from "../libs/selfDrivingCar"
+    // "
     import { init } from '../libs/selfDrivingCar'
     document.addEventListener('astro:page-load', () => {
         const drive = document.querySelector('#drive') as HTMLElement
@@ -16,10 +18,20 @@ const { class: className, ...otherProps } = Astro.props
 </script>
 
 <div class='h-full flex flex-col grow'>
-    <div class='flex gap-4 mb-2 w-full'>
-        <Button id='save-network'>Save</Button>
-        <Button id='discard-network'>Discard</Button>
+    <div class='flex gap-4 mb-2 w-full flex-wrap'>
+        <Button id='save-network'>Backup Network</Button>
+        <Button id='restore-network'>Restore Network</Button>
+        <Button id='reset-network'>Reset Network</Button>
         <Button id='restart-network'>Restart</Button>
+        <Button id='evolve-network'>Evolve</Button>
+        <div class='grid'>
+            <label for='mutation-rate'>Mutation Rate: <span id='mutation-rate-value'></span></label>
+            <Range id='mutation-rate' type='range' min='5' max='100' value='20' step='5' />
+        </div>
+        <div class='grid'>
+            <label for='number-of-cars'>Number of Cars: <span id='number-of-cars-value'></span></label>
+            <Range id='number-of-cars' type='range' min='10' max='100' value="50'" step='10' />
+        </div>
     </div>
     <div id='drive' class:list={[className]} {...otherProps}></div>
 </div>
