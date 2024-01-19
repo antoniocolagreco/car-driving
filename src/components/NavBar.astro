@@ -24,7 +24,7 @@ try {
                 if (page !== 'index') {
                     return (
                         <li>
-                            <NavLink href={`/${page}`}>{page}</NavLink>
+                            <NavLink href={`/${import.meta.env.BASE_URL}/${page}`}>{page}</NavLink>
                         </li>
                     )
                 }
