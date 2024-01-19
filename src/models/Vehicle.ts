@@ -21,8 +21,12 @@ export default class Vehicle extends Drawable {
     controls: Controls
     sensor: Sensor | undefined
     network: NeuralNetwork | undefined
+    meritPoints: number = 0
+    demeritPoints: number = 0
+    checkPoints: number = 0
     points: number = 0
     aliveFor: number
+    winner: boolean = false
 
     constructor(props: VehicleProps) {
         const { features, color, network, sensor, ...otherProps } = props
@@ -108,8 +112,12 @@ export default class Vehicle extends Drawable {
                 newPoints += 1
             }
         }
-        if (newPoints < this.points) return
-        this.points = newPoints
+
+        if (newPoints > this.meritPoints) {
+            this.meritPoints = newPoints
+        }
+
+        this.points = this.meritPoints - this.demeritPoints
     }
 
     crash() {
@@ -151,6 +159,13 @@ export default class Vehicle extends Drawable {
 
     afterDrawing(context: CanvasRenderingContext2D): void {
         context.globalAlpha = 1
+        if (!this.winner) return
+
+        context.fillStyle = 'black'
+        context.font = '12px monospace'
+        context.textAlign = 'center'
+        context.textBaseline = 'middle'
+        context.fillText('WINNER', this.position.x, this.position.y)
     }
 
     setGhost(value: boolean): void {
