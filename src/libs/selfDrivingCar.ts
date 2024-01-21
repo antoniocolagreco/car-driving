@@ -309,7 +309,7 @@ const generateCars = (n: number, neurons: Array<number>, road: Road) => {
         // const lane = Math.floor(Math.random() * 4)
         const lane = 1
         const position = road.getLanePosition(lane)
-        const sensor = new Sensor({ rayCount: 5, rayLength: 500, raySpread: Math.PI / 2 })
+        const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI / 2 })
         const network = new NeuralNetwork(sensor.rayCount + 1, ...neurons, 4)
         const car = new Car({ position, features, sensor, network, ghost: true })
         cars.push(car)
@@ -417,7 +417,7 @@ const loadNetwork = (): NeuralNetwork | undefined => {
 
 const generateTraffic = (rowsOfCar: number, road: Road) => {
     let traffic: Array<Vehicle> = []
-    const offset = -300
+    const offset = -400
 
     const fixedRows = [singleCenter, singleLeft, singleRight, singleCenter, singleRight, singleLeft]
 
