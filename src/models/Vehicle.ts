@@ -45,16 +45,9 @@ export default class Vehicle extends Drawable {
     }
 
     #move() {
-        if (this.controls.brake) {
-            if (this.speed > 0.1) {
-                this.speed -= this.features.breakPower
-            } else if (this.speed < -0.1) {
-                this.speed += this.features.breakPower
-            } else {
-                this.speed = 0
-            }
-        } else if (this.controls.reverse) {
-            if (this.speed > -this.features.maxReverse) this.speed -= this.features.breakPower
+        if (this.controls.reverse) {
+            if (this.speed > -this.features.maxReverse)
+                this.speed -= this.speed > 0 ? this.features.breakPower : this.features.acceleration
         } else if (this.controls.forward) {
             if (this.speed < this.features.maxSpeed) this.speed += this.features.acceleration
         } else {
@@ -75,7 +68,8 @@ export default class Vehicle extends Drawable {
         if (Math.abs(this.speed) > 0) {
             if (this.controls.left) {
                 this.direction += this.steeringPower
-            } else if (this.controls.right) {
+            }
+            if (this.controls.right) {
                 this.direction -= this.steeringPower
             }
         }
@@ -142,7 +136,6 @@ export default class Vehicle extends Drawable {
         this.controls.reverse = outputs[1] > 0
         this.controls.left = outputs[2] > 0
         this.controls.right = outputs[3] > 0
-        this.controls.brake = outputs[4] > 0
     }
 
     beforeDrawing(context: CanvasRenderingContext2D): void {

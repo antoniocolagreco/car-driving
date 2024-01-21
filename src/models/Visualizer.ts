@@ -10,7 +10,7 @@ export default class Visualizer {
         for (let index = network.layers.length - 1; index >= 0; index--) {
             const yStart = ctx.canvas.height - (index * heightSlice + margin)
             const yEnd = ctx.canvas.height - ((index + 1) * heightSlice + margin)
-            const icons = index === network.layers.length - 1 ? ['↑', '↓', '←', '→', 'brake'] : []
+            const icons = index === network.layers.length - 1 ? ['↑', '↓', '←', '→'] : []
             Visualizer.#drawLayer(ctx, network.layers[index], ctx.canvas.width, yStart, yEnd, icons)
         }
     }
@@ -36,8 +36,8 @@ export default class Visualizer {
                 ctx.beginPath()
                 ctx.lineWidth = Math.floor(normalize(weights[i][j], -1, 1, 1, 6))
 
-                const r = weights[i][j] < 0 ? normalizeToHex(weights[i][j], -1, 0) : '00'
-                const g = weights[i][j] > 0 ? normalizeToHex(weights[i][j], 0, 1) : '00'
+                const r = weights[i][j] < 0 ? normalizeToHex(Math.max(15, weights[i][j]), -1, 0) : '00'
+                const g = weights[i][j] > 0 ? normalizeToHex(Math.max(15, weights[i][j]), 0, 1) : '00'
                 // const r = normalizeToHex(-weights[i][j], -1, 1)
                 // const g = normalizeToHex(weights[i][j], -1, 1)
                 const b = '00'
@@ -61,7 +61,7 @@ export default class Visualizer {
             const r = inputs[index] < 0 ? normalizeToHex(inputs[index], -1, 0) : '00'
             const g = inputs[index] > 0 ? normalizeToHex(inputs[index], 0, 1) : '00'
             const b = '00'
-            
+
             ctx.fillStyle = `#${r}${g}${b}`
             ctx.lineWidth = 1
             ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2)
@@ -94,7 +94,7 @@ export default class Visualizer {
             ctx.arc(x, yOutput, NODE_SIZE, 0, Math.PI * 2)
             ctx.stroke()
 
-            if (outputs[index] > biases[index]) {
+            if (outputs[index] > 0) {
                 ctx.beginPath()
                 ctx.strokeStyle = '#ff0'
                 ctx.lineWidth = 4

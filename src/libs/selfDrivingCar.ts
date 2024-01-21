@@ -8,6 +8,7 @@ import Sensor from '../models/Sensor'
 import Size from '../models/Size'
 import type Vehicle from '../models/Vehicle'
 import Visualizer from '../models/Visualizer'
+import { getTrafficRow, singleCenter, singleLeft, singleRight } from './traffic'
 
 const BEST_NETWORK_KEY = 'BestNetwork'
 const BACKUP_NETWORK_KEY = 'BackupNetwork'
@@ -308,8 +309,8 @@ const generateCars = (n: number, neurons: Array<number>, road: Road) => {
         // const lane = Math.floor(Math.random() * 4)
         const lane = 1
         const position = road.getLanePosition(lane)
-        const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI / 4 })
-        const network = new NeuralNetwork(sensor.rayCount + 1, ...neurons, 5)
+        const sensor = new Sensor({ rayCount: 5, rayLength: 500, raySpread: Math.PI / 2 })
+        const network = new NeuralNetwork(sensor.rayCount + 1, ...neurons, 4)
         const car = new Car({ position, features, sensor, network, ghost: true })
         cars.push(car)
     }
@@ -416,42 +417,17 @@ const loadNetwork = (): NeuralNetwork | undefined => {
 
 const generateTraffic = (rowsOfCar: number, road: Road) => {
     let traffic: Array<Vehicle> = []
-    const offset = -250
+    const offset = -300
 
-    traffic.push(
-        new Car({ color: 'black', position: road.getLanePosition(1, offset * 1) }),
+    const fixedRows = [singleCenter, singleLeft, singleRight, singleCenter, singleRight, singleLeft]
 
-        new Car({ color: 'black', position: road.getLanePosition(0, offset * 2) }),
-
-        new Car({ color: 'black', position: road.getLanePosition(2, offset * 3) }),
-
-        new Car({ color: 'black', position: road.getLanePosition(1, offset * 4) }),
-
-        new Car({ color: 'black', position: road.getLanePosition(2, offset * 5) }),
-
-        new Car({ color: 'black', position: road.getLanePosition(0, offset * 6) }),
-
-        new Car({ color: 'black', position: road.getLanePosition(0, offset * 7) }),
-        new Car({ color: 'black', position: road.getLanePosition(1, offset * 7 - 50) }),
-
-        new Car({ color: 'black', position: road.getLanePosition(1, offset * 8 - 50) }),
-        new Car({ color: 'black', position: road.getLanePosition(2, offset * 8) }),
-
-        new Car({ color: 'black', position: road.getLanePosition(0, offset * 9) }),
-
-        new Car({ color: 'black', position: road.getLanePosition(1, offset * 10 - 50) }),
-        new Car({ color: 'black', position: road.getLanePosition(2, offset * 10) }),
-
-        new Car({ color: 'black', position: road.getLanePosition(0, offset * 11) }),
-        new Car({ color: 'black', position: road.getLanePosition(2, offset * 11) })
-    )
     for (let i = 0; i < rowsOfCar; i++) {
-        const numberOfCarsPerRow = Math.random() * (road.lanesCount - 1)
-        const lanes = generateUsedLanesPerRow(numberOfCarsPerRow, road)
-        for (let j = 0; j < lanes.length; j++) {
-            const car = new Car({ color: 'black', position: road.getLanePosition(lanes[j], i * offset + offset * 12) })
-            traffic.push(car)
-        }
+        // const func = fixedRows.shift()
+        // if (func) {
+        //     traffic.push(...func(road, offset * i))
+        // }
+        const carsRow = getTrafficRow(road, offset * i + offset)
+        traffic.push(...carsRow)
     }
 
     for (let vehicle of traffic) {

@@ -17,14 +17,14 @@ try {
 <nav class:list={['', className]} {...otherProps}>
     <ul class='flex gap-4 mx-1'>
         <li>
-            <NavLink href='/'>Home</NavLink>
+            <NavLink href={`${import.meta.env.BASE_URL}/`}>Home</NavLink>
         </li>
         {
             pages.map((page) => {
                 if (page !== 'index') {
                     return (
                         <li>
-                            <NavLink href={`/${import.meta.env.BASE_URL}/${page}`}>{page}</NavLink>
+                            <NavLink href={`${import.meta.env.BASE_URL}/${page}`}>{page}</NavLink>
                         </li>
                     )
                 }

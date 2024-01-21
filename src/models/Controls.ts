@@ -32,9 +32,6 @@ export default class Controls {
             case 'd':
                 this.right = true
                 break
-            case ' ':
-                this.brake = true
-                break
         }
     }
 
@@ -63,9 +60,6 @@ export default class Controls {
                 break
             case 'd':
                 this.right = false
-                break
-            case ' ':
-                this.brake = false
                 break
         }
     }
