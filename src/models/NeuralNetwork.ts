@@ -10,12 +10,15 @@ export const getRandomUnitarianValue = () => {
 }
 
 export default class NeuralNetwork {
-    layers: Array<Layer>
-    survivedRounds: number = 1
     id = generateId()
+    layers: Array<Layer>
+    neurons: Array<number>
+    survivedRounds: number = 0
+    pointsRecord: number = 0
 
     // L'array che gli passiamo imposta il numero di neuroni per ogni layer
     constructor(...numberOfNeurons: Array<number>) {
+        this.neurons = numberOfNeurons
         this.layers = []
         for (let i = 0; i < numberOfNeurons.length - 1; i++) {
             this.layers.push(new Layer(numberOfNeurons[i], numberOfNeurons[i + 1]))
@@ -55,5 +58,35 @@ export default class NeuralNetwork {
         })
 
         return mutatedNetwork
+    }
+
+    static mergeNetworks(network1: NeuralNetwork, network2: NeuralNetwork, amount: number = 0.5) {
+        const mergeNetwork = new NeuralNetwork(...network1.neurons)
+
+        const layers: Array<Layer> = []
+        for (let i = 0; i < network1.layers.length; i++) {
+            const network1Layer = network1.layers[i]
+            layers.push(new Layer(network1Layer.inputs.length, network1Layer.outputs.length))
+        }
+
+        for (let i = 0; i < mergeNetwork.layers.length; i++) {
+            for (let j = 0; j < mergeNetwork.layers[i].biases.length; j++) {
+                mergeNetwork.layers[i].biases[j] = weightedAverage(
+                    { value: network1.layers[i].biases[j], weight: 1 - amount },
+                    { value: network2.layers[i].biases[j], weight: amount }
+                )
+            }
+
+            for (let j = 0; j < mergeNetwork.layers[i].weights.length; j++) {
+                for (let k = 0; k < mergeNetwork.layers[i].weights[j].length; k++) {
+                    mergeNetwork.layers[i].weights[j][k] = weightedAverage(
+                        { value: network1.layers[i].weights[j][k], weight: 1 - amount },
+                        { value: network2.layers[i].weights[j][k], weight: amount }
+                    )
+                }
+            }
+        }
+
+        return mergeNetwork
     }
 }

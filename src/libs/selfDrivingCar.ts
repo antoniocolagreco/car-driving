@@ -131,7 +131,27 @@ export function init(container: HTMLElement) {
 
     const restart = () => {
         gameover = false
-        const bestNetwork = loadNetwork()
+        let bestNetwork = loadNetwork()
+
+        if (activeCar && activeCar.network && bestNetwork) {
+            const activeCarPoints = activeCar.network.pointsRecord
+            const bestNetworkPoints = bestNetwork.pointsRecord
+
+            /**
+             * Modifica effettuata successivamente per prova.
+             * Se il puntenggio della rete che vince è inferiore al padre,
+             * il modello delle reti suscessive sarà una media
+             * tra la rete del vincitore e quella del padre.
+             */
+            if (bestNetworkPoints > activeCarPoints) {
+                bestNetwork = NeuralNetwork.mergeNetworks(
+                    bestNetwork,
+                    activeCar.network,
+                    Math.max(0.5, activeCarPoints / bestNetworkPoints)
+                )
+            }
+        }
+
         clearInterval(deathTimer)
         clearInterval(demeritTimer)
         allCars = generateCars(numberOfCars, neurons, road)
@@ -192,23 +212,6 @@ export function init(container: HTMLElement) {
         lastFrameTimestamp = timestamp
 
         resizeCanvas()
-
-        // activeCar?.controls.release()
-
-        // if (!interval) {
-        //     interval = setInterval(() => {
-        //         const distance = checkpoint - activeCar.position.y
-        //         if (distance < 100) {
-        //             if (activeCar.network) {
-        //                 saveNetwork(activeCar.network)
-        //             }
-        //             restart()
-        //         }
-        //         checkpoint = activeCar.position.y
-        //     }, 5000)
-        // }
-
-        // activeCar.controls.drive()
 
         aliveCars = getAliveCars(allCars)
         bestCar = getBestCar(allCars)
@@ -309,7 +312,7 @@ const generateCars = (n: number, neurons: Array<number>, road: Road) => {
         // const lane = Math.floor(Math.random() * 4)
         const lane = 1
         const position = road.getLanePosition(lane)
-        const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI / 2 })
+        const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI })
         const network = new NeuralNetwork(sensor.rayCount + 1, ...neurons, 4)
         const car = new Car({ position, features, sensor, network, ghost: true })
         cars.push(car)
@@ -388,9 +391,9 @@ const giveDemerits = (aliveCars: Array<Car>, demeritTimer: NodeJS.Timeout) => {
     demeritTimer = setTimeout(() => giveDemerits(aliveCars, demeritTimer), DEMERIT_TIMER_SECONDS)
 }
 
-const saveNetwork = (network: NeuralNetwork) => {
-    network.survivedRounds += 1
-    localStorage.setItem(BEST_NETWORK_KEY, JSON.stringify(network))
+const saveNetwork = (newNetwork: NeuralNetwork, lastNework?: NeuralNetwork) => {
+    newNetwork.survivedRounds += 1
+    localStorage.setItem(BEST_NETWORK_KEY, JSON.stringify(newNetwork))
 }
 
 const backupNetwork = (network: NeuralNetwork) => {

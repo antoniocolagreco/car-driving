@@ -2,7 +2,6 @@
 import type { HTMLAttributes } from 'astro/types'
 import Button from '../components/Button.astro'
 import Range from '../components/Range.astro'
-import Checkbox from '../components/Checkbox.astro'
 import Input from '../components/Input.astro'
 
 type Props = HTMLAttributes<'div'>
@@ -18,25 +17,25 @@ const { class: className, ...otherProps } = Astro.props
     })
 </script>
 
-<div class='h-full flex flex-col grow'>
-    <div class='flex gap-4 mb-2 w-full flex-wrap'>
-        <Button id='save-network'>Backup</Button>
-        <Button id='restore-network'>Restore</Button>
-        <Button id='reset-network'>Reset</Button>
-        <Button id='restart-network'>Restart</Button>
-        <Button id='evolve-network'>Evolve</Button>
-        <div class='grid'>
-            <label for='mutation-rate'>Mutation Rate: <span id='mutation-rate-value'></span></label>
-            <Range id='mutation-rate' type='range' min='1' max='100' value='20' step='1' class='w-36' />
+<div class="h-full flex flex-col grow">
+    <div class="flex gap-4 mb-2 w-full flex-wrap">
+        <Button id="save-network">Backup</Button>
+        <Button id="restore-network">Restore</Button>
+        <Button id="reset-network">Reset</Button>
+        <Button id="restart-network">Restart</Button>
+        <Button id="evolve-network">Evolve</Button>
+        <div class="grid">
+            <label for="mutation-rate">Mutation Rate: <span id="mutation-rate-value"></span></label>
+            <Range id="mutation-rate" type="range" min="1" max="100" value="20" step="1" class="w-36" />
         </div>
-        <div class='grid'>
-            <label for='number-of-cars'>Number of Cars: <span id='number-of-cars-value'></span></label>
-            <Range id='number-of-cars' type='range' min='10' max='100' value="50'" step='10' class='w-36' />
+        <div class="grid">
+            <label for="number-of-cars">Number of Cars: <span id="number-of-cars-value"></span></label>
+            <Range id="number-of-cars" type="range" min="10" max="100" value="50'" step="10" class="w-36" />
         </div>
-        <div class='grid'>
-            <label for='number-of-cars'>Neurons</label>
-            <Input id='neurons' class='w-36' />
+        <div class="grid">
+            <label for="number-of-cars">Neurons</label>
+            <Input id="neurons" class="w-36" />
         </div>
     </div>
-    <div id='drive' class:list={[className]} {...otherProps}></div>
+    <div id="drive" class:list={[className]} {...otherProps}></div>
 </div>
