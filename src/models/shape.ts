@@ -1,4 +1,4 @@
-import type Point from './Point'
+import type Point from './point'
 
 export default class Shape {
     points: Array<Point>
@@ -11,7 +11,10 @@ export default class Shape {
         if (!this.isLine()) {
             const lines: Array<Shape> = []
             for (let index = 0; index < this.points.length; index++) {
-                const line = new Shape(this.points[index], this.points[(index + 1) % this.points.length])
+                const line = new Shape(
+                    this.points[index],
+                    this.points[(index + 1) % this.points.length],
+                )
                 lines.push(line)
             }
             return lines

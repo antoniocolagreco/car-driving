@@ -1,0 +1,38 @@
+---
+import '@css/global.css'
+import '@fontsource-variable/nunito'
+import type { HTMLAttributes } from 'astro/types'
+import NavBar from '../components/nav-bar.astro'
+import { ClientRouter } from 'astro:transitions'
+
+type Props = HTMLAttributes<'html'>
+
+const { lang = 'en', title, ...otherProps } = Astro.props
+---
+
+<html lang={lang} {...otherProps}>
+    <head>
+        <meta charset="utf-8" />
+        <link rel="icon" type="image/svg+xml" href={`${import.meta.env.BASE_URL}/favicon.svg`} />
+        <meta name="viewport" content="width=device-width" />
+        <meta name="generator" content={Astro.generator} />
+        <title>Car Driving | {title}</title>
+    </head>
+    <body
+        class="min-h-screen relative bg-stone-50 text-neutral-800 dark:bg-neutral-800 dark:text-stone-50 flex flex-col min-w-0"
+    >
+        <ClientRouter />
+        <header>
+            <div class="bg-rose-600">
+                <div class="mx-auto max-w-screen-lg w-full py-2 text-stone-50">
+                    <h1 class="text-2xl font-bold mx-1">Car Driving</h1>
+                </div>
+            </div>
+            <NavBar class="mx-auto max-w-screen-lg w-full py-2" />
+        </header>
+        <main class="mx-auto max-w-screen-lg w-full grow overflow-hidden" transition:name="main">
+            <slot />
+        </main>
+        <slot name="dialog" />
+    </body>
+</html>

@@ -1,4 +1,4 @@
-import Point from '../models/Point'
+import Point from '../models/point'
 
 export const init = (container: HTMLElement) => {
     const mainCanvas = document.createElement('canvas')
@@ -20,8 +20,20 @@ export const init = (container: HTMLElement) => {
 
     if (!mainContext || !chartContext) return
 
-    const mainCanvasData: CanvasData = { center: new Point(0, 0), left: 0, right: 0, top: 0, bottom: 0 }
-    const chartCanvasData: CanvasData = { center: new Point(0, 0), left: 0, right: 0, top: 0, bottom: 0 }
+    const mainCanvasData: CanvasData = {
+        center: new Point(0, 0),
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+    }
+    const chartCanvasData: CanvasData = {
+        center: new Point(0, 0),
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+    }
 
     const mainTriangleData: TriangleData = {
         A: new Point(0, 0),
@@ -49,7 +61,13 @@ export const init = (container: HTMLElement) => {
     handleResize()
 
     mainCanvas.onmousemove = (event: MouseEvent) =>
-        handleMouseMove(event.offsetX, event.offsetY, mainCanvasData, mainTriangleData, mainAngleData)
+        handleMouseMove(
+            event.offsetX,
+            event.offsetY,
+            mainCanvasData,
+            mainTriangleData,
+            mainAngleData,
+        )
 
     window.onresize = () => handleResize()
 
@@ -93,9 +111,21 @@ export const init = (container: HTMLElement) => {
             baseline: 'bottom',
         })
 
-        drawLine(mainContext, { positions: [mainTriangleData.A, mainTriangleData.B], thickness: 2, color: 'black' })
-        drawLine(mainContext, { positions: [mainTriangleData.B, mainTriangleData.C], thickness: 2, color: 'black' })
-        drawLine(mainContext, { positions: [mainTriangleData.C, mainTriangleData.A], thickness: 2, color: 'black' })
+        drawLine(mainContext, {
+            positions: [mainTriangleData.A, mainTriangleData.B],
+            thickness: 2,
+            color: 'black',
+        })
+        drawLine(mainContext, {
+            positions: [mainTriangleData.B, mainTriangleData.C],
+            thickness: 2,
+            color: 'black',
+        })
+        drawLine(mainContext, {
+            positions: [mainTriangleData.C, mainTriangleData.A],
+            thickness: 2,
+            color: 'black',
+        })
 
         drawCorner(mainContext, { thickness: 2, radius: 40 }, mainTriangleData, mainAngleData)
 
@@ -235,7 +265,7 @@ const handleMouseMove = (
     height: number,
     canvasData: CanvasData,
     triangleData: TriangleData,
-    angleData: AngleData
+    angleData: AngleData,
 ) => {
     triangleData.B.x = width - canvasData.center.x
     triangleData.B.y = height - canvasData.center.y
@@ -315,7 +345,7 @@ const drawArc = (ctx: CanvasRenderingContext2D, props: DrawArcProps) => {
         props.radius ?? 20,
         props.startAngle ?? 0,
         props.endAngle ?? 360,
-        props.counterClockwise ?? false
+        props.counterClockwise ?? false,
     )
     ctx.stroke()
 }
@@ -414,18 +444,23 @@ const drawCorner = (
     ctx: CanvasRenderingContext2D,
     props: DrawCornerProps,
     triangleData: TriangleData,
-    angleData: AngleData
+    angleData: AngleData,
 ) => {
     let counterClockwise = false
-    if (triangleData.B.x < triangleData.A.x && triangleData.B.y > triangleData.A.y) counterClockwise = true
-    if (triangleData.B.x > triangleData.A.x && triangleData.B.y < triangleData.A.y) counterClockwise = true
+    if (triangleData.B.x < triangleData.A.x && triangleData.B.y > triangleData.A.y)
+        counterClockwise = true
+    if (triangleData.B.x > triangleData.A.x && triangleData.B.y < triangleData.A.y)
+        counterClockwise = true
 
     const startAngle = triangleData.B.x > triangleData.A.x ? 0 : Math.PI
 
     let endAngle = angleData.theta
-    if (triangleData.B.x < triangleData.A.x && triangleData.B.y > triangleData.A.y) endAngle = Math.PI - angleData.theta
-    if (triangleData.B.x > triangleData.A.x && triangleData.B.y < triangleData.A.y) endAngle = -angleData.theta
-    if (triangleData.B.x < triangleData.A.x && triangleData.B.y < triangleData.A.y) endAngle = Math.PI + angleData.theta
+    if (triangleData.B.x < triangleData.A.x && triangleData.B.y > triangleData.A.y)
+        endAngle = Math.PI - angleData.theta
+    if (triangleData.B.x > triangleData.A.x && triangleData.B.y < triangleData.A.y)
+        endAngle = -angleData.theta
+    if (triangleData.B.x < triangleData.A.x && triangleData.B.y < triangleData.A.y)
+        endAngle = Math.PI + angleData.theta
 
     if (triangleData.b > 50) {
         drawArc(ctx, {

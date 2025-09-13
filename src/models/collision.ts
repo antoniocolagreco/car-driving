@@ -1,4 +1,4 @@
-import type Point from './Point'
+import type Point from './point'
 
 export default class Collision {
     position: Point

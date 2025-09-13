@@ -1,5 +1,5 @@
-import { Car } from '../models/Car'
-import type Road from '../models/Road'
+import { Car } from '../models/car'
+import type Road from '../models/road'
 
 export const getTrafficRow = (road: Road, offset: number) => {
     return rowType[Math.floor(Math.random() * rowType.length)](road, offset)
@@ -52,4 +52,13 @@ export const rightCurve = (road: Road, offset: number) => {
     ]
 }
 
-const rowType = [singleCenter, singleLeft, singleRight, bothSide, doubleLeft, doubleRight, leftCurve, rightCurve]
+const rowType = [
+    singleCenter,
+    singleLeft,
+    singleRight,
+    bothSide,
+    doubleLeft,
+    doubleRight,
+    leftCurve,
+    rightCurve,
+]

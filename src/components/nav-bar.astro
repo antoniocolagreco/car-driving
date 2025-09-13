@@ -1,7 +1,7 @@
 ---
 import type { HTMLAttributes } from 'astro/types'
 import { readdirSync } from 'fs'
-import NavLink from './NavLink.astro'
+import NavLink from './nav-link.astro'
 type Props = HTMLAttributes<'nav'>
 const { class: className, ...otherProps } = Astro.props
 
@@ -9,13 +9,17 @@ const pages: string[] = []
 
 try {
     pages.push(...(readdirSync('./src/pages') as string[]).map((t) => t.split('.')[0]))
-} catch (error: any) {
-    console.error(error.message)
+} catch (error: unknown) {
+    if (error && typeof error === 'object' && 'message' in error) {
+        console.error((error as { message?: unknown }).message)
+    } else {
+        console.error(error)
+    }
 }
 ---
 
 <nav class:list={['', className]} {...otherProps}>
-    <ul class='flex gap-4 mx-1'>
+    <ul class="flex gap-4 mx-1">
         <li>
             <NavLink href={`${import.meta.env.BASE_URL}/`}>Home</NavLink>
         </li>

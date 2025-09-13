@@ -1,8 +1,8 @@
 import { getIntersection } from '../libs/utils'
-import Collision from './Collision'
-import Drawable, { type DrawableProps } from './Drawable'
-import Point from './Point'
-import Shape from './Shape'
+import type Collision from './collision'
+import Drawable, { type DrawableProps } from './drawable'
+import Point from './point'
+import Shape from './shape'
 
 export type SensorProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle' | 'size'> & {
     rayCount: number
@@ -68,7 +68,7 @@ export default class Sensor extends Drawable {
             const start = new Point(this.position.x, this.position.y)
             const end = new Point(
                 this.position.x - Math.sin(rayDirection + this.direction) * this.rayLength,
-                this.position.y - Math.cos(rayDirection + this.direction) * this.rayLength
+                this.position.y - Math.cos(rayDirection + this.direction) * this.rayLength,
             )
 
             this.rays.unshift(new Shape(start, end))

@@ -1,6 +1,6 @@
-import Drawable, { type DrawableProps } from './Drawable'
-import Point from './Point'
-import Shape from './Shape'
+import Drawable, { type DrawableProps } from './drawable'
+import Point from './point'
+import Shape from './shape'
 
 export type RoadProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle'> & {
     lanesCount?: number
@@ -44,7 +44,12 @@ export default class Road extends Drawable {
         const y = -(this.size.height / 2)
 
         context.fillStyle = 'gray'
-        context.fillRect(x - this.roadMargins, y, this.size.width + this.roadMargins * 2, this.size.height)
+        context.fillRect(
+            x - this.roadMargins,
+            y,
+            this.size.width + this.roadMargins * 2,
+            this.size.height,
+        )
 
         context.strokeStyle = 'white'
         context.lineWidth = this.laneSeparatorWidth

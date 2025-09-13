@@ -1,6 +1,6 @@
 import { normalize, normalizeToHex } from '../libs/utils'
-import type Layer from './Layer'
-import type NeuralNetwork from './NeuralNetwork'
+import type Layer from './layer'
+import type NeuralNetwork from './neural-network'
 
 export default class Visualizer {
     static drawNetworkIn(ctx: CanvasRenderingContext2D, network: NeuralNetwork) {
@@ -21,7 +21,7 @@ export default class Visualizer {
         width: number,
         yStart: number,
         yEnd: number,
-        icons: Array<string>
+        icons: Array<string>,
     ) {
         const { biases, inputs, outputs, weights } = layer
 
@@ -36,8 +36,10 @@ export default class Visualizer {
                 ctx.beginPath()
                 ctx.lineWidth = Math.floor(normalize(weights[i][j], -1, 1, 1, 6))
 
-                const r = weights[i][j] < 0 ? normalizeToHex(Math.max(15, weights[i][j]), -1, 0) : '00'
-                const g = weights[i][j] > 0 ? normalizeToHex(Math.max(15, weights[i][j]), 0, 1) : '00'
+                const r =
+                    weights[i][j] < 0 ? normalizeToHex(Math.max(15, weights[i][j]), -1, 0) : '00'
+                const g =
+                    weights[i][j] > 0 ? normalizeToHex(Math.max(15, weights[i][j]), 0, 1) : '00'
                 // const r = normalizeToHex(-weights[i][j], -1, 1)
                 // const g = normalizeToHex(weights[i][j], -1, 1)
                 const b = '00'

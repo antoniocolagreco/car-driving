@@ -1,5 +1,4 @@
-import { tanh } from '../libs/utils'
-import { getRandomSimmetricalValue } from './NeuralNetwork'
+import { getRandomSimmetricalValue } from './neural-network'
 
 export default class Layer {
     /**
@@ -85,10 +84,10 @@ export default class Layer {
         /**
          * Calcoliamo i valori di output moltiplicando i valori di input, con i pesi
          *  */
-        // i itera gl inputs
+        // i itera gl output
         for (let i = 0; i < layer.outputs.length; i++) {
             let sum = 0
-            // j itera gli output
+            // j itera gli inputs
             for (let j = 0; j < layer.inputs.length; j++) {
                 //facciamo una somma ponderata moltiplicando tutti gli input per il peso della connessione con l'output w * s.
                 //Ripetiamo per ogni input
@@ -96,10 +95,12 @@ export default class Layer {
             }
 
             //se la somma è superiore al bias, l'output (il neurone) si attiva.
-            //Questa funzione di attivazione del neurone si chiama "hyperplane", che è molto semplice, ma ce ne sono tante:
+            //Questa funzione di attivazione del neurone si chiama hyperbolic tangent.
+            // Ci sono tanti tipi di funzioni di attivazione:
             // sigmoid, hyperbolic tangent, ReLU etc
 
-            layer.outputs[i] = tanh(sum, layer.biases[i])
+            // layer.outputs[i] = tanh(sum, layer.biases[i])
+            layer.outputs[i] = Math.tanh(sum + layer.biases[i])
         }
         return layer.outputs
     }

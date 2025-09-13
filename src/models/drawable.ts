@@ -1,6 +1,6 @@
-import Point from './Point'
-import Shape from './Shape'
-import Size from './Size'
+import Point from './point'
+import Shape from './shape'
+import Size from './size'
 
 export type DrawableProps = {
     position?: Point
@@ -42,26 +42,26 @@ export default class Drawable {
             //Moltiplicando il raggio per i valori di x ed y che fanno riferimento all'angolo di un cerchio unitario
             //otteniamo le coordinate
             this.position.x - Math.sin(this.direction - alpha) * rad,
-            this.position.y - Math.cos(this.direction - alpha) * rad
+            this.position.y - Math.cos(this.direction - alpha) * rad,
         )
         const topRight = new Point(
             this.position.x - Math.sin(this.direction + alpha) * rad,
-            this.position.y - Math.cos(this.direction + alpha) * rad
+            this.position.y - Math.cos(this.direction + alpha) * rad,
         )
         //Per trovare le coordinate dei vertici inferiori, quelli negativi sull'ordinata, aggiungiamo 3.14 radianti (180 gradi) al calcolo.
         const bottomRight = new Point(
             this.position.x - Math.sin(Math.PI + this.direction - alpha) * rad,
-            this.position.y - Math.cos(Math.PI + this.direction - alpha) * rad
+            this.position.y - Math.cos(Math.PI + this.direction - alpha) * rad,
         )
         const bottomLeft = new Point(
             this.position.x - Math.sin(Math.PI + this.direction + alpha) * rad,
-            this.position.y - Math.cos(Math.PI + this.direction + alpha) * rad
+            this.position.y - Math.cos(Math.PI + this.direction + alpha) * rad,
         )
         return new Shape(topLeft, topRight, bottomRight, bottomLeft)
     }
 
-    beforeDrawing(context: CanvasRenderingContext2D) {}
-    afterDrawing(context: CanvasRenderingContext2D) {}
+    beforeDrawing(_context: CanvasRenderingContext2D) {}
+    afterDrawing(_context: CanvasRenderingContext2D) {}
 
     drawInstructions(context: CanvasRenderingContext2D) {
         if (this.ghost) {

@@ -1,10 +1,10 @@
 import { checkPolygonsIntersection, getRandomColor, normalize } from '../libs/utils'
-import Controls from './Controls'
-import Drawable, { type DrawableProps } from './Drawable'
-import type Features from './Features'
-import NeuralNetwork from './NeuralNetwork'
-import Sensor from './Sensor'
-import type Shape from './Shape'
+import Controls from './controls'
+import Drawable, { type DrawableProps } from './drawable'
+import type Features from './features'
+import NeuralNetwork from './neural-network'
+import type Sensor from './sensor'
+import type Shape from './shape'
 
 export type VehicleProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle'> & {
     features: Features
@@ -125,10 +125,18 @@ export default class Vehicle extends Drawable {
 
     #autoPilot() {
         if (!this.network || !this.sensor) return
-        const offsets = this.sensor.collisions.map((collision) => (collision === null ? 0 : 1 - collision.offset))
+        const offsets = this.sensor.collisions.map((collision) =>
+            collision === null ? 0 : 1 - collision.offset,
+        )
 
         //Aggiunge Speed tra i sensori
-        const normalizedSpeed = normalize(this.speed, -this.features.maxReverse, this.features.maxSpeed, 0, 1)
+        const normalizedSpeed = normalize(
+            this.speed,
+            -this.features.maxReverse,
+            this.features.maxSpeed,
+            0,
+            1,
+        )
         offsets.push(normalizedSpeed)
 
         const outputs = NeuralNetwork.feedForward(offsets, this.network)

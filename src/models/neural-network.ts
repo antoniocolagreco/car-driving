@@ -1,5 +1,5 @@
 import { deepCopy, generateId, weightedAverage } from '../libs/utils'
-import Layer from './Layer'
+import Layer from './layer'
 
 export const getRandomSimmetricalValue = () => {
     return Math.random() * 2 - 1
@@ -41,17 +41,19 @@ export default class NeuralNetwork {
 
         mutatedNetwork.layers.forEach((layer) => {
             for (let i = 0; i < layer.biases.length; i++) {
-                layer.biases[i] = weightedAverage(
-                    { value: layer.biases[i], weight: 1 - amount },
-                    { value: getRandomSimmetricalValue(), weight: amount }
-                )
+                // Disabilito i bias per il momento
+                // layer.biases[i] = weightedAverage(
+                //     { value: layer.biases[i], weight: 1 - amount },
+                //     { value: getRandomSimmetricalValue(), weight: amount }
+                // )
+                layer.biases[i] = 0
             }
 
             for (let i = 0; i < layer.weights.length; i++) {
                 for (let j = 0; j < layer.weights[i].length; j++) {
                     layer.weights[i][j] = weightedAverage(
                         { value: layer.weights[i][j], weight: 1 - amount },
-                        { value: getRandomSimmetricalValue(), weight: amount }
+                        { value: getRandomSimmetricalValue(), weight: amount },
                     )
                 }
             }
@@ -73,7 +75,7 @@ export default class NeuralNetwork {
             for (let j = 0; j < mergeNetwork.layers[i].biases.length; j++) {
                 mergeNetwork.layers[i].biases[j] = weightedAverage(
                     { value: network1.layers[i].biases[j], weight: 1 - amount },
-                    { value: network2.layers[i].biases[j], weight: amount }
+                    { value: network2.layers[i].biases[j], weight: amount },
                 )
             }
 
@@ -81,7 +83,7 @@ export default class NeuralNetwork {
                 for (let k = 0; k < mergeNetwork.layers[i].weights[j].length; k++) {
                     mergeNetwork.layers[i].weights[j][k] = weightedAverage(
                         { value: network1.layers[i].weights[j][k], weight: 1 - amount },
-                        { value: network2.layers[i].weights[j][k], weight: amount }
+                        { value: network2.layers[i].weights[j][k], weight: amount },
                     )
                 }
             }
