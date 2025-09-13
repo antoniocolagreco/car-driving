@@ -1,61 +1,92 @@
-import { Car } from '../models/car'
-import Features from '../models/features'
-import Map from '../models/map'
-import NeuralNetwork from '../models/neural-network'
-import Point from '../models/point'
-import Road from '../models/road'
-import Sensor from '../models/sensor'
-import Size from '../models/size'
-import type Vehicle from '../models/vehicle'
-import Visualizer from '../models/visualizer'
-import { getTrafficRow } from './traffic'
+import Map from '@models/map'
+import NeuralNetwork from '@models/neural-network'
+import Point from '@models/point'
+import Road from '@models/road'
+import Size from '@models/size'
+import type Vehicle from '@models/vehicle'
+import Visualizer from '@models/visualizer'
+import { TIMERS, DISPLAY, SIMULATION } from './config'
+import {
+    backupNetwork as backupBest,
+    loadBestNetwork,
+    loadMutationRate,
+    loadNeurons,
+    loadNumberOfCars,
+    resetBestNetwork,
+    restoreBackupNetwork,
+    saveBestNetwork,
+    saveMutationRate,
+    saveNeurons,
+    saveNumberOfCars,
+} from './persistence.service'
+import { generateTraffic } from './traffic-service'
+import { generateCars, getAliveCars, getActiveCar, getBestCar } from './simulation-engine'
+import { bindUI } from './ui-controller'
 
-const BEST_NETWORK_KEY = 'BestNetwork'
-const BACKUP_NETWORK_KEY = 'BackupNetwork'
-const MUTATION_RATE_KEY = 'MutationRate'
-const NUMBER_OF_CARS_KEY = 'NumberOfCars'
-const NEURONS_KEY = 'Neurons'
-const DEATH_TIMER_SECONDS = 15000
-const DEMERIT_TIMER_SECONDS = 10000
-const WINNER_TIMER_SECONDS = 3000
+// keys moved into persistence service
 
-export function init(container: HTMLElement) {
+// Local display constants moved to config DISPLAY/SIMULATION
+
+export type SimulationControls = {
+    start: () => void
+    stop: () => void
+    destroy: () => void
+}
+
+export function createSimulation(container: HTMLElement): SimulationControls {
+    const abortController = new AbortController()
+    const on = (
+        target: EventTarget,
+        type: string,
+        handler: EventListenerOrEventListenerObject,
+        options?: AddEventListenerOptions,
+    ) =>
+        target.addEventListener(type, handler, {
+            ...(options ?? {}),
+            signal: abortController.signal,
+        })
+    let animationId: number | undefined
+    let lastNetworkDrawAt = 0
     const carCanvas = document.createElement('canvas')
+    carCanvas.setAttribute('role', 'img')
+    carCanvas.setAttribute('aria-label', 'Simulation view: road and cars')
     const networkCanvas = document.createElement('canvas')
+    networkCanvas.setAttribute('role', 'img')
+    networkCanvas.setAttribute('aria-label', 'Neural network visualization of the active car')
     const carContext = carCanvas.getContext('2d', { alpha: false })
     const networkContext = networkCanvas.getContext('2d', { alpha: false })
 
     container.appendChild(carCanvas)
     container.appendChild(networkCanvas)
 
-    window.onresize = () => resizeCanvas()
+    on(window, 'resize', () => resizeCanvas())
 
     function resizeCanvas() {
         container.style.display = 'grid'
-        if (container.clientWidth > 699) {
-            container.style.gridTemplateColumns = '1fr 1fr'
-            carCanvas.width = container.clientWidth / 2
-            carCanvas.height = container.clientHeight
-            networkCanvas.width = container.clientWidth / 2
-            networkCanvas.height = container.clientHeight
-        } else {
-            container.style.gridTemplateColumns = '1fr'
-            carCanvas.width = container.clientWidth
-            carCanvas.height = container.clientHeight / 2
-            networkCanvas.width = container.clientWidth
-            networkCanvas.height = container.clientHeight / 2
-        }
+        const twoCols = container.clientWidth > 699
+        container.style.gridTemplateColumns = twoCols ? '1fr 1fr' : '1fr'
+
+        const desiredCarWidth = twoCols ? container.clientWidth / 2 : container.clientWidth
+        const desiredCarHeight = twoCols ? container.clientHeight : container.clientHeight / 2
+        const desiredNetWidth = desiredCarWidth
+        const desiredNetHeight = desiredCarHeight
+
+        if (carCanvas.width !== desiredCarWidth) carCanvas.width = desiredCarWidth
+        if (carCanvas.height !== desiredCarHeight) carCanvas.height = desiredCarHeight
+        if (networkCanvas.width !== desiredNetWidth) networkCanvas.width = desiredNetWidth
+        if (networkCanvas.height !== desiredNetHeight) networkCanvas.height = desiredNetHeight
     }
 
     resizeCanvas()
 
-    const map = new Map({
+    // World setup
+    const worldMap = new Map({
         position: new Point(carCanvas.width / 2, carCanvas.height / 2),
         size: new Size(1000, 100000),
     })
     const road = new Road({
         position: new Point(carCanvas.width / 2, carCanvas.height / 2),
-        size: new Size(240, map.size.height),
+        size: new Size(240, worldMap.size.height),
         lanesCount: 3,
     })
 
@@ -64,73 +95,109 @@ export function init(container: HTMLElement) {
     let aliveCars: Array<Vehicle> = []
     let activeCar: Vehicle | undefined
     let bestCar: Vehicle | undefined
-    let notIdleVehicleCheckInterval: ReturnType<typeof setTimeout> | undefined
+    let deathCheckInterval: ReturnType<typeof setInterval> | undefined
+    let demeritCheckInterval: ReturnType<typeof setInterval> | undefined
     let mutationRate = loadMutationRate() ?? 0.2
     let numberOfCars = loadNumberOfCars() ?? 50
     let neurons: Array<number> = loadNeurons() ?? [4]
     let trafficCounter = 0
-    let deathTimer: ReturnType<typeof setTimeout>
-    let demeritTimer: ReturnType<typeof setTimeout>
     let gameover: boolean = false
+    let gameoverAt: number | null = null
 
-    const mutationRange = document.querySelector('#mutation-rate') as HTMLInputElement
-    const numberOfCarsRange = document.querySelector('#number-of-cars') as HTMLInputElement
-    const mutationValue = document.querySelector('#mutation-rate-value') as HTMLSpanElement
-    const numberOfCarsValue = document.querySelector('#number-of-cars-value') as HTMLSpanElement
-    const neuronsInput = document.querySelector('#neurons') as HTMLInputElement
-
-    mutationValue.innerText = `${Math.round(mutationRate * 100)}%`
-    mutationRange.value = `${mutationRate * 100}`
-    numberOfCarsValue.innerText = String(numberOfCars)
-    numberOfCarsRange.value = `${numberOfCars}`
-
-    neuronsInput.value = neurons.join(',')
-
-    neuronsInput.addEventListener('keypress', (event) => {
-        if (event.key === 'Enter') {
-            saveNeurons(neuronsInput.value)
-            neurons = neuronsInput.value.split(',').map((v) => Number(v))
-            resetNetwork()
-            restart()
-        }
+    bindUI({
+        signal: abortController.signal,
+        initial: { mutationRate, numberOfCars, neurons },
+        callbacks: {
+            onChangeMutationRate: (value) => {
+                mutationRate = value
+                saveMutationRate(value)
+            },
+            onChangeNumberOfCars: (value) => {
+                numberOfCars = value
+                saveNumberOfCars(value)
+            },
+            onChangeNeurons: (values) => {
+                saveNeurons(values.join(','))
+                neurons = values
+                resetBestNetwork()
+                restart()
+            },
+            onBackup: () => {
+                if (!activeCar || !activeCar.network) return
+                backupBest(activeCar.network)
+            },
+            onRestore: () => {
+                const restored = restoreBackupNetwork()
+                if (restored) saveBestNetwork(restored)
+                restart()
+            },
+            onReset: () => {
+                resetBestNetwork()
+                restart()
+            },
+            onRestart: () => restart(),
+            onEvolve: () => {
+                if (!bestCar || !bestCar.network) return
+                saveBestNetwork(bestCar.network)
+                endRound()
+            },
+        },
     })
 
-    mutationRange.addEventListener('input', () => {
-        const value = Number(mutationRange.value)
-        mutationValue.innerText = `${value}%`
-        mutationRate = value / 100
-        saveMutationRate(mutationRate)
-    })
-    numberOfCarsRange.addEventListener('input', () => {
-        numberOfCarsValue.innerText = numberOfCarsRange.value
-        numberOfCars = Number(numberOfCarsRange.value)
-        saveNumberOfCars(numberOfCars)
-    })
-
-    document.querySelector('#save-network')?.addEventListener('click', () => {
-        if (!activeCar || !activeCar.network) return
-        backupNetwork(activeCar.network)
-    })
-    document.querySelector('#restore-network')?.addEventListener('click', () => {
-        restoreNetwork()
-        restart()
-    })
-    document.querySelector('#reset-network')?.addEventListener('click', () => {
-        resetNetwork()
-        restart()
-    })
-    document.querySelector('#restart-network')?.addEventListener('click', () => {
-        restart()
-    })
-    document.querySelector('#evolve-network')?.addEventListener('click', () => {
-        if (!bestCar || !bestCar.network) return
-        saveNetwork(bestCar.network)
-        endRound()
-    })
+    // Helpers
+    const computeViewport = () => {
+        const x = carCanvas.width / 2
+        const fallbackY = traffic[0]?.position.y ?? 0
+        const y = activeCar
+            ? -activeCar.position.y + carCanvas.height * DISPLAY.viewportYFactor
+            : fallbackY
+        return { x, y }
+    }
+    const drawHud = () => {
+        if (!activeCar || !carContext) return
+        carContext.fillStyle = '#fff'
+        carContext.font = '20px monospace'
+        carContext.textAlign = 'left'
+        carContext.textBaseline = 'bottom'
+        carContext.fillText(` ID: ${activeCar.network?.id}`, 10, carCanvas.height - 130)
+        carContext.fillText(`PTS: ${activeCar.points}`, 10, carCanvas.height - 110)
+        carContext.fillText(`SRS: ${activeCar.network?.survivedRounds}`, 10, carCanvas.height - 90)
+        carContext.fillText(`CRS: ${aliveCars.length}`, 10, carCanvas.height - 70)
+        carContext.fillText(
+            `PPS: ${(activeCar.speed * currentFps).toFixed(2)}`,
+            10,
+            carCanvas.height - 50,
+        )
+        carContext.fillText(
+            `RPS: ${(activeCar.steeringPower * currentFps).toFixed(2)}`,
+            10,
+            carCanvas.height - 30,
+        )
+    }
+    const drawGameOverOverlay = () => {
+        if (!gameover || !bestCar || !carContext) return
+        carContext.font = '32px monospace'
+        carContext.lineWidth = 3
+        carContext.setLineDash([])
+        carContext.textAlign = 'center'
+        carContext.textBaseline = 'middle'
+        const message1 = `${bestCar.network?.id}`
+        const message2 = 'WINS'
+        const message3 = `with ${bestCar.points} points`
+        carContext.fillStyle = '#fff'
+        carContext.strokeStyle = 'black'
+        carContext.strokeText(message1, carCanvas.width / 2, carCanvas.height / 2 - 80)
+        carContext.fillText(message1, carCanvas.width / 2, carCanvas.height / 2 - 80)
+        carContext.strokeText(message2, carCanvas.width / 2, carCanvas.height / 2 - 40)
+        carContext.fillText(message2, carCanvas.width / 2, carCanvas.height / 2 - 40)
+        carContext.strokeText(message3, carCanvas.width / 2, carCanvas.height / 2)
+        carContext.fillText(message3, carCanvas.width / 2, carCanvas.height / 2)
+    }
 
     const restart = () => {
         gameover = false
-        let bestNetwork = loadNetwork()
+        gameoverAt = null
+        let bestNetwork = loadBestNetwork()
 
         if (activeCar && activeCar.network && bestNetwork) {
             const activeCarPoints = activeCar.network.pointsRecord
@@ -151,13 +218,12 @@ export function init(container: HTMLElement) {
             }
         }
 
-        clearTimeout(deathTimer)
-        clearTimeout(demeritTimer)
+        if (deathCheckInterval) clearInterval(deathCheckInterval)
+        if (demeritCheckInterval) clearInterval(demeritCheckInterval)
         allCars = generateCars(numberOfCars, neurons, road)
         aliveCars = allCars
         activeCar = aliveCars[0]
-        clearInterval(notIdleVehicleCheckInterval)
-        notIdleVehicleCheckInterval = undefined
+        trafficCounter = 0
         activeCar.fillStyle = 'white'
 
         if (bestNetwork) {
@@ -172,16 +238,36 @@ export function init(container: HTMLElement) {
             }
         }
 
-        traffic = generateTraffic(20, road)
+        traffic = generateTraffic(SIMULATION.initialTrafficRows, road)
 
-        deathTimer = setTimeout(
-            () => removeLateCars(aliveCars, traffic, trafficCounter, getActiveCar, deathTimer),
-            DEATH_TIMER_SECONDS,
-        )
-        demeritTimer = setTimeout(
-            () => giveDemerits(aliveCars, demeritTimer),
-            DEMERIT_TIMER_SECONDS,
-        )
+        // Intervalli basati sullo stato corrente
+        deathCheckInterval = setInterval(() => {
+            const firstCar = getActiveCar(aliveCars)
+            for (const car of aliveCars) {
+                const t = traffic[trafficCounter]
+                if (t && car.position.y > t.position.y) car.crash()
+                if (firstCar && car.position.y - SIMULATION.trafficCrashLead > firstCar.position.y)
+                    car.crash()
+                if (car.meritPoints === car.checkPoints) {
+                    car.demeritPoints += 1
+                } else {
+                    car.demeritPoints = 0
+                }
+                car.checkPoints = car.meritPoints
+            }
+            trafficCounter += 1
+        }, TIMERS.deathMs)
+
+        demeritCheckInterval = setInterval(() => {
+            for (const car of aliveCars) {
+                if (car.meritPoints <= car.checkPoints) {
+                    car.demeritPoints += 1
+                } else {
+                    car.demeritPoints = 0
+                }
+                car.checkPoints = car.meritPoints
+            }
+        }, TIMERS.demeritMs)
 
         if (networkContext && activeCar.network) {
             Visualizer.drawNetworkIn(networkContext, activeCar.network)
@@ -190,14 +276,12 @@ export function init(container: HTMLElement) {
 
     const endRound = () => {
         gameover = true
-        setTimeout(() => {
-            restart()
-        }, WINNER_TIMER_SECONDS)
+        gameoverAt = performance.now()
     }
 
     restart()
 
-    let targetFPS = 60
+    let targetFPS = DISPLAY.targetFps
     let framesInterval = 1000 / targetFPS
     let lastFrameTimestamp = 0
 
@@ -205,7 +289,10 @@ export function init(container: HTMLElement) {
     let countedFrames = 0
     let currentFps = 0
 
-    requestAnimationFrame(animate)
+    const start = () => {
+        if (animationId) cancelAnimationFrame(animationId)
+        animationId = requestAnimationFrame(animate)
+    }
 
     function animate(timestamp: number) {
         if (!carContext) return
@@ -221,24 +308,23 @@ export function init(container: HTMLElement) {
         aliveCars = getAliveCars(allCars)
         bestCar = getBestCar(allCars)
         activeCar = gameover ? bestCar : getActiveCar(aliveCars, activeCar)
+        // If we are in gameover state, restart after the winner timeout using RAF time
+        if (gameover && gameoverAt !== null && timestamp - gameoverAt >= TIMERS.winnerMs) {
+            restart()
+            gameoverAt = null
+        }
         if (aliveCars.length === 0 && !gameover) {
-            if (bestCar && bestCar.network) {
-                if (bestCar.network) {
-                    saveNetwork(bestCar.network)
-                }
-            }
+            if (bestCar?.network) saveBestNetwork(bestCar.network)
             endRound()
         }
 
         //Centra viewport su auto attiva
-        const translateY = activeCar
-            ? -activeCar.position.y + carCanvas.height * 0.7
-            : traffic[0].position.y
-        const translateX = carCanvas.width / 2
+        const { x: translateX, y: translateY } = computeViewport()
+        carContext.save()
         carContext.translate(translateX, translateY)
 
         //Disegna mappa e strada
-        map.drawIn(carContext)
+        worldMap.drawIn(carContext)
         road.drawIn(carContext)
 
         //Aggiorna stato e disegna auto che corrono con AI
@@ -254,7 +340,7 @@ export function init(container: HTMLElement) {
         }
 
         //Reset viewport
-        carContext.translate(-translateX, -translateY)
+        carContext.restore()
 
         countedFrames += 1
         if (timestamp - lastFpsCountTimestamp > 1000) {
@@ -264,208 +350,62 @@ export function init(container: HTMLElement) {
         }
 
         //Disegna interfaccia
-        if (activeCar) {
-            carContext.fillStyle = '#fff'
-            carContext.font = '20px monospace'
-            carContext.textAlign = 'left'
-            carContext.textBaseline = 'bottom'
-            carContext.fillText(` ID: ${activeCar.network?.id}`, 10, carCanvas.height - 130)
-            carContext.fillText(`PTS: ${activeCar.points}`, 10, carCanvas.height - 110)
-            carContext.fillText(
-                `SRS: ${activeCar.network?.survivedRounds}`,
-                10,
-                carCanvas.height - 90,
-            )
-            carContext.fillText(`CRS: ${aliveCars.length}`, 10, carCanvas.height - 70)
-            carContext.fillText(
-                `PPS: ${(activeCar.speed * currentFps).toFixed(2)}`,
-                10,
-                carCanvas.height - 50,
-            )
-            carContext.fillText(
-                `RPS: ${(activeCar.steeringPower * currentFps).toFixed(2)}`,
-                10,
-                carCanvas.height - 30,
-            )
-        }
+        drawHud()
         carContext.fillText(`FPS: ${currentFps}`, 10, carCanvas.height - 10)
 
-        if (gameover && bestCar) {
-            carContext.font = '32px monospace'
-            carContext.lineWidth = 3
-            carContext.setLineDash([])
-            carContext.textAlign = 'center'
-            carContext.textBaseline = 'middle'
-
-            const message1 = `${bestCar.network?.id}`
-            const message2 = `WINS`
-            const message3 = `with ${bestCar.points} points`
-
-            carContext.fillStyle = '#fff'
-            carContext.strokeStyle = 'black'
-
-            carContext.strokeText(message1, carCanvas.width / 2, carCanvas.height / 2 - 80)
-            carContext.fillText(message1, carCanvas.width / 2, carCanvas.height / 2 - 80)
-            carContext.strokeText(message2, carCanvas.width / 2, carCanvas.height / 2 - 40)
-            carContext.fillText(message2, carCanvas.width / 2, carCanvas.height / 2 - 40)
-            carContext.strokeText(message3, carCanvas.width / 2, carCanvas.height / 2)
-            carContext.fillText(message3, carCanvas.width / 2, carCanvas.height / 2)
-        }
+        drawGameOverOverlay()
 
         //Disegna rete neurale auto attiva
         if (networkContext && activeCar && activeCar.network) {
-            Visualizer.drawNetworkIn(networkContext, activeCar.network)
+            if (timestamp - lastNetworkDrawAt > DISPLAY.networkDrawThrottleMs) {
+                // Clear once per redraw to avoid ghosting without flicker
+                networkContext.clearRect(0, 0, networkCanvas.width, networkCanvas.height)
+                Visualizer.drawNetworkIn(networkContext, activeCar.network)
+                lastNetworkDrawAt = timestamp
+            }
         }
 
-        requestAnimationFrame((t) => animate(t))
+        animationId = requestAnimationFrame(animate)
     }
-}
-
-const generateCars = (n: number, neurons: Array<number>, road: Road) => {
-    const cars = []
-
-    const features = new Features({
-        maxSpeed: 7,
-        acceleration: 0.03,
-        maxReverse: 1,
-        breakPower: 0.2,
-    })
-
-    for (let index = 0; index < n; index++) {
-        // const lane = Math.floor(Math.random() * 4)
-        const lane = 1
-        const position = road.getLanePosition(lane)
-        const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI })
-        const network = new NeuralNetwork(sensor.rayCount + 1, ...neurons, 4)
-        const car = new Car({ position, features, sensor, network, ghost: true })
-        cars.push(car)
+    const stop = () => {
+        if (animationId) cancelAnimationFrame(animationId)
+        animationId = undefined
+        if (deathCheckInterval) clearInterval(deathCheckInterval)
+        if (demeritCheckInterval) clearInterval(demeritCheckInterval)
     }
-    return cars
-}
-
-const getAliveCars = (cars: Array<Vehicle>) => cars.filter((c) => !c.damaged)
-
-const getActiveCar = (cars: Array<Vehicle>, currentActiveCar?: Vehicle) => {
-    const car = cars.find((car) => car.position.y === Math.min(...cars.map((c) => c.position.y)))
-    if (car && currentActiveCar) {
-        currentActiveCar.setGhost(true)
-        car.setGhost(false)
+    const destroy = () => {
+        stop()
+        abortController.abort()
+        try {
+            container.removeChild(carCanvas)
+            container.removeChild(networkCanvas)
+        } catch {}
     }
-    return car
+
+    // kick things off by default; caller can stop/start as needed
+    start()
+    return { start, stop, destroy }
 }
 
-const getBestCar = (cars: Array<Car>) => {
-    const carsWithMostPoints = cars.filter(
-        (car) =>
-            car.points ===
-            Math.max(
-                ...cars.map((c) => {
-                    c.winner = false
-                    return c.points
-                }),
-            ),
-    )
-    const carThatDiedLast = carsWithMostPoints.find(
-        (car) => car.position.y === Math.min(...carsWithMostPoints.map((c) => c.position.y)),
-    )
-    if (carThatDiedLast) {
-        carThatDiedLast.winner = true
-    }
-    return carThatDiedLast
+// Backwards-compatible helper
+export function init(container: HTMLElement) {
+    const sim = createSimulation(container)
+    // As a safety net, destroy on unload
+    window.addEventListener('unload', () => sim.destroy(), { once: true })
 }
 
-const removeLateCars = (
-    cars: Array<Car>,
-    traffic: Array<Car>,
-    trafficCounter: number,
-    getActiveCar: (cars: Array<Vehicle>) => Vehicle | undefined,
-    deathTimer: ReturnType<typeof setTimeout>,
-) => {
-    const firstCar = getActiveCar(cars)
+// moved to simulation-engine
 
-    cars.forEach((car) => {
-        if (car.position.y > traffic[trafficCounter].position.y) car.crash()
-        if (firstCar) {
-            if (car.position.y - 5000 > firstCar.position.y) car.crash()
-        }
-        if (car.meritPoints === car.checkPoints) {
-            car.demeritPoints += 1
-        } else {
-            car.demeritPoints = 0
-        }
-        car.checkPoints = car.meritPoints
-    })
-    trafficCounter += 1
-    deathTimer = setTimeout(
-        () => removeLateCars(cars, traffic, trafficCounter, getActiveCar, deathTimer),
-        DEATH_TIMER_SECONDS,
-    )
-}
+// replaced by interval-based checks
 
-const giveDemerits = (aliveCars: Array<Car>, demeritTimer: ReturnType<typeof setTimeout>) => {
-    aliveCars.forEach((car) => {
-        if (car.meritPoints <= car.checkPoints) {
-            car.demeritPoints += 1
-        } else {
-            car.demeritPoints = 0
-        }
-        car.checkPoints = car.meritPoints
-    })
-    demeritTimer = setTimeout(() => giveDemerits(aliveCars, demeritTimer), DEMERIT_TIMER_SECONDS)
-}
+// replaced by interval-based checks
 
-const saveNetwork = (newNetwork: NeuralNetwork, _lastNework?: NeuralNetwork) => {
-    newNetwork.survivedRounds += 1
-    localStorage.setItem(BEST_NETWORK_KEY, JSON.stringify(newNetwork))
-}
-
-const backupNetwork = (network: NeuralNetwork) => {
-    localStorage.setItem(BACKUP_NETWORK_KEY, JSON.stringify(network))
-}
-
-const restoreNetwork = () => {
-    const networkString = localStorage.getItem(BACKUP_NETWORK_KEY)
-    if (networkString) {
-        const network = JSON.parse(networkString)
-        saveNetwork(network)
-    }
-}
-
-const resetNetwork = () => {
-    localStorage.removeItem(BEST_NETWORK_KEY)
-}
-
-/**
- * Carica la rete neurale salvata nel localStorage.
- */
-const loadNetwork = (): NeuralNetwork | undefined => {
-    const network = localStorage.getItem(BEST_NETWORK_KEY)
-    if (!network) return undefined
-    return JSON.parse(network)
-}
+// persistence moved to persistence.service
 
 /**
  * Genera il traffico per la strada specificata.
  */
-const generateTraffic = (rowsOfCar: number, road: Road): Array<Vehicle> => {
-    let traffic: Array<Vehicle> = []
-    const offset = -400
-
-    for (let i = 0; i < rowsOfCar; i++) {
-        // const func = fixedRows.shift()
-        // if (func) {
-        //     traffic.push(...func(road, offset * i))
-        // }
-        const carsRow = getTrafficRow(road, offset * i + offset)
-        traffic.push(...carsRow)
-    }
-
-    for (let vehicle of traffic) {
-        vehicle.controls.forward = true
-    }
-
-    return traffic
-}
+// traffic generation moved to traffic-service
 
 /**
  * Genera una fila di veicoli per la strada specificata in posizioni casuali.
@@ -485,34 +425,4 @@ const generateTraffic = (rowsOfCar: number, road: Road): Array<Vehicle> => {
     return lanes
 } */
 
-const loadMutationRate = (): number | undefined => {
-    const mutationRate = localStorage.getItem(MUTATION_RATE_KEY)
-    if (!mutationRate) return undefined
-    return JSON.parse(mutationRate)
-}
-
-const saveMutationRate = (mutationRate: number) => {
-    localStorage.setItem(MUTATION_RATE_KEY, mutationRate.toString())
-}
-
-const loadNumberOfCars = (): number | undefined => {
-    const mutationRate = localStorage.getItem(NUMBER_OF_CARS_KEY)
-    if (!mutationRate) return undefined
-    return JSON.parse(mutationRate)
-}
-
-const saveNumberOfCars = (numberOfCars: number) => {
-    localStorage.setItem(NUMBER_OF_CARS_KEY, numberOfCars.toString())
-}
-
-const loadNeurons = (): Array<number> | undefined => {
-    const json = localStorage.getItem(NEURONS_KEY)
-    if (!json) return undefined
-    const parsedString: string = JSON.parse(json)
-    const result = parsedString.split(',').map((v) => Number(v))
-    return result
-}
-
-const saveNeurons = (numberOfNeurons: string) => {
-    localStorage.setItem(NEURONS_KEY, `"${numberOfNeurons}"`)
-}
+// mutation rate, neurons and cars count moved to persistence.service

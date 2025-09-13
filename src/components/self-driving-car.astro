@@ -9,12 +9,17 @@ const { class: className, ...otherProps } = Astro.props
 ---
 
 <script>
-    // "
-    import { init } from '../libs/self-driving-car'
-    document.addEventListener('astro:page-load', () => {
-        const drive = document.querySelector('#drive') as HTMLElement
-        if (drive) init(drive)
-    })
+    import { createSimulation } from '../libs/self-driving-car'
+    let sim: { destroy: () => void } | null = null
+    const boot = () => {
+        const drive = document.querySelector('#drive') as HTMLElement | null
+        if (!drive) return
+        sim?.destroy?.()
+        sim = createSimulation(drive)
+    }
+    document.addEventListener('astro:page-load', boot)
+    document.addEventListener('astro:before-swap', () => sim?.destroy?.())
+    window.addEventListener('pagehide', () => sim?.destroy?.())
 </script>
 
 <div class="h-full flex flex-col grow">
@@ -57,5 +62,5 @@ const { class: className, ...otherProps } = Astro.props
             <Input id="neurons" class="w-36" />
         </div>
     </nav>
-    <div id="drive" class:list={[className]} {...otherProps}></div>
+    <div id="drive" class:list={[className]} {...otherProps} aria-live="polite"></div>
 </div>

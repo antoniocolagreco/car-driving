@@ -7,7 +7,8 @@
             "@pages/*": ["src/pages/*"],
             "@layouts/*": ["src/layouts/*"],
             "@libs/*": ["src/libs/*"],
-            "@css/*": ["src/css/*"]
+            "@css/*": ["src/css/*"],
+            "@models/*": ["src/models/*"]
         }
     }
 }
