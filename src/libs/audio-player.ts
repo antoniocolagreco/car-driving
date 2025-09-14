@@ -17,7 +17,6 @@ export default class AudioPlayer {
     }
 
     scratch = () => {
-        // Avoid unhandled promise rejections on autoplay-restricted browsers
         collisionSound.play().catch(() => {})
     }
     gameover = () => {

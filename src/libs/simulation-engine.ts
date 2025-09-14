@@ -18,7 +18,7 @@ export const generateCars = (n: number, neurons: Array<number>, road: Road) => {
     for (let index = 0; index < n; index++) {
         const lane = 1 // TODO: opzionale random lane
         const position = road.getLanePosition(lane)
-        const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI })
+        const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI * 0.5 })
         const network = new NeuralNetwork(sensor.rayCount + 1, ...neurons, 4)
         const car = new Car({ position, features, sensor, network, ghost: true })
         cars.push(car)

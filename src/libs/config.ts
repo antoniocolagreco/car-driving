@@ -25,3 +25,9 @@ export const SIMULATION = {
     initialTrafficRows: 20,
     trafficCrashLead: 5000,
 } as const
+
+export const DEFAULTS = {
+    mutationRate: 0.1,
+    carsQuantity: 50,
+    neurons: '4',
+} as const

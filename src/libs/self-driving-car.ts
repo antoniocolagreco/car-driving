@@ -5,27 +5,13 @@ import Road from '@models/road'
 import Size from '@models/size'
 import type Vehicle from '@models/vehicle'
 import Visualizer from '@models/visualizer'
-import { TIMERS, DISPLAY, SIMULATION } from './config'
-import {
-    backupNetwork as backupBest,
-    loadBestNetwork,
-    loadMutationRate,
-    loadNeurons,
-    loadNumberOfCars,
-    resetBestNetwork,
-    restoreBackupNetwork,
-    saveBestNetwork,
-    saveMutationRate,
-    saveNeurons,
-    saveNumberOfCars,
-} from './persistence.service'
+import { DISPLAY, SIMULATION, TIMERS } from './config'
+import { Persistence } from './persistence'
+import { generateCars, getActiveCar, getAliveCars, getBestCar } from './simulation-engine'
 import { generateTraffic } from './traffic-service'
-import { generateCars, getAliveCars, getActiveCar, getBestCar } from './simulation-engine'
 import { bindUI } from './ui-controller'
 
-// keys moved into persistence service
-
-// Local display constants moved to config DISPLAY/SIMULATION
+// Configuration and state management moved to dedicated services
 
 export type SimulationControls = {
     start: () => void
@@ -97,9 +83,9 @@ export function createSimulation(container: HTMLElement): SimulationControls {
     let bestCar: Vehicle | undefined
     let deathCheckInterval: ReturnType<typeof setInterval> | undefined
     let demeritCheckInterval: ReturnType<typeof setInterval> | undefined
-    let mutationRate = loadMutationRate() ?? 0.2
-    let numberOfCars = loadNumberOfCars() ?? 50
-    let neurons: Array<number> = loadNeurons() ?? [4]
+    let mutationRate = Persistence.loadMutationRate()
+    let numberOfCars = Persistence.loadCarsQuantity()
+    let neurons: Array<number> = Persistence.loadNeurons()
     let trafficCounter = 0
     let gameover: boolean = false
     let gameoverAt: number | null = null
@@ -110,35 +96,35 @@ export function createSimulation(container: HTMLElement): SimulationControls {
         callbacks: {
             onChangeMutationRate: (value) => {
                 mutationRate = value
-                saveMutationRate(value)
+                Persistence.saveMutationRate(value)
             },
             onChangeNumberOfCars: (value) => {
                 numberOfCars = value
-                saveNumberOfCars(value)
+                Persistence.saveCarsQuantity(value)
             },
             onChangeNeurons: (values) => {
-                saveNeurons(values.join(','))
+                Persistence.saveNeurons(values.join(','))
                 neurons = values
-                resetBestNetwork()
+                Persistence.clearBestNetwork()
                 restart()
             },
             onBackup: () => {
                 if (!activeCar || !activeCar.network) return
-                backupBest(activeCar.network)
+                Persistence.saveNetworkBackup(activeCar.network)
             },
             onRestore: () => {
-                const restored = restoreBackupNetwork()
-                if (restored) saveBestNetwork(restored)
+                const restored = Persistence.loadNetworkBackup()
+                if (restored) Persistence.saveBestNetwork(restored)
                 restart()
             },
             onReset: () => {
-                resetBestNetwork()
+                Persistence.clearBestNetwork()
                 restart()
             },
             onRestart: () => restart(),
             onEvolve: () => {
                 if (!bestCar || !bestCar.network) return
-                saveBestNetwork(bestCar.network)
+                Persistence.saveBestNetwork(bestCar.network)
                 endRound()
             },
         },
@@ -197,17 +183,17 @@ export function createSimulation(container: HTMLElement): SimulationControls {
     const restart = () => {
         gameover = false
         gameoverAt = null
-        let bestNetwork = loadBestNetwork()
+        let bestNetwork = Persistence.loadBestNetwork()
 
         if (activeCar && activeCar.network && bestNetwork) {
             const activeCarPoints = activeCar.network.pointsRecord
             const bestNetworkPoints = bestNetwork.pointsRecord
 
             /**
-             * Modifica effettuata successivamente per prova.
-             * Se il puntenggio della rete che vince è inferiore al padre,
-             * il modello delle reti suscessive sarà una media
-             * tra la rete del vincitore e quella del padre.
+             * Adaptive network merging strategy.
+             * If the winning network's score is lower than the parent,
+             * the model for successive networks will be an average
+             * between the winner's network and the parent's network.
              */
             if (bestNetworkPoints > activeCarPoints) {
                 bestNetwork = NeuralNetwork.mergeNetworks(
@@ -240,7 +226,7 @@ export function createSimulation(container: HTMLElement): SimulationControls {
 
         traffic = generateTraffic(SIMULATION.initialTrafficRows, road)
 
-        // Intervalli basati sullo stato corrente
+        // State-based interval timers
         deathCheckInterval = setInterval(() => {
             const firstCar = getActiveCar(aliveCars)
             for (const car of aliveCars) {
@@ -314,32 +300,32 @@ export function createSimulation(container: HTMLElement): SimulationControls {
             gameoverAt = null
         }
         if (aliveCars.length === 0 && !gameover) {
-            if (bestCar?.network) saveBestNetwork(bestCar.network)
+            if (bestCar?.network) Persistence.saveBestNetwork(bestCar.network)
             endRound()
         }
 
-        //Centra viewport su auto attiva
+        // Center viewport on active car
         const { x: translateX, y: translateY } = computeViewport()
         carContext.save()
         carContext.translate(translateX, translateY)
 
-        //Disegna mappa e strada
+        // Draw map and road
         worldMap.drawIn(carContext)
         road.drawIn(carContext)
 
-        //Aggiorna stato e disegna auto che corrono con AI
+        // Update and draw AI-controlled cars
         for (let car of allCars) {
             car.updateStatus(traffic, road.borders)
             car.drawIn(carContext)
         }
 
-        //Aggiorna stato e disegna traffico
+        // Update and draw traffic vehicles
         for (let vehicle of traffic) {
             vehicle.updateStatus(traffic, road.borders)
             vehicle.drawIn(carContext)
         }
 
-        //Reset viewport
+        // Reset viewport
         carContext.restore()
 
         countedFrames += 1
@@ -349,13 +335,13 @@ export function createSimulation(container: HTMLElement): SimulationControls {
             countedFrames = 0
         }
 
-        //Disegna interfaccia
+        // Draw user interface
         drawHud()
         carContext.fillText(`FPS: ${currentFps}`, 10, carCanvas.height - 10)
 
         drawGameOverOverlay()
 
-        //Disegna rete neurale auto attiva
+        // Draw neural network visualization for active car
         if (networkContext && activeCar && activeCar.network) {
             if (timestamp - lastNetworkDrawAt > DISPLAY.networkDrawThrottleMs) {
                 // Clear once per redraw to avoid ghosting without flicker
@@ -393,36 +379,3 @@ export function init(container: HTMLElement) {
     // As a safety net, destroy on unload
     window.addEventListener('unload', () => sim.destroy(), { once: true })
 }
-
-// moved to simulation-engine
-
-// replaced by interval-based checks
-
-// replaced by interval-based checks
-
-// persistence moved to persistence.service
-
-/**
- * Genera il traffico per la strada specificata.
- */
-// traffic generation moved to traffic-service
-
-/**
- * Genera una fila di veicoli per la strada specificata in posizioni casuali.
- * @param road - L'oggetto strada su cui generare il traffico.
- * @returns Un array di veicoli che rappresentano una fila di traffico.
- */
-/* const generateUsedLanesPerRow = (n: number, road: Road) => {
-    const lanes: Array<number> = []
-    let lanesToAdd = 0
-    while (lanesToAdd < n) {
-        const lane = Math.floor(Math.random() * road.lanesCount)
-        if (!lanes.includes(lane)) {
-            lanes.push(lane)
-            lanesToAdd += 1
-        }
-    }
-    return lanes
-} */
-
-// mutation rate, neurons and cars count moved to persistence.service
