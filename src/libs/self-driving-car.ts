@@ -6,10 +6,9 @@ import Size from '@models/size'
 import type Vehicle from '@models/vehicle'
 import Visualizer from '@models/visualizer'
 import { DISPLAY, SIMULATION, TIMERS } from './config'
-import { Persistence } from './persistence'
+import { persistence } from './persistence'
 import { generateCars, getActiveCar, getAliveCars, getBestCar } from './simulation-engine'
 import { generateTraffic } from './traffic-service'
-import { bindUI } from './ui-controller'
 
 // Configuration and state management moved to dedicated services
 
@@ -21,18 +20,9 @@ export type SimulationControls = {
 
 export function createSimulation(container: HTMLElement): SimulationControls {
     const abortController = new AbortController()
-    const on = (
-        target: EventTarget,
-        type: string,
-        handler: EventListenerOrEventListenerObject,
-        options?: AddEventListenerOptions,
-    ) =>
-        target.addEventListener(type, handler, {
-            ...(options ?? {}),
-            signal: abortController.signal,
-        })
     let animationId: number | undefined
     let lastNetworkDrawAt = 0
+
     const carCanvas = document.createElement('canvas')
     carCanvas.setAttribute('role', 'img')
     carCanvas.setAttribute('aria-label', 'Simulation view: road and cars')
@@ -45,7 +35,7 @@ export function createSimulation(container: HTMLElement): SimulationControls {
     container.appendChild(carCanvas)
     container.appendChild(networkCanvas)
 
-    on(window, 'resize', () => resizeCanvas())
+    window.addEventListener('resize', () => resizeCanvas(), { signal: abortController.signal })
 
     function resizeCanvas() {
         container.style.display = 'grid'
@@ -83,52 +73,123 @@ export function createSimulation(container: HTMLElement): SimulationControls {
     let bestCar: Vehicle | undefined
     let deathCheckInterval: ReturnType<typeof setInterval> | undefined
     let demeritCheckInterval: ReturnType<typeof setInterval> | undefined
-    let mutationRate = Persistence.loadMutationRate()
-    let numberOfCars = Persistence.loadCarsQuantity()
-    let neurons: Array<number> = Persistence.loadNeurons()
+    let mutationRate = persistence.loadMutationRate()
+    let numberOfCars = persistence.loadCarsQuantity()
+    let neurons: Array<number> = persistence.loadNeurons()
     let trafficCounter = 0
     let gameover: boolean = false
     let gameoverAt: number | null = null
 
-    bindUI({
-        signal: abortController.signal,
-        initial: { mutationRate, numberOfCars, neurons },
-        callbacks: {
-            onChangeMutationRate: (value) => {
-                mutationRate = value
-                Persistence.saveMutationRate(value)
+    // Setup UI event handlers
+    const setupUI = () => {
+        // Get DOM elements
+        const mutationRange = document.querySelector('#mutation-rate') as HTMLInputElement | null
+        const numberOfCarsRange = document.querySelector(
+            '#number-of-cars',
+        ) as HTMLInputElement | null
+        const mutationValue = document.querySelector(
+            '#mutation-rate-value',
+        ) as HTMLSpanElement | null
+        const numberOfCarsValue = document.querySelector(
+            '#number-of-cars-value',
+        ) as HTMLSpanElement | null
+        const neuronsInput = document.querySelector('#neurons') as HTMLInputElement | null
+
+        // Initialize UI values
+        if (mutationValue) mutationValue.innerText = `${Math.round(mutationRate * 100)}%`
+        if (mutationRange) mutationRange.value = `${mutationRate * 100}`
+        if (numberOfCarsValue) numberOfCarsValue.innerText = String(numberOfCars)
+        if (numberOfCarsRange) numberOfCarsRange.value = `${numberOfCars}`
+        if (neuronsInput) neuronsInput.value = neurons.join(',')
+
+        // Mutation rate slider
+        mutationRange?.addEventListener(
+            'input',
+            () => {
+                if (!mutationRange || !mutationValue) return
+                const value = Number(mutationRange.value)
+                mutationValue.innerText = `${value}%`
+                mutationRate = value / 100
+                persistence.saveMutationRate(mutationRate)
             },
-            onChangeNumberOfCars: (value) => {
-                numberOfCars = value
-                Persistence.saveCarsQuantity(value)
+            { signal: abortController.signal },
+        )
+
+        // Number of cars slider
+        numberOfCarsRange?.addEventListener(
+            'input',
+            () => {
+                if (!numberOfCarsRange || !numberOfCarsValue) return
+                numberOfCarsValue.innerText = numberOfCarsRange.value
+                numberOfCars = Number(numberOfCarsRange.value)
+                persistence.saveCarsQuantity(numberOfCars)
             },
-            onChangeNeurons: (values) => {
-                Persistence.saveNeurons(values.join(','))
+            { signal: abortController.signal },
+        )
+
+        // Neurons input
+        neuronsInput?.addEventListener(
+            'keypress',
+            (event: Event) => {
+                const e = event as KeyboardEvent
+                if (e.key !== 'Enter' || !neuronsInput) return
+                const values = neuronsInput.value
+                    .split(',')
+                    .map((v) => Number(v))
+                    .filter((n) => Number.isFinite(n))
+                persistence.saveNeurons(values.join(','))
                 neurons = values
-                Persistence.clearBestNetwork()
+                persistence.clearBestNetwork()
                 restart()
             },
-            onBackup: () => {
+            { signal: abortController.signal },
+        )
+
+        // Control buttons
+        document.querySelector('#save-network')?.addEventListener(
+            'click',
+            () => {
                 if (!activeCar || !activeCar.network) return
-                Persistence.saveNetworkBackup(activeCar.network)
+                persistence.saveNetworkBackup(activeCar.network)
             },
-            onRestore: () => {
-                const restored = Persistence.loadNetworkBackup()
-                if (restored) Persistence.saveBestNetwork(restored)
+            { signal: abortController.signal },
+        )
+
+        document.querySelector('#restore-network')?.addEventListener(
+            'click',
+            () => {
+                const restored = persistence.loadNetworkBackup()
+                if (restored) persistence.saveBestNetwork(restored)
                 restart()
             },
-            onReset: () => {
-                Persistence.clearBestNetwork()
+            { signal: abortController.signal },
+        )
+
+        document.querySelector('#reset-network')?.addEventListener(
+            'click',
+            () => {
+                persistence.clearBestNetwork()
                 restart()
             },
-            onRestart: () => restart(),
-            onEvolve: () => {
+            { signal: abortController.signal },
+        )
+
+        document
+            .querySelector('#restart-network')
+            ?.addEventListener('click', () => restart(), { signal: abortController.signal })
+
+        document.querySelector('#evolve-network')?.addEventListener(
+            'click',
+            () => {
                 if (!bestCar || !bestCar.network) return
-                Persistence.saveBestNetwork(bestCar.network)
+                persistence.saveBestNetwork(bestCar.network)
                 endRound()
             },
-        },
-    })
+            { signal: abortController.signal },
+        )
+    }
+
+    setupUI()
 
     // Helpers
     const computeViewport = () => {
@@ -183,7 +244,7 @@ export function createSimulation(container: HTMLElement): SimulationControls {
     const restart = () => {
         gameover = false
         gameoverAt = null
-        let bestNetwork = Persistence.loadBestNetwork()
+        let bestNetwork = persistence.loadBestNetwork()
 
         if (activeCar && activeCar.network && bestNetwork) {
             const activeCarPoints = activeCar.network.pointsRecord
@@ -300,7 +361,7 @@ export function createSimulation(container: HTMLElement): SimulationControls {
             gameoverAt = null
         }
         if (aliveCars.length === 0 && !gameover) {
-            if (bestCar?.network) Persistence.saveBestNetwork(bestCar.network)
+            if (bestCar?.network) persistence.saveBestNetwork(bestCar.network)
             endRound()
         }
 
