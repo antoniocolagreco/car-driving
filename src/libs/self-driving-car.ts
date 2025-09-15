@@ -8,7 +8,7 @@ import Visualizer from '@models/visualizer'
 import { DISPLAY, SIMULATION, TIMERS } from './config'
 import { persistence } from './persistence'
 import { generateCars, getActiveCar, getAliveCars, getBestCar } from './simulation-engine'
-import { generateTraffic } from './traffic-service'
+import { generateTraffic } from './traffic'
 
 // Configuration and state management moved to dedicated services
 
@@ -200,26 +200,21 @@ export function createSimulation(container: HTMLElement): SimulationControls {
             : fallbackY
         return { x, y }
     }
+
     const drawHud = () => {
         if (!activeCar || !carContext) return
-        carContext.fillStyle = '#fff'
-        carContext.font = '20px monospace'
-        carContext.textAlign = 'left'
-        carContext.textBaseline = 'bottom'
-        carContext.fillText(` ID: ${activeCar.network?.id}`, 10, carCanvas.height - 130)
-        carContext.fillText(`PTS: ${activeCar.points}`, 10, carCanvas.height - 110)
-        carContext.fillText(`SRS: ${activeCar.network?.survivedRounds}`, 10, carCanvas.height - 90)
-        carContext.fillText(`CRS: ${aliveCars.length}`, 10, carCanvas.height - 70)
-        carContext.fillText(
-            `PPS: ${(activeCar.speed * currentFps).toFixed(2)}`,
-            10,
-            carCanvas.height - 50,
-        )
-        carContext.fillText(
-            `RPS: ${(activeCar.steeringPower * currentFps).toFixed(2)}`,
-            10,
-            carCanvas.height - 30,
-        )
+        const infoId = document.querySelector('#info-id')
+        if (infoId) infoId.innerHTML = `${activeCar.network?.id}`
+        const infoPts = document.querySelector('#info-pts')
+        if (infoPts) infoPts.innerHTML = `${activeCar.points}`
+        const infoSrs = document.querySelector('#info-srv')
+        if (infoSrs) infoSrs.innerHTML = `${activeCar.network?.survivedRounds}`
+        const infoCrs = document.querySelector('#info-crs')
+        if (infoCrs) infoCrs.innerHTML = `${aliveCars.length}`
+        const infoPps = document.querySelector('#info-pps')
+        if (infoPps) infoPps.innerHTML = `${(activeCar.speed * currentFps).toFixed(2)}`
+        const infoFps = document.querySelector('#info-fps')
+        if (infoFps) infoFps.innerHTML = `${currentFps}`
     }
     const drawGameOverOverlay = () => {
         if (!gameover || !bestCar || !carContext) return
@@ -396,10 +391,7 @@ export function createSimulation(container: HTMLElement): SimulationControls {
             countedFrames = 0
         }
 
-        // Draw user interface
         drawHud()
-        carContext.fillText(`FPS: ${currentFps}`, 10, carCanvas.height - 10)
-
         drawGameOverOverlay()
 
         // Draw neural network visualization for active car
@@ -432,11 +424,4 @@ export function createSimulation(container: HTMLElement): SimulationControls {
     // kick things off by default; caller can stop/start as needed
     start()
     return { start, stop, destroy }
-}
-
-// Backwards-compatible helper
-export function init(container: HTMLElement) {
-    const sim = createSimulation(container)
-    // As a safety net, destroy on unload
-    window.addEventListener('unload', () => sim.destroy(), { once: true })
 }

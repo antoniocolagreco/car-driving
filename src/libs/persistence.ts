@@ -1,45 +1,53 @@
 import NeuralNetwork from '@models/neural-network'
 import { DEFAULTS, STORAGE_KEYS } from './config'
-import { storage } from './storage'
 
 export const persistence = {
     saveBestNetwork: (network: NeuralNetwork) => {
         network.survivedRounds += 1
-        storage.set(STORAGE_KEYS.bestNetwork, network.toJSON())
+        localStorage.setItem(STORAGE_KEYS.bestNetwork, JSON.stringify(network))
     },
 
     saveNetworkBackup: (network: NeuralNetwork) => {
-        storage.set(STORAGE_KEYS.backupNetwork, network.toJSON())
+        localStorage.setItem(STORAGE_KEYS.backupNetwork, JSON.stringify(network))
     },
 
     loadNetworkBackup: (): NeuralNetwork | undefined => {
-        const json = storage.get<ReturnType<NeuralNetwork['toJSON']>>(STORAGE_KEYS.backupNetwork)
-        return json ? NeuralNetwork.fromJSON(json) : undefined
+        const networkString = localStorage.getItem(STORAGE_KEYS.backupNetwork)
+        const network = networkString ? JSON.parse(networkString) : undefined
+        return network
     },
 
     clearBestNetwork: () => {
-        storage.remove(STORAGE_KEYS.bestNetwork)
+        localStorage.removeItem(STORAGE_KEYS.bestNetwork)
     },
 
     loadBestNetwork: (): NeuralNetwork | undefined => {
-        const json = storage.get<ReturnType<NeuralNetwork['toJSON']>>(STORAGE_KEYS.bestNetwork)
-        return json ? NeuralNetwork.fromJSON(json) : undefined
+        const networkString = localStorage.getItem(STORAGE_KEYS.bestNetwork)
+        const network = networkString ? JSON.parse(networkString) : undefined
+        return network
     },
 
-    loadMutationRate: (): number =>
-        storage.get<number>(STORAGE_KEYS.mutationRate) ?? DEFAULTS.mutationRate,
+    loadMutationRate: (): number => {
+        const mutationString = localStorage.getItem(STORAGE_KEYS.mutationRate)
+        return mutationString ? Number(mutationString) : DEFAULTS.mutationRate
+    },
 
-    saveMutationRate: (rate: number) => storage.set(STORAGE_KEYS.mutationRate, rate),
+    saveMutationRate: (rate: number) =>
+        localStorage.setItem(STORAGE_KEYS.mutationRate, String(rate)),
 
-    loadCarsQuantity: (): number =>
-        storage.get<number>(STORAGE_KEYS.carsQuantity) ?? DEFAULTS.carsQuantity,
+    loadCarsQuantity: (): number => {
+        const carsString = localStorage.getItem(STORAGE_KEYS.carsQuantity)
+        return carsString ? Number(carsString) : DEFAULTS.carsQuantity
+    },
 
-    saveCarsQuantity: (n: number) => storage.set(STORAGE_KEYS.carsQuantity, n),
+    saveCarsQuantity: (quantity: number) =>
+        localStorage.setItem(STORAGE_KEYS.carsQuantity, String(quantity)),
 
     loadNeurons: (): Array<number> => {
-        const str = storage.get<string>(STORAGE_KEYS.neurons) ?? DEFAULTS.neurons
-        return str.split(',').map((v) => Number(v))
+        const neuronString = localStorage.getItem(STORAGE_KEYS.neurons) ?? DEFAULTS.neurons
+        const neuronsArray = neuronString.split(',').map((n) => Number(n))
+        return neuronsArray
     },
 
-    saveNeurons: (neurons: string) => storage.set(STORAGE_KEYS.neurons, neurons),
+    saveNeurons: (neurons: string) => localStorage.setItem(STORAGE_KEYS.neurons, neurons),
 }

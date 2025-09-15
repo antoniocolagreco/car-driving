@@ -116,6 +116,13 @@ export const weightedAverage = (...values: Array<{ value: number; weight: number
     return sumValues / sumWeights
 }
 
+/**
+ * Funzione di attivazione sigmoide
+ * @param sum - Somma pesata degli input
+ * @param bias - Valore di bias da aggiungere
+ * @returns Valore tra 0 e 1, calcolato come 1/(1 + e^(-(sum + bias)))
+ * @description Funzione smooth per attivazione graduale nelle reti neurali
+ */
 export const sigmoid = (sum: number, bias: number) => 1 / (1 + Math.exp(-(sum + bias)))
 
 /**

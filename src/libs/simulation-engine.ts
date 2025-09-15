@@ -5,7 +5,7 @@ import Road from '@models/road'
 import Sensor from '@models/sensor'
 import type Vehicle from '@models/vehicle'
 
-export const generateCars = (n: number, neurons: Array<number>, road: Road) => {
+export const generateCars = (numberOfCars: number, neurons: Array<number>, road: Road) => {
     const cars: Array<Vehicle> = []
 
     const features = new Features({
@@ -15,7 +15,7 @@ export const generateCars = (n: number, neurons: Array<number>, road: Road) => {
         breakPower: 0.2,
     })
 
-    for (let index = 0; index < n; index++) {
+    for (let index = 0; index < numberOfCars; index++) {
         const lane = 1 // TODO: opzionale random lane
         const position = road.getLanePosition(lane)
         const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI * 0.5 })
