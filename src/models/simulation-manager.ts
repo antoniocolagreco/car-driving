@@ -143,6 +143,7 @@ export class SimulationManager {
                 const network = this.state.bestCar.getNetwork()
                 if (network) {
                     network.setSurvivedRounds(network.getSurvivedRounds() + 1)
+                    network.setPointsRecord(this.state.bestCar.getPoints())
                     Persistence.saveBestNetwork(network)
                 }
             }

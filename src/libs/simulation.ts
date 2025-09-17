@@ -15,8 +15,7 @@ export const generateCars = (carsQuantity: number, neurons: Array<number>, road:
     })
 
     for (let index = 0; index < carsQuantity; index++) {
-        // const lane = Math.floor(Math.random() * road.getLaneCount()) // Random lane
-        const lane = 1 // TODO: opzionale random lane
+        const lane = Math.floor(Math.random() * road.getLaneCount()) // Random lane
         const position = road.getLanePosition(lane)
         const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI * 0.5 })
         const network = new NeuralNetwork(sensor.getRayCount() + 1, ...neurons, 4)
@@ -47,7 +46,7 @@ export const getBestCar = (cars: Array<Car>) => {
 
     const bestScore = Math.max(...cars.map((c) => c.getPoints()))
     const bestCars = cars.filter((c) => c.getPoints() === bestScore)
-    const mostDistanceCovered = Math.max(...bestCars.map((c) => c.getPosition().getY()))
+    const mostDistanceCovered = Math.min(...bestCars.map((c) => c.getPosition().getY()))
     const bestCarLastToDie = bestCars.find(
         (car) => car.getPosition().getY() === mostDistanceCovered,
     )
