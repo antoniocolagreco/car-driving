@@ -17,19 +17,32 @@ export default class Visualizer {
         // Margine del 10% dell'altezza canvas per evitare che i neuroni tocchino i bordi
         const margin = Math.floor(ctx.canvas.height * 0.1)
         // Dividi lo spazio verticale disponibile tra tutti i layer
-        const heightSlice = Math.floor(ctx.canvas.height - margin * 2) / network.layers.length
+        const heightSlice = Math.floor(ctx.canvas.height - margin * 2) / network.getLayers().length
 
         // Disegna i layer dall'ultimo al primo (dal basso verso l'alto)
         // Questo perché l'ultimo layer (output) va in basso con le frecce direzionali
-        for (let index = network.layers.length - 1; index >= 0; index--) {
+        for (let index = network.getLayers().length - 1; index >= 0; index--) {
             // Calcola posizione Y di inizio e fine per questo layer
             const yStart = ctx.canvas.height - (index * heightSlice + margin)
             const yEnd = ctx.canvas.height - ((index + 1) * heightSlice + margin)
 
-            Visualizer.#drawLayerRails(ctx, network.layers[index], ctx.canvas.width, yStart, yEnd)
+            Visualizer.#drawLayerRails(
+                ctx,
+                network.getLayers()[index],
+                ctx.canvas.width,
+                yStart,
+                yEnd,
+            )
             // Solo l'ultimo layer (output) ha le icone frecce per indicare le azioni (su, giù, sinistra, destra)
-            const icons = index === network.layers.length - 1 ? ['↑', '↓', '←', '→'] : []
-            Visualizer.#drawLayer(ctx, network.layers[index], ctx.canvas.width, yStart, yEnd, icons)
+            const icons = index === network.getLayers().length - 1 ? ['↑', '↓', '←', '→'] : []
+            Visualizer.#drawLayer(
+                ctx,
+                network.getLayers()[index],
+                ctx.canvas.width,
+                yStart,
+                yEnd,
+                icons,
+            )
         }
     }
 
@@ -40,7 +53,8 @@ export default class Visualizer {
         yStart: number,
         yEnd: number,
     ) {
-        const { inputs, outputs } = layer
+        const inputs = layer.getInputs()
+        const outputs = layer.getOutputs()
 
         const inputSlice = width / (inputs.length + 1)
         const outputSlice = width / (outputs.length + 1)
@@ -77,7 +91,10 @@ export default class Visualizer {
         yEnd: number,
         icons: Array<string>,
     ) {
-        const { biases, inputs, outputs, weights } = layer
+        const biases = layer.getBiases()
+        const inputs = layer.getInputs()
+        const outputs = layer.getOutputs()
+        const weights = layer.getWeights()
 
         // Calcola la spaziatura orizzontale per distribuire uniformemente i neuroni
         const inputSlice = width / (inputs.length + 1) // +1 per evitare neuroni sui bordi

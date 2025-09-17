@@ -1,7 +1,7 @@
 import type Point from './point'
 
 export default class Shape {
-    points: Array<Point>
+    protected points: Array<Point>
 
     constructor(...points: Array<Point>) {
         this.points = points
@@ -20,6 +20,22 @@ export default class Shape {
             return lines
         }
         return [this]
+    }
+
+    getPoints() {
+        return this.points
+    }
+
+    getPointAt(index: number) {
+        return this.points[index]
+    }
+
+    setPoints(points: Array<Point>) {
+        this.points = points
+    }
+
+    setPointAt(index: number, point: Point) {
+        this.points[index] = point
     }
 
     get(index: number) {

@@ -1,9 +1,9 @@
 export default class Controls {
-    forward: boolean = false
-    reverse: boolean = false
-    left: boolean = false
-    right: boolean = false
-    brake: boolean = false
+    private forward: boolean = false
+    private reverse: boolean = false
+    private left: boolean = false
+    private right: boolean = false
+    private brake: boolean = false
     private active: boolean = false
 
     #handleKeyDown(key: string) {
@@ -76,5 +76,53 @@ export default class Controls {
         this.active = false
     }
 
-    isActive = () => this.active
+    // Getters
+    getForward(): boolean {
+        return this.forward
+    }
+
+    getReverse(): boolean {
+        return this.reverse
+    }
+
+    getLeft(): boolean {
+        return this.left
+    }
+
+    getRight(): boolean {
+        return this.right
+    }
+
+    getBrake(): boolean {
+        return this.brake
+    }
+
+    isActive(): boolean {
+        return this.active
+    }
+
+    // Setters
+    setForward(value: boolean): void {
+        this.forward = value
+    }
+
+    setReverse(value: boolean): void {
+        this.reverse = value
+    }
+
+    setLeft(value: boolean): void {
+        this.left = value
+    }
+
+    setRight(value: boolean): void {
+        this.right = value
+    }
+
+    setBrake(value: boolean): void {
+        this.brake = value
+    }
+
+    setActive(value: boolean): void {
+        this.active = value
+    }
 }

@@ -82,6 +82,8 @@ export const generateTraffic = (numberOfRows: number, road: Road): Array<Vehicle
                 break
         }
     }
-    for (const vehicle of traffic) vehicle.controls.forward = true
+    for (const vehicle of traffic) {
+        vehicle.getControls().setForward(true)
+    }
     return traffic
 }

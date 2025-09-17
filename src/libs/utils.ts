@@ -23,14 +23,14 @@ export const lerp = (start: number, end: number, slice: number) => {
  */
 export const getIntersection = (A: Shape, B: Shape) => {
     const tTop =
-        (B.getLast().x - B.getFirst().x) * (A.getFirst().y - B.getFirst().y) -
-        (B.getLast().y - B.getFirst().y) * (A.getFirst().x - B.getFirst().x)
+        (B.getLast().getX() - B.getFirst().getX()) * (A.getFirst().getY() - B.getFirst().getY()) -
+        (B.getLast().getY() - B.getFirst().getY()) * (A.getFirst().getX() - B.getFirst().getX())
     const uTop =
-        (B.getFirst().y - A.getFirst().y) * (A.getFirst().x - A.getLast().x) -
-        (B.getFirst().x - A.getFirst().x) * (A.getFirst().y - A.getLast().y)
+        (B.getFirst().getY() - A.getFirst().getY()) * (A.getFirst().getX() - A.getLast().getX()) -
+        (B.getFirst().getX() - A.getFirst().getX()) * (A.getFirst().getY() - A.getLast().getY())
     const bottom =
-        (B.getLast().y - B.getFirst().y) * (A.getLast().x - A.getFirst().x) -
-        (B.getLast().x - B.getFirst().x) * (A.getLast().y - A.getFirst().y)
+        (B.getLast().getY() - B.getFirst().getY()) * (A.getLast().getX() - A.getFirst().getX()) -
+        (B.getLast().getX() - B.getFirst().getX()) * (A.getLast().getY() - A.getFirst().getY())
 
     if (bottom != 0) {
         const t = tTop / bottom
@@ -38,8 +38,8 @@ export const getIntersection = (A: Shape, B: Shape) => {
         if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
             return new Collision(
                 new Point(
-                    lerp(A.getFirst().x, A.getLast().x, t),
-                    lerp(A.getFirst().y, A.getLast().y, t),
+                    lerp(A.getFirst().getX(), A.getLast().getX(), t),
+                    lerp(A.getFirst().getY(), A.getLast().getY(), t),
                 ),
                 t,
             )
@@ -57,12 +57,17 @@ export const getIntersection = (A: Shape, B: Shape) => {
  * @description Controlla ogni lato del primo poligono contro ogni lato del secondo
  */
 export const checkPolygonsIntersection = (A: Shape, B: Shape) => {
-    for (let i = 0; i < A.points.length; i++) {
-        const lineOfA = new Shape(A.points[i], A.points[(i + 1) % A.points.length])
-        for (let j = 0; j < B.points.length; j++) {
-            const lineOfB = new Shape(B.points[j], B.points[(j + 1) % B.points.length])
+    for (let i = 0; i < A.getPoints().length; i++) {
+        const lineOfA = new Shape(A.getPoints()[i], A.getPoints()[(i + 1) % A.getPoints().length])
+        for (let j = 0; j < B.getPoints().length; j++) {
+            const lineOfB = new Shape(
+                B.getPoints()[j],
+                B.getPoints()[(j + 1) % B.getPoints().length],
+            )
             const collision = getIntersection(lineOfA, lineOfB)
-            if (collision) return true
+            if (collision) {
+                return true
+            }
         }
     }
     return false
@@ -104,6 +109,12 @@ export const normalizeToHex = (value: number, min: number, max: number): string 
     return normalizedValue.toString(16).padStart(2, '00')
 }
 
+/**
+ * Calculates the weighted average of a collection of values.
+ *
+ * @param values - An array of objects containing value and weight pairs
+ * @returns The weighted average of all provided values
+ */
 export const weightedAverage = (...values: Array<{ value: number; weight: number }>): number => {
     let sumValues = 0
     let sumWeights = 0
@@ -158,7 +169,9 @@ export function deepCopy<T>(obj: T): T
 export function deepCopy<T extends unknown[]>(obj: T): T
 export function deepCopy<T extends Record<string, unknown>>(obj: T): T
 export function deepCopy(obj: unknown): unknown {
-    if (obj === null || typeof obj !== 'object') return obj
+    if (obj === null || typeof obj !== 'object') {
+        return obj
+    }
 
     if (Array.isArray(obj)) {
         return obj.map((item) => deepCopy(item)) as unknown

@@ -12,12 +12,12 @@ export type SensorProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle' | 'siz
 }
 
 export default class Sensor extends Drawable {
-    rayCount: number
-    rayLength: number
-    raySpread: number
-    rays: Array<Shape>
-    collisions: Array<Collision | null>
-    visibleRays: boolean
+    private rayCount: number
+    private rayLength: number
+    private raySpread: number
+    private rays: Array<Shape>
+    private collisions: Array<Collision | null>
+    private visibleRays: boolean
 
     constructor(props: SensorProps) {
         const { rayCount, rayLength, raySpread, visibleRays, ...otherProps } = props
@@ -52,10 +52,12 @@ export default class Sensor extends Drawable {
                 touches.push(touch)
             }
         }
-        if (touches.length === 0) return null
-        const offsets = touches.map((touch) => touch.offset)
+        if (touches.length === 0) {
+            return null
+        }
+        const offsets = touches.map((touch) => touch.getOffset())
         const minOffset = Math.min(...offsets)
-        return touches.find((touch) => touch.offset === minOffset)!
+        return touches.find((touch) => touch.getOffset() === minOffset)!
     }
 
     #castRays() {
@@ -65,10 +67,10 @@ export default class Sensor extends Drawable {
         for (let index = 0; index < this.rayCount; index++) {
             const rayDirection = -(this.raySpread / 2) + rayRadiants * index
 
-            const start = new Point(this.position.x, this.position.y)
+            const start = new Point(this.position.getX(), this.position.getY())
             const end = new Point(
-                this.position.x - Math.sin(rayDirection + this.direction) * this.rayLength,
-                this.position.y - Math.cos(rayDirection + this.direction) * this.rayLength,
+                this.position.getX() - Math.sin(rayDirection + this.direction) * this.rayLength,
+                this.position.getY() - Math.cos(rayDirection + this.direction) * this.rayLength,
             )
 
             this.rays.unshift(new Shape(start, end))
@@ -78,35 +80,83 @@ export default class Sensor extends Drawable {
     drawInstructions(context: CanvasRenderingContext2D): void {
         this.#castRays()
 
-        if (!this.visibleRays) return
+        if (!this.visibleRays) {
+            return
+        }
 
         for (let i = 0; i < this.rayCount; i++) {
             const start = this.rays[i].getFirst()
-            const collision = this.collisions[i]?.position ?? null
+            const collision = this.collisions[i]?.getPosition() ?? null
             const end = this.rays[i].getLast()
 
             if (collision) {
                 context.beginPath()
                 context.fillStyle = 'red'
-                context.arc(collision.x, collision.y, 3, 0, 2 * Math.PI)
+                context.arc(collision.getX(), collision.getY(), 3, 0, 2 * Math.PI)
                 context.fill()
 
                 context.beginPath()
                 context.strokeStyle = 'yellow'
                 context.setLineDash([1, 5])
                 context.lineWidth = 1
-                context.moveTo(start.x, start.y)
-                context.lineTo(collision.x, collision.y)
+                context.moveTo(start.getX(), start.getY())
+                context.lineTo(collision.getX(), collision.getY())
                 context.stroke()
             } else {
                 context.beginPath()
                 context.lineWidth = 1
                 context.setLineDash([1, 5])
                 context.strokeStyle = 'yellow'
-                context.moveTo(start.x, start.y)
-                context.lineTo(end.x, end.y)
+                context.moveTo(start.getX(), start.getY())
+                context.lineTo(end.getX(), end.getY())
                 context.stroke()
             }
         }
+    }
+
+    // Getters
+    getRayCount(): number {
+        return this.rayCount
+    }
+
+    getRayLength(): number {
+        return this.rayLength
+    }
+
+    getRaySpread(): number {
+        return this.raySpread
+    }
+
+    getRays(): Array<Shape> {
+        return [...this.rays] // Return copy to prevent external mutation
+    }
+
+    getCollisions(): Array<Collision | null> {
+        return [...this.collisions] // Return copy to prevent external mutation
+    }
+
+    getVisibleRays(): boolean {
+        return this.visibleRays
+    }
+
+    // Setters
+    setRayCount(value: number): void {
+        this.rayCount = value
+    }
+
+    setRayLength(value: number): void {
+        this.rayLength = value
+    }
+
+    setRaySpread(value: number): void {
+        this.raySpread = value
+    }
+
+    setVisibleRays(value: boolean): void {
+        this.visibleRays = value
+    }
+
+    setPosition(position: Point): void {
+        this.position = position
     }
 }

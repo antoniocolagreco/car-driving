@@ -18,7 +18,9 @@ export const init = (container: HTMLElement) => {
     const mainContext = mainCanvas.getContext('2d')
     const chartContext = chartCanvas.getContext('2d')
 
-    if (!mainContext || !chartContext) return
+    if (!mainContext || !chartContext) {
+        return
+    }
 
     const mainCanvasData: CanvasData = {
         center: new Point(0, 0),
@@ -49,7 +51,9 @@ export const init = (container: HTMLElement) => {
     const handleResize = () => {
         const parentWidth = mainCanvas.parentElement?.clientWidth
         const parentHeight = mainCanvas.parentElement?.clientHeight
-        if (!parentWidth || !parentHeight) return
+        if (!parentWidth || !parentHeight) {
+            return
+        }
         mainCanvas.width = parentWidth - (parentWidth % 2) - 1
         mainCanvas.height = parentHeight - (parentHeight % 2) - 1
         setCenter(mainContext, mainCanvasData, mainCanvas.width / 2, mainCanvas.height / 2)
@@ -80,33 +84,33 @@ export const init = (container: HTMLElement) => {
 
         drawLine(mainContext, {
             positions: [
-                { x: mainCanvasData.left, y: mainCanvasData.bottom },
-                { x: mainCanvasData.right, y: mainCanvasData.bottom },
+                new Point(mainCanvasData.left, mainCanvasData.bottom),
+                new Point(mainCanvasData.right, mainCanvasData.bottom),
             ],
             thickness: 2,
         })
 
         drawText(mainContext, {
             text: `sin = a/c = ${mainAngleData.sin.toFixed(3)}`,
-            position: { x: mainCanvasData.left + 10, y: mainCanvasData.bottom - 70 },
+            position: new Point(mainCanvasData.left + 10, mainCanvasData.bottom - 70),
             align: 'left',
             baseline: 'bottom',
         })
         drawText(mainContext, {
             text: `cos = b/c = ${mainAngleData.cos.toFixed(3)}`,
-            position: { x: mainCanvasData.left + 10, y: mainCanvasData.bottom - 50 },
+            position: new Point(mainCanvasData.left + 10, mainCanvasData.bottom - 50),
             align: 'left',
             baseline: 'bottom',
         })
         drawText(mainContext, {
             text: `tan = a/b = ${mainAngleData.tan.toFixed(3)}`,
-            position: { x: mainCanvasData.left + 10, y: mainCanvasData.bottom - 30 },
+            position: new Point(mainCanvasData.left + 10, mainCanvasData.bottom - 30),
             align: 'left',
             baseline: 'bottom',
         })
         drawText(mainContext, {
             text: `θ = ${mainAngleData.theta.toFixed(2)}rad (${Math.round(convertToDegree(mainAngleData.theta))}°)`,
-            position: { x: mainCanvasData.left + 10, y: mainCanvasData.bottom - 10 },
+            position: new Point(mainCanvasData.left + 10, mainCanvasData.bottom - 10),
             align: 'left',
             baseline: 'bottom',
         })
@@ -156,26 +160,26 @@ export const init = (container: HTMLElement) => {
         drawText(mainContext, { text: 'C', position: mainTriangleData.C, fill: 'white' })
 
         drawCircle(chartContext, {
-            position: {
-                x: (mainAngleData.theta * chartCanvasData.right) / 2,
-                y: (mainAngleData.sin * chartCanvasData.bottom) / 2,
-            },
+            position: new Point(
+                (mainAngleData.theta * chartCanvasData.right) / 2,
+                (mainAngleData.sin * chartCanvasData.bottom) / 2,
+            ),
             radius: 2,
             color: 'red',
         })
         drawCircle(chartContext, {
-            position: {
-                x: (mainAngleData.theta * chartCanvasData.right) / 2,
-                y: (mainAngleData.cos * chartCanvasData.bottom) / 2,
-            },
+            position: new Point(
+                (mainAngleData.theta * chartCanvasData.right) / 2,
+                (mainAngleData.cos * chartCanvasData.bottom) / 2,
+            ),
             radius: 2,
             color: 'blue',
         })
         drawCircle(chartContext, {
-            position: {
-                x: (mainAngleData.theta * chartCanvasData.right) / 2,
-                y: (mainAngleData.tan * chartCanvasData.bottom) / 2,
-            },
+            position: new Point(
+                (mainAngleData.theta * chartCanvasData.right) / 2,
+                (mainAngleData.tan * chartCanvasData.bottom) / 2,
+            ),
             radius: 2,
             color: 'green',
         })
@@ -186,8 +190,6 @@ export const init = (container: HTMLElement) => {
     animate()
 }
 
-type SimplePosition = { x: number; y: number }
-
 type Shadow = {
     color?: string
     blur?: number
@@ -197,7 +199,7 @@ type Shadow = {
 
 type DrawTextProps = {
     text: string
-    position: Point | SimplePosition
+    position: Point
     align?: CanvasTextAlign
     baseline?: CanvasTextBaseline
     fill?: string
@@ -207,27 +209,27 @@ type DrawTextProps = {
 }
 
 type DrawCircleProps = {
-    position: Point | SimplePosition
+    position: Point
     radius?: number
     color?: string
 }
 
 type DrawLineProps = {
-    positions: (Point | SimplePosition)[]
+    positions: Point[]
     thickness?: number
     dash?: number[]
     color?: string
 }
 
 type DrawSquareProps = {
-    coords?: [Point | SimplePosition, Point | SimplePosition]
+    coords?: [Point, Point]
     thickness?: number
     fillColor?: string
     strokeColor?: string
 }
 
 type DrawArcProps = {
-    position: Point | SimplePosition
+    position: Point
     startAngle: number
     endAngle: number
     counterClockwise?: boolean
@@ -253,11 +255,11 @@ type AngleData = { theta: number; sin: number; cos: number; tan: number }
 
 const setCenter = (ctx: CanvasRenderingContext2D, canvasData: CanvasData, x: number, y: number) => {
     canvasData.center.set(x, y)
-    ctx.translate(canvasData.center.x, canvasData.center.y)
-    canvasData.left = -canvasData.center.x
-    canvasData.right = ctx.canvas.width - canvasData.center.x
-    canvasData.top = -canvasData.center.y
-    canvasData.bottom = ctx.canvas.height - canvasData.center.y
+    ctx.translate(canvasData.center.getX(), canvasData.center.getY())
+    canvasData.left = -canvasData.center.getX()
+    canvasData.right = ctx.canvas.width - canvasData.center.getX()
+    canvasData.top = -canvasData.center.getY()
+    canvasData.bottom = ctx.canvas.height - canvasData.center.getY()
 }
 
 const handleMouseMove = (
@@ -267,9 +269,8 @@ const handleMouseMove = (
     triangleData: TriangleData,
     angleData: AngleData,
 ) => {
-    triangleData.B.x = width - canvasData.center.x
-    triangleData.B.y = height - canvasData.center.y
-    triangleData.C.x = triangleData.B.x
+    triangleData.B.set(width - canvasData.center.getX(), height - canvasData.center.getY())
+    triangleData.C.set(triangleData.B.getX(), triangleData.C.getY())
     triangleData.c = calculateDistance(triangleData.A, triangleData.B)
     triangleData.b = calculateDistance(triangleData.A, triangleData.C)
     triangleData.a = calculateDistance(triangleData.B, triangleData.C)
@@ -280,8 +281,8 @@ const handleMouseMove = (
 }
 
 const calculateAverage = (p1: Point, p2: Point) => {
-    const x = (p1.x + p2.x) / 2
-    const y = (p1.y + p2.y) / 2
+    const x = (p1.getX() + p2.getX()) / 2
+    const y = (p1.getY() + p2.getY()) / 2
     return new Point(x, y)
 }
 
@@ -291,7 +292,7 @@ const convertToDegree = (value: number) => {
 
 const calculateDistance = (p1: Point, p2: Point) => {
     // const distance= Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2))
-    const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+    const distance = Math.hypot(p2.getX() - p1.getX(), p2.getY() - p1.getY())
 
     return distance
 }
@@ -299,7 +300,13 @@ const calculateDistance = (p1: Point, p2: Point) => {
 const drawCircle = (ctx: CanvasRenderingContext2D, props: DrawCircleProps) => {
     ctx.beginPath()
     ctx.fillStyle = props.color ?? '#000'
-    ctx.arc(props.position.x ?? 0, props.position.y ?? 0, props.radius ?? 10, 0, Math.PI * 2)
+    ctx.arc(
+        props.position.getX() ?? 0,
+        props.position.getY() ?? 0,
+        props.radius ?? 10,
+        0,
+        Math.PI * 2,
+    )
     ctx.fill()
 }
 
@@ -316,17 +323,19 @@ const drawText = (ctx: CanvasRenderingContext2D, props: DrawTextProps) => {
     if (props.stroke) {
         ctx.lineWidth = 5
         ctx.strokeStyle = props.stroke
-        ctx.strokeText(props.text, props.position.x, props.position.y)
+        ctx.strokeText(props.text, props.position.getX(), props.position.getY())
     }
-    ctx.fillText(props.text, props.position.x, props.position.y)
+    ctx.fillText(props.text, props.position.getX(), props.position.getY())
 }
 
 const drawLine = (ctx: CanvasRenderingContext2D, props: DrawLineProps) => {
     ctx.beginPath()
-    if (props.positions.length < 2) return
-    ctx.moveTo(props.positions[0].x, props.positions[0].y)
+    if (props.positions.length < 2) {
+        return
+    }
+    ctx.moveTo(props.positions[0].getX(), props.positions[0].getY())
     for (let index = 1; index < props.positions.length; index++) {
-        ctx.lineTo(props.positions[index].x, props.positions[index].y)
+        ctx.lineTo(props.positions[index].getX(), props.positions[index].getY())
     }
     ctx.setLineDash(props.dash ?? [])
     ctx.strokeStyle = props.color ?? '#000'
@@ -340,8 +349,8 @@ const drawArc = (ctx: CanvasRenderingContext2D, props: DrawArcProps) => {
     ctx.lineWidth = props.thickness ?? 1
     ctx.setLineDash(props.dash ?? [])
     ctx.arc(
-        props.position.x,
-        props.position.y,
+        props.position.getX(),
+        props.position.getY(),
         props.radius ?? 20,
         props.startAngle ?? 0,
         props.endAngle ?? 360,
@@ -351,10 +360,10 @@ const drawArc = (ctx: CanvasRenderingContext2D, props: DrawArcProps) => {
 }
 
 const drawSquare = (ctx: CanvasRenderingContext2D, props?: DrawSquareProps) => {
-    const x1 = props?.coords ? props.coords[0].x : -ctx.canvas.width
-    const y1 = props?.coords ? props.coords[0].y : -ctx.canvas.height
-    const x2 = props?.coords ? props.coords[1].x : ctx.canvas.width * 2
-    const y2 = props?.coords ? props.coords[1].y : ctx.canvas.height * 2
+    const x1 = props?.coords ? props.coords[0].getX() : -ctx.canvas.width
+    const y1 = props?.coords ? props.coords[0].getY() : -ctx.canvas.height
+    const x2 = props?.coords ? props.coords[1].getX() : ctx.canvas.width * 2
+    const y2 = props?.coords ? props.coords[1].getY() : ctx.canvas.height * 2
     if (props?.strokeColor) {
         ctx.lineWidth = props?.thickness ?? 0
         ctx.strokeStyle = props?.strokeColor
@@ -371,70 +380,46 @@ const drawCoordinateSystem = (ctx: CanvasRenderingContext2D, canvasData: CanvasD
 
     for (let index = 0; index < canvasData.right + 10; index += 10) {
         drawLine(ctx, {
-            positions: [
-                { x: index, y: canvasData.bottom },
-                { x: index, y: canvasData.top },
-            ],
+            positions: [new Point(index, canvasData.bottom), new Point(index, canvasData.top)],
             color: Boolean(index % 100) ? '#eee' : '#ddd',
         })
     }
     for (let index = 0; index > canvasData.left - 10; index -= 10) {
         drawLine(ctx, {
-            positions: [
-                { x: index, y: canvasData.bottom },
-                { x: index, y: canvasData.top },
-            ],
+            positions: [new Point(index, canvasData.bottom), new Point(index, canvasData.top)],
             color: Boolean(index % 100) ? '#eee' : '#ddd',
         })
     }
     for (let index = 0; index > canvasData.top - 10; index -= 10) {
         drawLine(ctx, {
-            positions: [
-                { x: canvasData.left, y: index },
-                { x: canvasData.right, y: index },
-            ],
+            positions: [new Point(canvasData.left, index), new Point(canvasData.right, index)],
             color: Boolean(index % 100) ? '#eee' : '#ddd',
         })
     }
     for (let index = 0; index < canvasData.bottom + 10; index += 10) {
         drawLine(ctx, {
-            positions: [
-                { x: canvasData.left, y: index },
-                { x: canvasData.right, y: index },
-            ],
+            positions: [new Point(canvasData.left, index), new Point(canvasData.right, index)],
             color: Boolean(index % 100) ? '#eee' : '#ddd',
         })
     }
 
     drawLine(ctx, {
-        positions: [
-            { x: 0, y: 0 },
-            { x: canvasData.right, y: 0 },
-        ],
+        positions: [new Point(0, 0), new Point(canvasData.right, 0)],
         dash: [5, 5],
         color: 'gray',
     })
     drawLine(ctx, {
-        positions: [
-            { x: 0, y: 0 },
-            { x: canvasData.left, y: 0 },
-        ],
+        positions: [new Point(0, 0), new Point(canvasData.left, 0)],
         dash: [5, 5],
         color: 'gray',
     })
     drawLine(ctx, {
-        positions: [
-            { x: 0, y: 0 },
-            { x: 0, y: canvasData.top },
-        ],
+        positions: [new Point(0, 0), new Point(0, canvasData.top)],
         dash: [5, 5],
         color: 'gray',
     })
     drawLine(ctx, {
-        positions: [
-            { x: 0, y: 0 },
-            { x: 0, y: canvasData.bottom },
-        ],
+        positions: [new Point(0, 0), new Point(0, canvasData.bottom)],
         dash: [5, 5],
         color: 'gray',
     })
@@ -447,20 +432,40 @@ const drawCorner = (
     angleData: AngleData,
 ) => {
     let counterClockwise = false
-    if (triangleData.B.x < triangleData.A.x && triangleData.B.y > triangleData.A.y)
+    if (
+        triangleData.B.getX() < triangleData.A.getX() &&
+        triangleData.B.getY() > triangleData.A.getY()
+    ) {
         counterClockwise = true
-    if (triangleData.B.x > triangleData.A.x && triangleData.B.y < triangleData.A.y)
+    }
+    if (
+        triangleData.B.getX() > triangleData.A.getX() &&
+        triangleData.B.getY() < triangleData.A.getY()
+    ) {
         counterClockwise = true
+    }
 
-    const startAngle = triangleData.B.x > triangleData.A.x ? 0 : Math.PI
+    const startAngle = triangleData.B.getX() > triangleData.A.getX() ? 0 : Math.PI
 
     let endAngle = angleData.theta
-    if (triangleData.B.x < triangleData.A.x && triangleData.B.y > triangleData.A.y)
+    if (
+        triangleData.B.getX() < triangleData.A.getX() &&
+        triangleData.B.getY() > triangleData.A.getY()
+    ) {
         endAngle = Math.PI - angleData.theta
-    if (triangleData.B.x > triangleData.A.x && triangleData.B.y < triangleData.A.y)
+    }
+    if (
+        triangleData.B.getX() > triangleData.A.getX() &&
+        triangleData.B.getY() < triangleData.A.getY()
+    ) {
         endAngle = -angleData.theta
-    if (triangleData.B.x < triangleData.A.x && triangleData.B.y < triangleData.A.y)
+    }
+    if (
+        triangleData.B.getX() < triangleData.A.getX() &&
+        triangleData.B.getY() < triangleData.A.getY()
+    ) {
         endAngle = Math.PI + angleData.theta
+    }
 
     if (triangleData.b > 50) {
         drawArc(ctx, {

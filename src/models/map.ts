@@ -8,10 +8,10 @@ export default class Map extends Drawable {
     drawInstructions(context: CanvasRenderingContext2D): void {
         context.fillStyle = 'green'
         context.fillRect(
-            -(this.size.width / 2),
-            -(this.size.height / 2),
-            this.size.width,
-            this.size.height,
+            -(this.size.getWidth() / 2),
+            -(this.size.getHeight() / 2),
+            this.size.getWidth(),
+            this.size.getHeight(),
         )
     }
 }

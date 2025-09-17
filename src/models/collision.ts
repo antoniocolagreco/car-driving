@@ -1,11 +1,19 @@
 import type Point from './point'
 
 export default class Collision {
-    position: Point
-    offset: number
+    private position: Point
+    private offset: number
 
-    constructor(position: Point, offest: number) {
+    constructor(position: Point, offset: number) {
         this.position = position
-        this.offset = offest
+        this.offset = offset
+    }
+
+    getPosition(): Point {
+        return this.position
+    }
+
+    getOffset(): number {
+        return this.offset
     }
 }

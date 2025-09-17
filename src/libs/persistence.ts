@@ -1,53 +1,76 @@
 import NeuralNetwork from '@models/neural-network'
-import { DEFAULTS, STORAGE_KEYS } from './config'
+import { DEFAULTS, STORAGE_KEYS } from 'src/constants'
 
-export const persistence = {
-    saveBestNetwork: (network: NeuralNetwork) => {
-        network.survivedRounds += 1
-        localStorage.setItem(STORAGE_KEYS.bestNetwork, JSON.stringify(network))
-    },
+export default class Persistence {
+    static saveBestNetwork(network: NeuralNetwork): void {
+        localStorage.setItem(STORAGE_KEYS.bestNetwork, JSON.stringify(network.toJSON()))
+    }
 
-    saveNetworkBackup: (network: NeuralNetwork) => {
-        localStorage.setItem(STORAGE_KEYS.backupNetwork, JSON.stringify(network))
-    },
+    static saveNetworkBackup(network: NeuralNetwork): void {
+        localStorage.setItem(STORAGE_KEYS.backupNetwork, JSON.stringify(network.toJSON()))
+    }
 
-    loadNetworkBackup: (): NeuralNetwork | undefined => {
+    static loadNetworkBackup(): NeuralNetwork | undefined {
         const networkString = localStorage.getItem(STORAGE_KEYS.backupNetwork)
-        const network = networkString ? JSON.parse(networkString) : undefined
-        return network
-    },
+        if (!networkString) {
+            return undefined
+        }
 
-    clearBestNetwork: () => {
+        try {
+            const jsonData = JSON.parse(networkString)
+            return NeuralNetwork.fromJSON(jsonData)
+        } catch (error) {
+            console.error('Error loading network backup:', error)
+            return undefined
+        }
+    }
+
+    static clearBestNetwork(): void {
         localStorage.removeItem(STORAGE_KEYS.bestNetwork)
-    },
+    }
 
-    loadBestNetwork: (): NeuralNetwork | undefined => {
+    static loadBestNetwork(): NeuralNetwork | undefined {
         const networkString = localStorage.getItem(STORAGE_KEYS.bestNetwork)
-        const network = networkString ? JSON.parse(networkString) : undefined
-        return network
-    },
+        if (!networkString) {
+            return undefined
+        }
 
-    loadMutationRate: (): number => {
+        try {
+            const jsonData = JSON.parse(networkString)
+            return NeuralNetwork.fromJSON(jsonData)
+        } catch (error) {
+            console.error('Error loading best network:', error)
+            return undefined
+        }
+    }
+
+    static loadMutationRate(): number {
         const mutationString = localStorage.getItem(STORAGE_KEYS.mutationRate)
         return mutationString ? Number(mutationString) : DEFAULTS.mutationRate
-    },
+    }
 
-    saveMutationRate: (rate: number) =>
-        localStorage.setItem(STORAGE_KEYS.mutationRate, String(rate)),
+    static saveMutationRate(rate: number): void {
+        localStorage.setItem(STORAGE_KEYS.mutationRate, String(rate))
+    }
 
-    loadCarsQuantity: (): number => {
+    static loadCarsQuantity(): number {
         const carsString = localStorage.getItem(STORAGE_KEYS.carsQuantity)
         return carsString ? Number(carsString) : DEFAULTS.carsQuantity
-    },
+    }
 
-    saveCarsQuantity: (quantity: number) =>
-        localStorage.setItem(STORAGE_KEYS.carsQuantity, String(quantity)),
+    static saveCarsQuantity(quantity: number): void {
+        localStorage.setItem(STORAGE_KEYS.carsQuantity, String(quantity))
+    }
 
-    loadNeurons: (): Array<number> => {
-        const neuronString = localStorage.getItem(STORAGE_KEYS.neurons) ?? DEFAULTS.neurons
-        const neuronsArray = neuronString.split(',').map((n) => Number(n))
+    static loadNeurons(): Array<number> {
+        const neuronString = localStorage.getItem(STORAGE_KEYS.neurons)
+        const neuronsArray = neuronString
+            ? neuronString.split(',').map((n) => Number(n))
+            : [...DEFAULTS.neurons]
         return neuronsArray
-    },
+    }
 
-    saveNeurons: (neurons: string) => localStorage.setItem(STORAGE_KEYS.neurons, neurons),
+    static saveNeurons(neurons: string): void {
+        localStorage.setItem(STORAGE_KEYS.neurons, neurons)
+    }
 }

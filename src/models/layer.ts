@@ -7,7 +7,7 @@ export default class Layer {
      * Un input può essere il valore di un sensore, il colore di un pixel etc.
      * Una immagine 32px*32px avrà 1024 (inputs) neuroni ad esempio.
      */
-    inputs: Array<number>
+    private inputs: Array<number>
     /**
      * Questo array rappresenta gli output previsti dalla rete neurale.
      * Ogni elemento dell'array corrisponde a un neurone di output.
@@ -15,7 +15,7 @@ export default class Layer {
      * Scegliamo noi l'output, ad esempio, in una rete neurale di regressione,
      * il layer di output potrebbe avere un solo neurone con una funzione di attivazione lineare
      */
-    outputs: Array<number>
+    private outputs: Array<number>
     /*
      * Gli array dei bias contengono i valori di bias per ogni neurone nella rete neurale.
      * Il bias è un termine costante aggiunto all'input di ogni neurone prima dell'applicazione della funzione di attivazione.
@@ -23,7 +23,7 @@ export default class Layer {
      * Un bias è una specie di offset per regolare meglio l'attivazione del neurone.
      * E' una straslazione sull'ordinata
      */
-    biases: Array<number>
+    private biases: Array<number>
     /*
      * La matrice dei pesi rappresenta i pesi delle connessioni tra i neuroni.
      * L'elemento weights[i][j] rappresenta il peso della connessione tra il neurone di input i e il neurone di output j.
@@ -31,7 +31,7 @@ export default class Layer {
      * Essi determinano l'importanza di ciascuna connessione nella trasmissione dell'informazione attraverso la rete.
      * Durante il calcolo dell'output, vengono usati per fare la somma ponderata.
      */
-    weights: Array<Array<number>>
+    private weights: Array<Array<number>>
     /*
      * NOTA
      * Durante il processo di addestramento di una rete neurale, i valori di bias possono cambiare.
@@ -103,5 +103,84 @@ export default class Layer {
             layer.outputs[i] = Math.tanh(sum + layer.biases[i])
         }
         return layer.outputs
+    }
+
+    // Getters
+    getInputs(): ReadonlyArray<number> {
+        return this.inputs
+    }
+
+    getInputAt(index: number): number {
+        return this.inputs[index]
+    }
+
+    getOutputs(): ReadonlyArray<number> {
+        return this.outputs
+    }
+
+    getOutputAt(index: number): number {
+        return this.outputs[index]
+    }
+
+    getBiases(): ReadonlyArray<number> {
+        return this.biases
+    }
+
+    getBiasAt(index: number): number {
+        return this.biases[index]
+    }
+
+    getWeights(): ReadonlyArray<ReadonlyArray<number>> {
+        return this.weights
+    }
+
+    getWeightAt(inputIndex: number, outputIndex: number): number {
+        return this.weights[inputIndex][outputIndex]
+    }
+
+    // Setters
+    setInputs(inputs: Array<number>): void {
+        this.inputs = [...inputs]
+    }
+
+    setOutputs(outputs: Array<number>): void {
+        this.outputs = [...outputs]
+    }
+
+    setBiases(biases: Array<number>): void {
+        this.biases = [...biases]
+    }
+
+    setWeights(weights: Array<Array<number>>): void {
+        this.weights = weights.map((row) => [...row])
+    }
+
+    setInputAt(index: number, value: number): void {
+        if (index >= 0 && index < this.inputs.length) {
+            this.inputs[index] = value
+        }
+    }
+
+    setOutputAt(index: number, value: number): void {
+        if (index >= 0 && index < this.outputs.length) {
+            this.outputs[index] = value
+        }
+    }
+
+    setBiasAt(index: number, value: number): void {
+        if (index >= 0 && index < this.biases.length) {
+            this.biases[index] = value
+        }
+    }
+
+    setWeightAt(inputIndex: number, outputIndex: number, value: number): void {
+        if (
+            inputIndex >= 0 &&
+            inputIndex < this.weights.length &&
+            outputIndex >= 0 &&
+            outputIndex < this.weights[inputIndex].length
+        ) {
+            this.weights[inputIndex][outputIndex] = value
+        }
     }
 }

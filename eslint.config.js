@@ -28,6 +28,12 @@ export default [
                     case: 'kebabCase',
                 },
             ],
+            // ✅ Force curly braces for all control statements
+            curly: ['error', 'all'],
+            // ✅ Consistent brace style
+            'brace-style': ['error', '1tbs', { allowSingleLine: false }],
+            // ✅ No single line blocks
+            'nonblock-statement-body-position': ['error', 'below'],
         },
     },
 ]
