@@ -140,8 +140,6 @@ const generateRoadConfiguration = (numberOfRows: number): Array<number> => {
         ...veryHardSectionArray,
     ]
 
-    console.log(configuration)
-
     return configuration
 }
 

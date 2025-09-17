@@ -10,7 +10,7 @@ import type World from './world'
 export interface SimulationState {
     allCars: RacingCar[]
     traffic: Car[]
-    aliveCars: RacingCar[]
+    remainingCars: RacingCar[]
     activeCar?: RacingCar
     bestCar?: RacingCar
     gameover: boolean
@@ -38,7 +38,7 @@ export class Simulation {
         this.state = {
             allCars: [],
             traffic: [],
-            aliveCars: [],
+            remainingCars: [],
             activeCar: undefined,
             bestCar: undefined,
             gameover: false,
@@ -86,11 +86,11 @@ export class Simulation {
             this.config.neurons,
             this.world.getRoad(),
         )
-        this.state.aliveCars = this.state.allCars
+        this.state.remainingCars = this.state.allCars
         // Ensure all start inactive (ghost)
-        this.state.aliveCars.forEach((c) => c.setActive(false))
+        this.state.remainingCars.forEach((c) => c.setActive(false))
         // Mark the first alive car as active
-        this.state.activeCar = this.state.aliveCars[0]
+        this.state.activeCar = this.state.remainingCars[0]
         this.state.trafficCounter = 0
 
         if (this.state.activeCar) {
@@ -102,7 +102,7 @@ export class Simulation {
             this.state.activeCar.setNetwork(bestNetwork)
             if (this.state.activeCar.getNetwork()) {
                 for (let index = 1; index < this.state.allCars.length; index++) {
-                    this.state.aliveCars[index].setNetwork(
+                    this.state.remainingCars[index].setNetwork(
                         NeuralNetwork.getMutatedNetwork(bestNetwork, this.config.mutationRate),
                     )
                 }
@@ -123,11 +123,20 @@ export class Simulation {
     }
 
     update(): void {
-        this.state.aliveCars = getRemainingCars(this.state.allCars)
+        this.state.remainingCars = getRemainingCars(this.state.allCars)
         this.state.bestCar = getBestCar(this.state.allCars)
         this.state.activeCar = this.state.gameover
             ? this.state.bestCar
-            : getActiveCar(this.state.aliveCars)
+            : getActiveCar(this.state.remainingCars)
+
+        // Aggiorna continuamente il record di punti della rete attiva
+        if (this.state.activeCar?.getNetwork()) {
+            const network = this.state.activeCar.getNetwork()!
+            const currentPoints = this.state.activeCar.getPoints()
+            if (currentPoints > network.getPointsRecord()) {
+                network.setPointsRecord(currentPoints)
+            }
+        }
     }
 
     checkGameOver(timestamp: number): boolean {
@@ -141,12 +150,16 @@ export class Simulation {
             return true
         }
 
-        if (this.state.aliveCars.length === 0 && !this.state.gameover) {
+        if (this.state.remainingCars.length === 0 && !this.state.gameover) {
             if (this.state.bestCar?.getNetwork()) {
                 const network = this.state.bestCar.getNetwork()
                 if (network) {
                     network.setSurvivedRounds(network.getSurvivedRounds() + 1)
-                    network.setPointsRecord(this.state.bestCar.getPoints())
+                    // Aggiorna il record di punti solo se è maggiore del precedente
+                    const currentPoints = this.state.bestCar.getPoints()
+                    if (currentPoints > network.getPointsRecord()) {
+                        network.setPointsRecord(currentPoints)
+                    }
                     Persistence.saveBestNetwork(network)
                 }
             }
@@ -172,8 +185,8 @@ export class Simulation {
     private startTimers(): void {
         // Death check interval
         this.deathCheckInterval = setInterval(() => {
-            const firstCar = getActiveCar(this.state.aliveCars)
-            for (const car of this.state.aliveCars) {
+            const firstCar = getActiveCar(this.state.remainingCars)
+            for (const car of this.state.remainingCars) {
                 const t = this.state.traffic[this.state.trafficCounter]
                 if (t && car.getPosition().getY() > t.getPosition().getY()) {
                     car.crash()
@@ -197,7 +210,7 @@ export class Simulation {
 
         // Demerit check interval
         this.demeritCheckInterval = setInterval(() => {
-            for (const car of this.state.aliveCars) {
+            for (const car of this.state.remainingCars) {
                 if (car.getMeritPoints() <= car.getCheckPoints()) {
                     car.addDemeritPoints(1)
                 } else {
@@ -246,7 +259,18 @@ export class Simulation {
 
     evolveNetwork(): boolean {
         if (this.state.bestCar?.getNetwork()) {
-            Persistence.saveBestNetwork(this.state.bestCar.getNetwork()!)
+            const network = this.state.bestCar.getNetwork()!
+            const currentPoints = this.state.bestCar.getPoints()
+
+            // Incrementa i survived rounds quando si evolve manualmente
+            network.setSurvivedRounds(network.getSurvivedRounds() + 1)
+
+            // Aggiorna il record di punti se è maggiore
+            if (currentPoints > network.getPointsRecord()) {
+                network.setPointsRecord(currentPoints)
+            }
+
+            Persistence.saveBestNetwork(network)
             return true
         }
         return false

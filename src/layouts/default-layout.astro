@@ -4,6 +4,7 @@ import '@fontsource-variable/nunito'
 import type { HTMLAttributes } from 'astro/types'
 import NavBar from '../components/nav-bar.astro'
 import { ClientRouter } from 'astro:transitions'
+import NavLink from '@components/nav-link.astro'
 
 type Props = HTMLAttributes<'html'>
 
@@ -24,11 +25,15 @@ const { lang = 'en', title, ...otherProps } = Astro.props
         <ClientRouter />
         <header>
             <div class="bg-rose-600">
-                <div class="mx-auto max-w-screen-lg w-full py-2 text-stone-50">
-                    <h1 class="text-2xl font-bold mx-1">Car Driving</h1>
+                <div class="mx-auto max-w-screen-lg w-full flex justify-between py-2 text-stone-50">
+                    <NavLink href={`${import.meta.env.BASE_URL}/`}
+                        ><h1 class="text-2xl font-bold mx-1">Car Driving</h1></NavLink
+                    >
+                    <NavLink href={`${import.meta.env.BASE_URL}/trigonometry`}
+                        ><h1 class="text-2xl font-bold mx-1">Trigonometry</h1></NavLink
+                    >
                 </div>
             </div>
-            <NavBar class="mx-auto max-w-screen-lg w-full py-2" />
         </header>
         <main class="mx-auto max-w-screen-lg w-full grow overflow-hidden" transition:name="main">
             <slot />

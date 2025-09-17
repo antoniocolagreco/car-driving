@@ -152,10 +152,10 @@ export default class Vehicle extends Drawable {
     }
 
     // Domain method: explicitly mark a car as active/inactive
-    setActive(isActive: boolean): void {
+    setActive(value: boolean): void {
         // Active means not ghost and rays visible
-        super.setGhost(!isActive)
-        this.sensor?.setVisibleRays(isActive)
+        super.setGhost(!value)
+        this.sensor?.setVisibleRays(value)
     }
 
     getNetwork(): NeuralNetwork | undefined {

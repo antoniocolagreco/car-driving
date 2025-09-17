@@ -10,10 +10,11 @@ export interface UIState {
     activeCar?: {
         networkId?: string
         points: number
+        record?: number
         networkSurvivedRounds?: number
         speed: number
     }
-    aliveCars: number
+    remainingCars: number
     fps: number
 }
 
@@ -57,6 +58,11 @@ export class UIController {
             infoPts.innerHTML = `${state.activeCar?.points ?? 0}`
         }
 
+        const infoRec = document.querySelector('#info-rec')
+        if (infoRec) {
+            infoRec.innerHTML = `${state.activeCar?.networkId ? state.activeCar.record : 0}`
+        }
+
         const infoSrs = document.querySelector('#info-srv')
         if (infoSrs) {
             infoSrs.innerHTML = `${state.activeCar?.networkSurvivedRounds ?? 0}`
@@ -64,7 +70,7 @@ export class UIController {
 
         const infoCrs = document.querySelector('#info-crs')
         if (infoCrs) {
-            infoCrs.innerHTML = `${state.aliveCars}`
+            infoCrs.innerHTML = `${state.remainingCars}`
         }
 
         const infoPps = document.querySelector('#info-pps')

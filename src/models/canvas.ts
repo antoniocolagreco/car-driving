@@ -21,7 +21,6 @@ export default class Canvas {
             contextOptions = { alpha: false },
         } = options
 
-        console.log('Creating canvas with options:', options)
         this.container = container
         this.element = document.createElement('canvas')
         this.element.width = width

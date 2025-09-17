@@ -5,6 +5,7 @@ export class RacingCar extends Car {
     private meritPoints: number = 0
     private demeritPoints: number = 0
     private checkpoints: number = 0
+    private secondsFromLastCheckpoint: number = 0
     private points: number = 0
     private winner: boolean = false
 
@@ -13,15 +14,16 @@ export class RacingCar extends Car {
     }
 
     protected calculatePoints(traffic: Array<Car>) {
-        let newPoints = 0
+        // Bonus per superare traffico
+        let trafficReward = 0
         for (let trafficVehicle of traffic) {
             if (trafficVehicle.getPosition().getY() > this.getPosition().getY()) {
-                newPoints += 1
+                trafficReward += 1
             }
         }
 
-        if (newPoints > this.meritPoints) {
-            this.meritPoints = newPoints
+        if (trafficReward > this.meritPoints) {
+            this.meritPoints = trafficReward
         }
 
         this.points = this.meritPoints - this.demeritPoints
@@ -83,5 +85,13 @@ export class RacingCar extends Car {
 
     setWinner(value: boolean): void {
         this.winner = value
+    }
+
+    getSecondsFromLastCheckpoint(): number {
+        return this.secondsFromLastCheckpoint
+    }
+
+    setSecondsFromLastCheckpoint(value: number): void {
+        this.secondsFromLastCheckpoint = value
     }
 }

@@ -125,11 +125,12 @@ export function createSimulation(element: HTMLElement): SimulationControls {
                     ? {
                           networkId: state.activeCar.getNetwork()?.getId(),
                           points: state.activeCar.getPoints(),
+                          record: state.activeCar.getNetwork()?.getPointsRecord(),
                           networkSurvivedRounds: state.activeCar.getNetwork()?.getSurvivedRounds(),
                           speed: state.activeCar.getSpeed(),
                       }
                     : undefined,
-                aliveCars: state.aliveCars.length,
+                remainingCars: state.remainingCars.length,
                 fps: currentFps,
             }
 
