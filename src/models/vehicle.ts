@@ -14,18 +14,13 @@ export type VehicleProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle'> & {
 }
 
 export default class Vehicle extends Drawable {
-    private speed: number
-    private steeringPower: number
-    private features: Features
-    private damaged: boolean
-    private controls: Controls
-    private sensor: Sensor | undefined
-    private network: NeuralNetwork | undefined
-    private meritPoints: number = 0
-    private demeritPoints: number = 0
-    private passedCheckPoints: number = 0
-    private points: number = 0
-    private winner: boolean = false
+    protected speed: number
+    protected steeringPower: number
+    protected features: Features
+    protected damaged: boolean
+    protected controls: Controls
+    protected sensor: Sensor | undefined
+    protected network: NeuralNetwork | undefined
 
     constructor(props: VehicleProps) {
         const { features, color, network, sensor, ...otherProps } = props
@@ -42,7 +37,7 @@ export default class Vehicle extends Drawable {
         }
     }
 
-    #move() {
+    protected move() {
         if (this.controls.getForward()) {
             if (this.speed < this.features.getMaxSpeed()) {
                 this.speed += this.features.getAcceleration()
@@ -83,7 +78,7 @@ export default class Vehicle extends Drawable {
         this.sensor?.syncDirection(this.direction)
     }
 
-    #assessDamage(shapes: Array<Shape>) {
+    protected assessDamage(shapes: Array<Shape>) {
         for (let shape of shapes) {
             if (checkPolygonsIntersection(shape, this.shape)) {
                 return true
@@ -94,27 +89,11 @@ export default class Vehicle extends Drawable {
 
     updateStatus(traffic: Array<Vehicle>, obstacles: Array<Shape>) {
         const shapes = [...traffic.map((v) => v.shape), ...obstacles]
-        const damaged = this.#assessDamage(shapes)
+        const damaged = this.assessDamage(shapes)
         if (damaged && !this.damaged) {
             this.crash()
         }
-        this.#calculatePoints(traffic)
         this.sensor?.checkCollisions(shapes)
-    }
-
-    #calculatePoints(traffic: Array<Vehicle>) {
-        let newPoints = 0
-        for (let trafficVehicle of traffic) {
-            if (trafficVehicle.getPosition().getY() > this.getPosition().getY()) {
-                newPoints += 1
-            }
-        }
-
-        if (newPoints > this.meritPoints) {
-            this.meritPoints = newPoints
-        }
-
-        this.points = this.meritPoints - this.demeritPoints
     }
 
     crash() {
@@ -128,7 +107,7 @@ export default class Vehicle extends Drawable {
         // AudioPlayer.play().scratch()
     }
 
-    #autoPilot() {
+    protected autoPilot() {
         if (!this.network || !this.sensor) {
             return
         }
@@ -158,25 +137,14 @@ export default class Vehicle extends Drawable {
             context.globalAlpha = 0.5
         }
         if (!this.damaged) {
-            this.#autoPilot()
-            this.#move()
+            this.autoPilot()
+            this.move()
 
             this.sensor?.drawIn(context)
         }
     }
 
-    afterDrawing(context: CanvasRenderingContext2D): void {
-        context.globalAlpha = 1
-        if (!this.winner) {
-            return
-        }
-
-        context.fillStyle = 'black'
-        context.font = '12px monospace'
-        context.textAlign = 'center'
-        context.textBaseline = 'middle'
-        context.fillText('WINNER', this.getPosition().getX(), this.getPosition().getY())
-    }
+    afterDrawing(_context: CanvasRenderingContext2D): void {}
 
     setGhost(value: boolean): void {
         // Keep this setter free of side-effects; only toggle ghost flag
@@ -188,50 +156,6 @@ export default class Vehicle extends Drawable {
         // Active means not ghost and rays visible
         super.setGhost(!isActive)
         this.sensor?.setVisibleRays(isActive)
-    }
-
-    getDemeritPoints(): number {
-        return this.demeritPoints
-    }
-
-    incrementDemeritPoints(): void {
-        this.demeritPoints += 1
-    }
-
-    resetDemeritPoints(): void {
-        this.demeritPoints = 0
-    }
-
-    setDemeritPoints(value: number): void {
-        this.demeritPoints = value
-    }
-
-    addDemeritPoints(value: number): void {
-        this.demeritPoints += value
-    }
-
-    getPassedCheckPoints(): number {
-        return this.passedCheckPoints
-    }
-
-    setPassedCheckPoint(value: number): void {
-        this.passedCheckPoints = value
-    }
-
-    getCheckPoints(): number {
-        return this.passedCheckPoints // checkPoints alias for passedCheckPoints
-    }
-
-    setCheckPoints(value: number): void {
-        this.passedCheckPoints = value
-    }
-
-    getMeritPoints(): number {
-        return this.meritPoints
-    }
-
-    setMeritPoints(value: number): void {
-        this.meritPoints = value
     }
 
     getNetwork(): NeuralNetwork | undefined {
@@ -248,18 +172,6 @@ export default class Vehicle extends Drawable {
 
     isDamaged(): boolean {
         return this.damaged
-    }
-
-    getPoints(): number {
-        return this.points
-    }
-
-    isWinner(): boolean {
-        return this.winner
-    }
-
-    setWinner(value: boolean): void {
-        this.winner = value
     }
 
     getControls(): Controls {

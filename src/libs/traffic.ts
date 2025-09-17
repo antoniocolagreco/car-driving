@@ -1,4 +1,3 @@
-import type Vehicle from '@models/vehicle'
 import { Car } from '../models/car'
 import type Road from '../models/road'
 
@@ -146,8 +145,8 @@ const generateRoadConfiguration = (numberOfRows: number): Array<number> => {
     return configuration
 }
 
-export const generateTraffic = (numberOfRows: number, road: Road): Array<Vehicle> => {
-    const traffic: Array<Vehicle> = []
+export const generateTraffic = (numberOfRows: number, road: Road): Array<Car> => {
+    const traffic: Array<Car> = []
     const offset = -400
 
     const roadConfiguration = generateRoadConfiguration(numberOfRows)

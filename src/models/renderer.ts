@@ -1,5 +1,6 @@
 import { CONSTANTS } from '../constants'
 import type Canvas from './canvas'
+import type { RacingCar } from './racing-car'
 import Map from './map'
 import Road from './road'
 import type { SimulationState } from './simulation'
@@ -40,7 +41,7 @@ export class Renderer {
         return { x, y }
     }
 
-    drawGameOverOverlay(bestCar?: Vehicle): void {
+    drawGameOverOverlay(bestCar?: RacingCar): void {
         if (!bestCar || !this.simulationContext) {
             return
         }

@@ -1,11 +1,11 @@
-import { Car } from '@models/car'
+import { RacingCar } from '@models/racing-car'
 import Features from '@models/features'
 import NeuralNetwork from '@models/neural-network'
 import Road from '@models/road'
 import Sensor from '@models/sensor'
 
 export const generateCars = (carsQuantity: number, neurons: Array<number>, road: Road) => {
-    const cars: Array<Car> = []
+    const cars: Array<RacingCar> = []
 
     const features = new Features({
         maxSpeed: 7,
@@ -20,15 +20,15 @@ export const generateCars = (carsQuantity: number, neurons: Array<number>, road:
         const position = road.getLanePosition(lane)
         const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI * 0.5 })
         const network = new NeuralNetwork(sensor.getRayCount() + 1, ...neurons, 4)
-        const car = new Car({ position, features, sensor, network, ghost: true })
+        const car = new RacingCar({ position, features, sensor, network, ghost: true })
         cars.push(car)
     }
     return cars
 }
 
-export const getRemainingCars = (cars: Array<Car>) => cars.filter((car) => !car.isDamaged())
+export const getRemainingCars = (cars: Array<RacingCar>) => cars.filter((car) => !car.isDamaged())
 
-export const getActiveCar = (cars: Array<Car>) => {
+export const getActiveCar = (cars: Array<RacingCar>) => {
     const leadingCarPosition = Math.min(...cars.map((c) => c.getPosition().getY()))
     const car = cars.find((car) => car.getPosition().getY() === leadingCarPosition)
     // Reset active state for all cars (ghost + hide rays)
@@ -41,7 +41,7 @@ export const getActiveCar = (cars: Array<Car>) => {
     return car
 }
 
-export const getBestCar = (cars: Array<Car>) => {
+export const getBestCar = (cars: Array<RacingCar>) => {
     // Reset winner flag for all cars
     cars.forEach((car) => car.setWinner(false))
 

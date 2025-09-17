@@ -7,14 +7,18 @@ export type CarProps = Omit<VehicleProps, 'features'> & {
 }
 
 export class Car extends Vehicle {
-    constructor(props: CarProps) {
-        const { features, size, ...otherProps } = props
+    constructor({ features, ...rest }: CarProps) {
         super({
-            ...otherProps,
-            size: size ?? new Size(40, 70),
+            ...rest,
             features:
-                features ??
-                new Features({ maxSpeed: 5, acceleration: 0.02, maxReverse: 1, breakPower: 0.05 }),
+                features ||
+                new Features({
+                    maxSpeed: 5,
+                    acceleration: 0.02,
+                    maxReverse: 1,
+                    breakPower: 0.05,
+                }),
         })
+        this.size = new Size(40, 70)
     }
 }

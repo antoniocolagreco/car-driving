@@ -28,10 +28,10 @@ export default class Drawable {
         this.fillStyle = fillStyle ?? '#000'
         this.strokeStyle = strokeStyle ?? '#000'
         this.ghost = ghost ?? false
-        this.shape = this.#createShape()
+        this.shape = this.createShape()
     }
 
-    #createShape(): Shape {
+    protected createShape(): Shape {
         const rad = Math.hypot(this.getSize().getWidth(), this.getSize().getHeight()) / 2
         const alpha = Math.atan2(this.getSize().getWidth(), this.getSize().getHeight())
         const topLeft = new Point(
@@ -87,7 +87,7 @@ export default class Drawable {
 
     drawIn(context: CanvasRenderingContext2D) {
         this.beforeDrawing(context)
-        this.shape = this.#createShape()
+        this.shape = this.createShape()
         this.drawInstructions(context)
         this.afterDrawing(context)
     }

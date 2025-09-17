@@ -2,16 +2,17 @@ import { CONSTANTS } from '../constants'
 import Persistence from '../libs/persistence'
 import { generateCars, getActiveCar, getBestCar, getRemainingCars } from '../libs/simulation'
 import { generateTraffic } from '../libs/traffic'
+import type { Car } from './car'
 import NeuralNetwork from './neural-network'
-import type Vehicle from './vehicle'
+import type { RacingCar } from './racing-car'
 import type World from './world'
 
 export interface SimulationState {
-    allCars: Vehicle[]
-    traffic: Vehicle[]
-    aliveCars: Vehicle[]
-    activeCar?: Vehicle
-    bestCar?: Vehicle
+    allCars: RacingCar[]
+    traffic: Car[]
+    aliveCars: RacingCar[]
+    activeCar?: RacingCar
+    bestCar?: RacingCar
     gameover: boolean
     gameoverAt: number | null
     trafficCounter: number
