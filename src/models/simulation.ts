@@ -3,9 +3,8 @@ import Persistence from '../libs/persistence'
 import { generateCars, getActiveCar, getBestCar, getRemainingCars } from '../libs/simulation'
 import { generateTraffic } from '../libs/traffic'
 import NeuralNetwork from './neural-network'
-import Road from './road'
 import type Vehicle from './vehicle'
-import Visualizer from './visualizer'
+import type World from './world'
 
 export interface SimulationState {
     allCars: Vehicle[]
@@ -24,16 +23,15 @@ export interface SimulationConfig {
     neurons: number[]
 }
 
-export class SimulationManager {
+export class Simulation {
     private state: SimulationState
     private config: SimulationConfig
     private deathCheckInterval?: ReturnType<typeof setInterval>
     private demeritCheckInterval?: ReturnType<typeof setInterval>
 
     constructor(
-        private road: Road,
+        private world: World,
         config: SimulationConfig,
-        private networkContext?: CanvasRenderingContext2D | null,
     ) {
         this.config = config
         this.state = {
@@ -82,7 +80,11 @@ export class SimulationManager {
 
         this.stopTimers()
 
-        this.state.allCars = generateCars(this.config.carsQuantity, this.config.neurons, this.road)
+        this.state.allCars = generateCars(
+            this.config.carsQuantity,
+            this.config.neurons,
+            this.world.getRoad(),
+        )
         this.state.aliveCars = this.state.allCars
         // Ensure all start inactive (ghost)
         this.state.aliveCars.forEach((c) => c.setActive(false))
@@ -106,12 +108,12 @@ export class SimulationManager {
             }
         }
 
-        this.state.traffic = generateTraffic(CONSTANTS.initialTrafficRows, this.road)
+        this.state.traffic = generateTraffic(CONSTANTS.initialTrafficRows, this.world.getRoad())
         this.startTimers()
 
-        if (this.networkContext && this.state.activeCar?.getNetwork()) {
-            Visualizer.drawNetworkIn(this.networkContext, this.state.activeCar.getNetwork()!)
-        }
+        // if (this.networkContext && this.state.activeCar?.getNetwork()) {
+        //     Visualizer.drawNetworkIn(this.networkContext, this.state.activeCar.getNetwork()!)
+        // }
     }
 
     endRound(): void {
@@ -157,12 +159,12 @@ export class SimulationManager {
     updateVehicles(): void {
         // Update AI-controlled cars
         for (const car of this.state.allCars) {
-            car.updateStatus(this.state.traffic, this.road.getBorders())
+            car.updateStatus(this.state.traffic, this.world.getRoad().getBorders())
         }
 
         // Update traffic vehicles
         for (const vehicle of this.state.traffic) {
-            vehicle.updateStatus(this.state.traffic, this.road.getBorders())
+            vehicle.updateStatus(this.state.traffic, this.world.getRoad().getBorders())
         }
     }
 

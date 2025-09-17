@@ -15,7 +15,8 @@ export const generateCars = (carsQuantity: number, neurons: Array<number>, road:
     })
 
     for (let index = 0; index < carsQuantity; index++) {
-        const lane = Math.floor(Math.random() * road.getLaneCount()) // Random lane
+        // Tutte le auto partono dalla corsia centrale nella stessa posizione
+        const lane = Math.floor(road.getLaneCount() / 2)
         const position = road.getLanePosition(lane)
         const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI * 0.5 })
         const network = new NeuralNetwork(sensor.getRayCount() + 1, ...neurons, 4)

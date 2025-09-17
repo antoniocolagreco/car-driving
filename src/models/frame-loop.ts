@@ -1,9 +1,10 @@
 import { CONSTANTS } from '../constants'
+import type Canvas from './canvas'
 
 export class FrameLoop {
+    private simulationCanvas: Canvas
+    private networkCanvas: Canvas
     private container: HTMLElement
-    private carCanvas: HTMLCanvasElement
-    private networkCanvas: HTMLCanvasElement
     private abortController: AbortController
     private animationId: number | undefined
     private targetFPS: number = CONSTANTS.targetFps
@@ -14,24 +15,11 @@ export class FrameLoop {
     private currentFps: number = 0
     private onFrameCallback?: (timestamp: number, fps: number) => void
 
-    constructor(container: HTMLElement) {
-        this.container = container
+    constructor(simulationCanvas: Canvas, network: Canvas) {
+        this.simulationCanvas = simulationCanvas
+        this.networkCanvas = network
+        this.container = simulationCanvas.getContainer()
         this.abortController = new AbortController()
-
-        // Create canvas elements
-        this.carCanvas = document.createElement('canvas')
-        this.carCanvas.setAttribute('role', 'img')
-        this.carCanvas.setAttribute('aria-label', 'Simulation view: road and cars')
-
-        this.networkCanvas = document.createElement('canvas')
-        this.networkCanvas.setAttribute('role', 'img')
-        this.networkCanvas.setAttribute(
-            'aria-label',
-            'Neural network visualization of the active car',
-        )
-
-        this.container.appendChild(this.carCanvas)
-        this.container.appendChild(this.networkCanvas)
 
         // Setup resize listener
         window.addEventListener('resize', () => this.resizeCanvas(), {
@@ -42,20 +30,12 @@ export class FrameLoop {
         this.resizeCanvas()
     }
 
-    getCarCanvas(): HTMLCanvasElement {
-        return this.carCanvas
+    getSimulationCanvas(): Canvas {
+        return this.simulationCanvas
     }
 
-    getNetworkCanvas(): HTMLCanvasElement {
+    getNetworkCanvas(): Canvas {
         return this.networkCanvas
-    }
-
-    getCarContext(): CanvasRenderingContext2D | null {
-        return this.carCanvas.getContext('2d', { alpha: false })
-    }
-
-    getNetworkContext(): CanvasRenderingContext2D | null {
-        return this.networkCanvas.getContext('2d', { alpha: false })
     }
 
     getCurrentFps(): number {
@@ -63,6 +43,9 @@ export class FrameLoop {
     }
 
     private resizeCanvas(): void {
+        const simulationCanvasElement = this.simulationCanvas.getElement()
+        const networkCanvasElement = this.networkCanvas.getElement()
+
         this.container.style.display = 'grid'
         const twoCols = this.container.clientWidth > 699
         this.container.style.gridTemplateColumns = twoCols ? '1fr 1fr' : '1fr'
@@ -76,17 +59,17 @@ export class FrameLoop {
         const desiredNetWidth = desiredCarWidth
         const desiredNetHeight = desiredCarHeight
 
-        if (this.carCanvas.width !== desiredCarWidth) {
-            this.carCanvas.width = desiredCarWidth
+        if (simulationCanvasElement.width !== desiredCarWidth) {
+            simulationCanvasElement.width = desiredCarWidth
         }
-        if (this.carCanvas.height !== desiredCarHeight) {
-            this.carCanvas.height = desiredCarHeight
+        if (simulationCanvasElement.height !== desiredCarHeight) {
+            simulationCanvasElement.height = desiredCarHeight
         }
-        if (this.networkCanvas.width !== desiredNetWidth) {
-            this.networkCanvas.width = desiredNetWidth
+        if (networkCanvasElement.width !== desiredNetWidth) {
+            networkCanvasElement.width = desiredNetWidth
         }
-        if (this.networkCanvas.height !== desiredNetHeight) {
-            this.networkCanvas.height = desiredNetHeight
+        if (networkCanvasElement.height !== desiredNetHeight) {
+            networkCanvasElement.height = desiredNetHeight
         }
     }
 
@@ -109,8 +92,8 @@ export class FrameLoop {
         this.stop()
         this.abortController.abort()
         try {
-            this.container.removeChild(this.carCanvas)
-            this.container.removeChild(this.networkCanvas)
+            this.container.removeChild(this.simulationCanvas.getElement())
+            this.container.removeChild(this.networkCanvas.getElement())
         } catch {}
     }
 

@@ -8,21 +8,21 @@ import InfoPanel from '../components/info-panel.astro'
 import InfoText from '../components/info-text.astro'
 
 type Props = HTMLAttributes<'div'>
-const { class: className, ...otherProps } = Astro.props
+const { class: className, ...rest } = Astro.props
 ---
 
 <script>
     import { createSimulation } from '../libs/self-driving-car'
-    let sim: { destroy: () => void } | null = null
+    let simulation: { destroy: () => void } | null = null
     const boot = () => {
-        const drive = document.querySelector('#drive') as HTMLElement | null
-        if (!drive) return
-        sim?.destroy?.()
-        sim = createSimulation(drive)
+        const appContainer = document.querySelector('#app-container') as HTMLElement | null
+        if (!appContainer) return
+        simulation?.destroy?.()
+        simulation = createSimulation(appContainer)
     }
     document.addEventListener('astro:page-load', boot)
-    document.addEventListener('astro:before-swap', () => sim?.destroy?.())
-    window.addEventListener('pagehide', () => sim?.destroy?.())
+    document.addEventListener('astro:before-swap', () => simulation?.destroy?.())
+    window.addEventListener('pagehide', () => simulation?.destroy?.())
 </script>
 
 <DefaultLayout title="Self Driving Car">
@@ -68,7 +68,7 @@ const { class: className, ...otherProps } = Astro.props
                 <Input id="neurons" class="w-36" />
             </div>
         </nav>
-        <div id="drive" class="h-full relative" aria-live="polite">
+        <div id="app-container" class="h-full relative" aria-live="polite" {...rest}>
             <InfoPanel class="absolute top-0" }>
                 <InfoText
                     id="info-id"

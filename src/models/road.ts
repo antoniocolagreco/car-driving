@@ -12,17 +12,21 @@ export default class Road extends Drawable {
     private laneWidth: number
     private roadMargins: number
     private laneSeparatorWidth: number
-    private oneWay: boolean | undefined //TODO: two ways road
+    // private oneWay: boolean | undefined //TODO: two ways road
     private borders: Shape[] = []
 
     constructor(props: RoadProps) {
-        const { laneCount, oneWay, ...otherProps } = props
+        const {
+            laneCount,
+            //  oneWay,
+            ...otherProps
+        } = props
         super(otherProps)
         this.laneCount = laneCount ?? 4
         this.laneWidth = this.size.getWidth() / this.laneCount
         this.roadMargins = 10
         this.laneSeparatorWidth = 5
-        this.oneWay = oneWay
+        // this.oneWay = oneWay
         const topLeft = new Point(-this.size.getWidth() / 2, -this.size.getHeight() / 2)
         const bottomLeft = new Point(-this.size.getWidth() / 2, this.size.getHeight())
         const topRight = new Point(this.size.getWidth() / 2, -this.size.getHeight() / 2)

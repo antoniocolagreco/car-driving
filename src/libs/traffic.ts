@@ -2,7 +2,7 @@ import type Vehicle from '@models/vehicle'
 import { Car } from '../models/car'
 import type Road from '../models/road'
 
-// Easy Mode
+// Easy Mode 0 - 3
 const singleCenter = (road: Road, offset: number) => {
     return [new Car({ color: 'black', position: road.getLanePosition(1, offset) })]
 }
@@ -22,7 +22,7 @@ const bothSide = (road: Road, offset: number) => {
     ]
 }
 
-// Medium Mode
+// Medium Mode 4 - 7
 const doubleLeft = (road: Road, offset: number) => {
     return [
         new Car({ color: 'black', position: road.getLanePosition(0, offset) }),
@@ -53,7 +53,7 @@ const doubleBothSides = (road: Road, offset: number) => {
     ]
 }
 
-// Hard Mode
+// Hard Mode 8 - 9
 const leftStairs = (road: Road, offset: number) => {
     return [
         new Car({ color: 'black', position: road.getLanePosition(0, offset) }),
@@ -68,7 +68,7 @@ const rightStairs = (road: Road, offset: number) => {
     ]
 }
 
-// VeryHard Mode
+// VeryHard Mode 10 - 11
 const rightL = (road: Road, offset: number) => {
     return [
         new Car({ color: 'black', position: road.getLanePosition(2, offset) }),
@@ -85,29 +85,75 @@ const leftL = (road: Road, offset: number) => {
     ]
 }
 
-export const generateTraffic = (numberOfRows: number, road: Road): Array<Vehicle> => {
-    const traffic: Array<Vehicle> = []
-    const offset = -400
+const getRandomInteger = (min: number, max: number): number => {
+    return Math.floor(Math.random() * (max - min)) + min
+}
+
+const generateRoadConfiguration = (numberOfRows: number): Array<number> => {
+    if (numberOfRows < 12) {
+        numberOfRows = 12
+    }
+
     const sectionSize = Math.floor(numberOfRows / 4)
     const easySection = { start: 0, end: sectionSize - 1 }
     const mediumSection = { start: sectionSize, end: sectionSize * 2 - 1 }
     const hardSection = { start: sectionSize * 2, end: sectionSize * 3 - 1 }
     const veryHardSection = { start: sectionSize * 3, end: numberOfRows - 1 }
 
-    for (let i = 0; i < numberOfRows; i++) {
-        let randomValue = 0
+    // Calculate actual section lengths
+    const easySectionLength = easySection.end - easySection.start + 1
+    const mediumSectionLength = mediumSection.end - mediumSection.start + 1
+    const hardSectionLength = hardSection.end - hardSection.start + 1
+    const veryHardSectionLength = veryHardSection.end - veryHardSection.start + 1
 
-        if (i >= easySection.start && i <= easySection.end) {
-            randomValue = Math.floor(Math.random() * 4)
-        } else if (i >= mediumSection.start && i <= mediumSection.end) {
-            randomValue = Math.floor(Math.random() * 8)
-        } else if (i >= hardSection.start && i <= hardSection.end) {
-            randomValue = Math.floor(Math.random() * 10)
-        } else if (i >= veryHardSection.start && i <= veryHardSection.end) {
-            randomValue = Math.floor(Math.random() * 12)
-        }
+    // Easy section: guarantee all types (0-3), then fill with random
+    const easySectionArray = [0, 1, 2, 3]
+    while (easySectionArray.length < easySectionLength) {
+        easySectionArray.push(getRandomInteger(0, 4))
+    }
+    easySectionArray.sort(() => Math.random() - 0.5)
 
-        switch (randomValue) {
+    // Medium section: guarantee all types (4-7), then fill with random
+    const mediumSectionArray = [4, 5, 6, 7]
+    while (mediumSectionArray.length < mediumSectionLength) {
+        mediumSectionArray.push(getRandomInteger(0, 8))
+    }
+    mediumSectionArray.sort(() => Math.random() - 0.5)
+
+    // Hard section: guarantee all types (8-9), then fill with random
+    const hardSectionArray = [8, 9]
+    while (hardSectionArray.length < hardSectionLength) {
+        hardSectionArray.push(getRandomInteger(0, 10))
+    }
+    hardSectionArray.sort(() => Math.random() - 0.5)
+
+    // Very Hard section: guarantee all types (10-11), then fill with random
+    const veryHardSectionArray = [10, 11]
+    while (veryHardSectionArray.length < veryHardSectionLength) {
+        veryHardSectionArray.push(getRandomInteger(0, 12))
+    }
+    veryHardSectionArray.sort(() => Math.random() - 0.5)
+
+    const configuration = [
+        ...easySectionArray,
+        ...mediumSectionArray,
+        ...hardSectionArray,
+        ...veryHardSectionArray,
+    ]
+
+    console.log(configuration)
+
+    return configuration
+}
+
+export const generateTraffic = (numberOfRows: number, road: Road): Array<Vehicle> => {
+    const traffic: Array<Vehicle> = []
+    const offset = -400
+
+    const roadConfiguration = generateRoadConfiguration(numberOfRows)
+
+    roadConfiguration.forEach((value, i) => {
+        switch (value) {
             case 0:
                 traffic.push(...singleCenter(road, offset * i + offset))
                 break
@@ -147,9 +193,9 @@ export const generateTraffic = (numberOfRows: number, road: Road): Array<Vehicle
             default:
                 break
         }
-    }
-    for (const vehicle of traffic) {
-        vehicle.getControls().setForward(true)
-    }
+    })
+
+    traffic.forEach((vehicle) => vehicle.getControls().setForward(true))
+
     return traffic
 }

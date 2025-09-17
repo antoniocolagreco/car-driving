@@ -1,8 +1,9 @@
+import Canvas from '@models/canvas'
 import { FrameLoop } from '@models/frame-loop'
-import { UIController, type UIConfig, type UIState, type UIAction } from '@models/ui-controller'
-import { SimulationManager, type SimulationConfig } from '@models/simulation-manager'
-import { RenderingManager } from '@models/rendering-manager'
-import { WorldBuilder } from '@models/world-builder'
+import { Renderer } from '@models/renderer'
+import { Simulation, type SimulationConfig } from '@models/simulation'
+import { UIController, type UIAction, type UIConfig, type UIState } from '@models/ui-controller'
+import World, { type WorldConfig } from '@models/world'
 import Persistence from './persistence'
 
 // Configuration and state management moved to dedicated services
@@ -13,29 +14,31 @@ export type SimulationControls = {
     destroy: () => void
 }
 
-export function createSimulation(container: HTMLElement): SimulationControls {
+export function createSimulation(element: HTMLElement): SimulationControls {
     const abortController = new AbortController()
 
+    const simulationCanvas = new Canvas(element)
+    const networkCanvas = new Canvas(element)
+
     // Create frame loop that manages canvas and animation
-    const frameLoop = new FrameLoop(container)
-    const carCanvas = frameLoop.getCarCanvas()
-    const networkCanvas = frameLoop.getNetworkCanvas()
-    const carContext = frameLoop.getCarContext()
-    const networkContext = frameLoop.getNetworkContext()
+    const frameLoop = new FrameLoop(simulationCanvas, networkCanvas)
 
+    const worldConfig: WorldConfig = {
+        canvas: {
+            width: simulationCanvas.getElement().width,
+            height: simulationCanvas.getElement().height,
+        },
+        map: {
+            width: 1000,
+            height: 100000, // Very tall world for driving
+        },
+        road: {
+            width: 240,
+            laneCount: 3,
+        },
+    }
     // Create world (map and road)
-    const worldConfig = WorldBuilder.getDefaultConfig(carCanvas.width, carCanvas.height)
-    const world = WorldBuilder.createWorld(worldConfig)
-
-    // Create rendering manager
-    const renderingManager = new RenderingManager(
-        carCanvas,
-        networkCanvas,
-        carContext,
-        networkContext,
-        world.map,
-        world.road,
-    )
+    const world = new World(worldConfig)
 
     // Create simulation manager
     const simulationConfig: SimulationConfig = {
@@ -44,7 +47,10 @@ export function createSimulation(container: HTMLElement): SimulationControls {
         neurons: Persistence.loadNeurons(),
     }
 
-    const simulationManager = new SimulationManager(world.road, simulationConfig, networkContext)
+    const simulation = new Simulation(world, simulationConfig)
+
+    // Create rendering manager
+    const renderingManager = new Renderer(simulationCanvas, networkCanvas, world)
 
     // Setup UI controller
     const uiController = new UIController(
@@ -62,28 +68,28 @@ export function createSimulation(container: HTMLElement): SimulationControls {
                 simConfig.neurons = config.neurons
             }
 
-            simulationManager.updateConfig(simConfig)
+            simulation.updateConfig(simConfig)
         },
         (action: UIAction) => {
             switch (action) {
                 case 'save-network':
-                    simulationManager.saveNetwork()
+                    simulation.saveNetwork()
                     break
                 case 'restore-network':
-                    if (simulationManager.restoreNetwork()) {
-                        simulationManager.restart()
+                    if (simulation.restoreNetwork()) {
+                        simulation.restart()
                     }
                     break
                 case 'reset-network':
-                    simulationManager.resetNetwork()
-                    simulationManager.restart()
+                    simulation.resetNetwork()
+                    simulation.restart()
                     break
                 case 'restart-network':
-                    simulationManager.restart()
+                    simulation.restart()
                     break
                 case 'evolve-network':
-                    if (simulationManager.evolveNetwork()) {
-                        simulationManager.endRound()
+                    if (simulation.evolveNetwork()) {
+                        simulation.endRound()
                     }
                     break
             }
@@ -93,26 +99,27 @@ export function createSimulation(container: HTMLElement): SimulationControls {
     uiController.setupEventListeners()
 
     // Initialize simulation
-    simulationManager.restart()
+    simulation.restart()
 
     const start = () => {
         frameLoop.start((timestamp: number, _currentFps: number) => {
-            const state = simulationManager.getState()
+            const state = simulation.getState()
 
             // Update simulation state
-            simulationManager.update()
+            simulation.update()
 
             // Check for game over conditions
-            simulationManager.checkGameOver(timestamp)
+            simulation.checkGameOver(timestamp)
 
             // Update all vehicles
-            simulationManager.updateVehicles()
+            simulation.updateVehicles()
 
             // Render everything
             renderingManager.render(state, timestamp)
 
             // Update HUD
             const currentFps = frameLoop.getCurrentFps()
+
             const uiState: UIState = {
                 activeCar: state.activeCar
                     ? {
@@ -132,7 +139,7 @@ export function createSimulation(container: HTMLElement): SimulationControls {
 
     const stop = () => {
         frameLoop.stop()
-        simulationManager.stop()
+        simulation.stop()
     }
 
     const destroy = () => {

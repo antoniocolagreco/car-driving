@@ -65,11 +65,13 @@ export default class NeuralNetwork {
         mutatedNetwork.layers.forEach((layer) => {
             for (let i = 0; i < layer.getBiases().length; i++) {
                 // Disabilito i bias per il momento
-                // layer.biases[i] = weightedAverage(
-                //     { value: layer.biases[i], weight: 1 - amount },
-                //     { value: getRandomSimmetricalValue(), weight: amount }
-                // )
-                layer.setBiasAt(i, 0)
+                layer.setBiasAt(
+                    i,
+                    weightedAverage(
+                        { value: layer.getBiasAt(i), weight: 1 - amount },
+                        { value: getRandomSimmetricalValue(), weight: amount },
+                    ),
+                )
             }
 
             for (let i = 0; i < layer.getWeights().length; i++) {
