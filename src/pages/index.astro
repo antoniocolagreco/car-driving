@@ -1,5 +1,6 @@
 ---
 import type { HTMLAttributes } from 'astro/types'
+import { HTML_IDS } from 'src/constants'
 import Button from '../components/button.astro'
 import InfoPanel from '../components/info-panel.astro'
 import InfoText from '../components/info-text.astro'
@@ -30,37 +31,37 @@ const { class: className, ...rest } = Astro.props
         <nav class="flex gap-4 mb-2 w-full flex-wrap justify-between mt-2">
             <div class="flex gap-4 flex-wrap">
                 <Button
-                    id="save-network"
+                    id={HTML_IDS.saveNetworkButton}
                     class="grow basis-0 min-w-0"
                     title="Make a backup of the active network">Backup</Button
                 >
                 <Button
-                    id="restore-network"
+                    id={HTML_IDS.restoreNetworkButton}
                     class="grow basis-0 min-w-0"
                     title="Restore the last saved network">Restore</Button
                 >
                 <Button
-                    id="reset-network"
+                    id={HTML_IDS.resetNetworkButton}
                     class="grow basis-0 min-w-0"
                     title="Delete the saved network">Reset</Button
                 >
                 <Button
-                    id="restart-network"
+                    id={HTML_IDS.restartNetworkButton}
                     class="grow basis-0 min-w-0"
                     title="Restart the simulation without saving">Restart</Button
                 >
                 <Button
-                    id="evolve-network"
+                    id={HTML_IDS.evolveNetworkButton}
                     class="grow basis-0 min-w-0"
                     title="Restart the simulation after saving the active network">Evolve</Button
                 >
             </div>
             <div class="grid">
                 <label for="mutation-rate"
-                    >Mutation Rate: <span id="mutation-rate-value"></span></label
+                    >Max Mutation: <span id={HTML_IDS.mutationRateValue}></span></label
                 >
                 <Range
-                    id="mutation-rate"
+                    id={HTML_IDS.mutationRateRange}
                     type="range"
                     min="1"
                     max="100"
@@ -71,62 +72,62 @@ const { class: className, ...rest } = Astro.props
             </div>
             <div class="grid">
                 <label for="number-of-cars"
-                    >Number of Cars: <span id="number-of-cars-value"></span></label
+                    >Number of Cars: <span id={HTML_IDS.carsQuantityValue}></span></label
                 >
                 <Range
-                    id="number-of-cars"
+                    id={HTML_IDS.carsQuantityRange}
                     type="range"
                     min="10"
-                    max="100"
+                    max="200"
                     value="50"
                     step="10"
                     class="w-36"
                 />
             </div>
             <div class="grid">
-                <label for="number-of-cars">Neurons</label>
-                <Input id="neurons" class="w-36" />
+                <label for="number-of-cars">Architecture</label>
+                <Input id={HTML_IDS.networkArchitectureInput} class="w-36" />
             </div>
         </nav>
-        <div id="app-container" class="h-full relative" aria-live="polite" {...rest}>
+        <div id={HTML_IDS.appContainer} class="h-full relative" aria-live="polite" {...rest}>
             <InfoPanel class="absolute top-0" }>
                 <InfoText
-                    id="info-id"
+                    id={HTML_IDS.infoNetworkId}
                     label="Current Car"
                     title="Identifier of the current active car"
                 />
                 <InfoText
-                    id="info-pts"
+                    id={HTML_IDS.infoPoints}
                     label="Points"
                     title="Points accumulated by the current active car"
                 />
                 <InfoText
-                    id="info-rec"
+                    id={HTML_IDS.infoRecord}
                     label="Record"
                     title="Highest points achieved by the current active car"
                 />
                 <InfoText
-                    id="info-srv"
+                    id={HTML_IDS.infoSurvivedRounds}
                     label="Survived Rounds"
                     title="Number of rounds this network has survived"
                 />
                 <InfoText
-                    id="info-crs"
+                    id={HTML_IDS.infoRemainingCars}
                     label="Remaining Cars"
                     title="Number of cars still competing in current generation"
                 />
                 <InfoText
-                    id="info-timeout"
+                    id={HTML_IDS.infoTimeout}
                     label="Timeout"
                     title="Remaining time before game over"
                 />
                 <InfoText
-                    id="info-pps"
+                    id={HTML_IDS.infoPixelsPerSecond}
                     label="Pixels per sec."
                     title="Speed of the active car in pixels per second"
                 />
                 <InfoText
-                    id="info-fps"
+                    id={HTML_IDS.infoFps}
                     label="Frame per sec."
                     title="Current frames per second of the simulation"
                 />

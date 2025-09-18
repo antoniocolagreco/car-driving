@@ -26,16 +26,16 @@ export default class Visualizer {
             const yStart = ctx.canvas.height - (index * heightSlice + margin)
             const yEnd = ctx.canvas.height - ((index + 1) * heightSlice + margin)
 
-            Visualizer.#drawLayerRails(
-                ctx,
-                network.getLayers()[index],
-                ctx.canvas.width,
-                yStart,
-                yEnd,
-            )
+            // Visualizer.drawLayerRails(
+            //     ctx,
+            //     network.getLayers()[index],
+            //     ctx.canvas.width,
+            //     yStart,
+            //     yEnd,
+            // )
             // Solo l'ultimo layer (output) ha le icone frecce per indicare le azioni (su, giù, sinistra, destra)
-            const icons = index === network.getLayers().length - 1 ? ['↑', '↓', '←', '→'] : []
-            Visualizer.#drawLayer(
+            const icons = index === network.getLayers().length - 1 ? ['⬆️', '⏹️', '☸️'] : []
+            Visualizer.drawLayer(
                 ctx,
                 network.getLayers()[index],
                 ctx.canvas.width,
@@ -46,7 +46,7 @@ export default class Visualizer {
         }
     }
 
-    static #drawLayerRails(
+    private static drawLayerRails(
         ctx: CanvasRenderingContext2D,
         layer: Layer,
         width: number,
@@ -83,7 +83,7 @@ export default class Visualizer {
      * @param yEnd - Coordinata Y dove disegnare i neuroni di output
      * @param icons - Array di icone da mostrare sui neuroni di output (es. frecce direzionali)
      */
-    static #drawLayer(
+    private static drawLayer(
         ctx: CanvasRenderingContext2D,
         layer: Layer,
         width: number,

@@ -21,7 +21,7 @@ export interface SimulationState {
 export interface SimulationConfig {
     mutationRate: number
     carsQuantity: number
-    neurons: number[]
+    networkArchitecture: number[]
 }
 
 export class Simulation {
@@ -60,22 +60,14 @@ export class Simulation {
         this.state.gameoverAt = null
         let bestNetwork = Persistence.loadBestNetwork()
 
-        if (this.state.activeCar?.getNetwork() && bestNetwork) {
-            const activeCarPoints = this.state.activeCar.getNetwork()!.getPointsRecord()
+        const activeNetwork = this.state.activeCar?.getNetwork()
+
+        if (activeNetwork && bestNetwork) {
+            const activeNetworkPoints = activeNetwork.getPointsRecord()
             const bestNetworkPoints = bestNetwork.getPointsRecord()
 
-            /**
-             * Adaptive network merging strategy.
-             * If the winning network's score is lower than the parent,
-             * the model for successive networks will be an average
-             * between the winner's network and the parent's network.
-             */
-            if (bestNetworkPoints > activeCarPoints) {
-                bestNetwork = NeuralNetwork.mergeNetworks(
-                    bestNetwork,
-                    this.state.activeCar.getNetwork()!,
-                    Math.max(0.5, activeCarPoints / bestNetworkPoints),
-                )
+            if (activeNetworkPoints > bestNetworkPoints) {
+                bestNetwork = activeNetwork
             }
         }
 
@@ -83,8 +75,10 @@ export class Simulation {
 
         this.state.allCars = generateCars(
             this.config.carsQuantity,
-            this.config.neurons,
+            this.config.networkArchitecture,
             this.world.getRoad(),
+            bestNetwork,
+            this.config.mutationRate,
         )
         this.state.remainingCars = this.state.allCars
         // Ensure all start inactive (ghost)

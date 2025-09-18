@@ -1,125 +1,127 @@
 export default class Controls {
-    private forward: boolean = false
-    private reverse: boolean = false
-    private left: boolean = false
-    private right: boolean = false
-    private brake: boolean = false
+    private acceleration: number = 0 // -1 (reverse) to +1 (forward)
+    private steering: number = 0 // -1 (left) to +1 (right)
+    private brake: number = 0 // 0 (no brake) to 1 (full brake)
     private active: boolean = false
 
-    #handleKeyDown(key: string) {
+    private handleKeyDown(key: string) {
         switch (key) {
             case 'ArrowUp':
-                this.forward = true
+            case 'w':
+                this.acceleration = 1.0 // Full forward
                 break
             case 'ArrowDown':
-                this.reverse = true
+            case 's':
+                this.acceleration = -1.0 // Full reverse
                 break
             case 'ArrowLeft':
-                this.left = true
+            case 'a':
+                this.steering = -1.0 // Full left
                 break
             case 'ArrowRight':
-                this.right = true
-                break
-            case 'w':
-                this.forward = true
-                break
-            case 's':
-                this.reverse = true
-                break
-            case 'a':
-                this.left = true
-                break
             case 'd':
-                this.right = true
+                this.steering = 1.0 // Full right
+                break
+            case ' ':
+                this.brake = 1.0 // Full brake with spacebar
                 break
         }
     }
 
-    #handleKeyUp(key: string) {
+    private handleKeyUp(key: string) {
         switch (key) {
             case 'ArrowUp':
-                this.forward = false
-                break
             case 'ArrowDown':
-                this.reverse = false
+            case 'w':
+            case 's':
+                this.acceleration = 0 // No acceleration
                 break
             case 'ArrowLeft':
-                this.left = false
-                break
             case 'ArrowRight':
-                this.right = false
-                break
-            case 'w':
-                this.forward = false
-                break
-            case 's':
-                this.reverse = false
-                break
             case 'a':
-                this.left = false
-                break
             case 'd':
-                this.right = false
+                this.steering = 0 // Center steering
+                break
+            case ' ':
+                this.brake = 0 // Release brake
                 break
         }
     }
 
     drive = () => {
-        document.onkeydown = (event: KeyboardEvent) => this.#handleKeyDown(event.key)
-        document.onkeyup = (event: KeyboardEvent) => this.#handleKeyUp(event.key)
+        document.onkeydown = (event: KeyboardEvent) => this.handleKeyDown(event.key)
+        document.onkeyup = (event: KeyboardEvent) => this.handleKeyUp(event.key)
         this.active = true
     }
 
     release = () => {
-        document.onkeydown = (event: KeyboardEvent) => this.#handleKeyDown(event.key)
-        document.onkeyup = (event: KeyboardEvent) => this.#handleKeyUp(event.key)
+        document.onkeydown = (event: KeyboardEvent) => this.handleKeyDown(event.key)
+        document.onkeyup = (event: KeyboardEvent) => this.handleKeyUp(event.key)
         this.active = false
     }
 
-    // Getters
+    // New analog getters
+    getAcceleration(): number {
+        return this.acceleration
+    }
+
+    getSteering(): number {
+        return this.steering
+    }
+
+    getBrake(): number {
+        return this.brake
+    }
+
+    // Legacy boolean getters for backward compatibility
     getForward(): boolean {
-        return this.forward
+        return this.acceleration > 0
     }
 
     getReverse(): boolean {
-        return this.reverse
+        return this.acceleration < 0
     }
 
     getLeft(): boolean {
-        return this.left
+        return this.steering < 0
     }
 
     getRight(): boolean {
-        return this.right
-    }
-
-    getBrake(): boolean {
-        return this.brake
+        return this.steering > 0
     }
 
     isActive(): boolean {
         return this.active
     }
 
-    // Setters
+    // New analog setters
+    setAcceleration(value: number): void {
+        this.acceleration = Math.max(-1, Math.min(1, value)) // Clamp to [-1, 1]
+    }
+
+    setSteering(value: number): void {
+        this.steering = Math.max(-1, Math.min(1, value)) // Clamp to [-1, 1]
+    }
+
+    setBrake(value: number): void {
+        this.brake = Math.max(0, Math.min(1, value)) // Clamp to [0, 1]
+    }
+
+    // Legacy boolean setters for backward compatibility
     setForward(value: boolean): void {
-        this.forward = value
+        this.acceleration = value ? 1.0 : 0
     }
 
     setReverse(value: boolean): void {
-        this.reverse = value
+        this.acceleration = value ? -1.0 : 0
     }
 
     setLeft(value: boolean): void {
-        this.left = value
+        this.steering = value ? -1.0 : 0
     }
 
     setRight(value: boolean): void {
-        this.right = value
-    }
-
-    setBrake(value: boolean): void {
-        this.brake = value
+        this.steering = value ? 1.0 : 0
     }
 
     setActive(value: boolean): void {

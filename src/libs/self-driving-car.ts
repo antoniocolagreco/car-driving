@@ -44,7 +44,7 @@ export function createSimulation(element: HTMLElement): SimulationControls {
     const simulationConfig: SimulationConfig = {
         mutationRate: Persistence.loadMutationRate(),
         carsQuantity: Persistence.loadCarsQuantity(),
-        neurons: Persistence.loadNeurons(),
+        networkArchitecture: Persistence.loadNetworkArchitecture(),
     }
 
     const simulation = new Simulation(world, simulationConfig)
@@ -64,8 +64,8 @@ export function createSimulation(element: HTMLElement): SimulationControls {
             if (config.carsQuantity !== undefined) {
                 simConfig.carsQuantity = config.carsQuantity
             }
-            if (config.neurons !== undefined) {
-                simConfig.neurons = config.neurons
+            if (config.networkArchitecture !== undefined) {
+                simConfig.networkArchitecture = config.networkArchitecture
             }
 
             simulation.updateConfig(simConfig)

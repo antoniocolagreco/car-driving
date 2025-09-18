@@ -38,16 +38,33 @@ export default class Vehicle extends Drawable {
     }
 
     protected move() {
-        if (this.controls.getForward()) {
+        const acceleration = this.controls.getAcceleration()
+        const braking = this.controls.getBrake()
+
+        // Handle acceleration/deceleration with analog input
+        if (acceleration > 0) {
+            // Forward acceleration
             if (this.speed < this.features.getMaxSpeed()) {
-                this.speed += this.features.getAcceleration()
+                this.speed += this.features.getAcceleration() * acceleration
             }
-        } else if (this.controls.getReverse()) {
+        } else if (acceleration < 0) {
+            // Reverse acceleration
             if (this.speed > -this.features.getMaxReverse()) {
-                this.speed -=
-                    this.speed > 0 ? this.features.getBreakPower() : this.features.getAcceleration()
+                this.speed += this.features.getAcceleration() * acceleration
             }
-        } else {
+        }
+
+        // Handle braking
+        if (braking > 0) {
+            if (this.speed > 0) {
+                this.speed -= this.features.getBreakPower() * braking
+            } else if (this.speed < 0) {
+                this.speed += this.features.getBreakPower() * braking
+            }
+        }
+
+        // Natural deceleration when no input
+        if (acceleration === 0 && braking === 0) {
             if (this.speed < 0.02 && this.speed > -0.02) {
                 this.speed = 0
             } else if (this.speed > 0) {
@@ -62,13 +79,10 @@ export default class Vehicle extends Drawable {
                 ? 0.000444 * Math.pow(this.speed, 2) - 0.007667 * this.speed + 0.037222
                 : 0.03 * this.speed - 0.003
 
+        // Analog steering
         if (Math.abs(this.speed) > 0) {
-            if (this.controls.getLeft()) {
-                this.direction += this.steeringPower
-            }
-            if (this.controls.getRight()) {
-                this.direction -= this.steeringPower
-            }
+            const steering = this.controls.getSteering()
+            this.direction += this.steeringPower * steering
         }
 
         const newX = this.getPosition().getX() - Math.sin(this.direction) * this.speed
@@ -126,10 +140,11 @@ export default class Vehicle extends Drawable {
         offsets.push(normalizedSpeed)
 
         const outputs = NeuralNetwork.feedForward(offsets, this.network)
-        this.controls.setForward(outputs[0] > 0)
-        this.controls.setReverse(outputs[1] > 0)
-        this.controls.setLeft(outputs[2] > 0)
-        this.controls.setRight(outputs[3] > 0)
+
+        // New 3-output system: acceleration, steering, brake
+        this.controls.setAcceleration(outputs[0]) // -1 to +1
+        this.controls.setSteering(outputs[1]) // -1 to +1
+        this.controls.setBrake(Math.max(0, outputs[2])) // 0 to +1 (clamp negative values)
     }
 
     beforeDrawing(context: CanvasRenderingContext2D): void {

@@ -152,11 +152,11 @@ export const threshold = (sum: number, bias: number) => (sum > bias ? 1 : 0)
  * @returns Valore tra -1 e 1, calcolato come (e^x - e^(-x))/(e^x + e^(-x)) dove x = sum + bias
  * @description Funzione smooth simmetrica, ideale per reti neurali
  */
-export const tanh = (sum: number, bias: number): number => {
+export const tanh = (sum: number, bias: number, scale: number): number => {
     const exponent = sum + bias
     const numerator = Math.exp(exponent) - Math.exp(-exponent)
     const denominator = Math.exp(exponent) + Math.exp(-exponent)
-    return numerator / denominator
+    return (numerator / denominator) * scale
 }
 
 /**

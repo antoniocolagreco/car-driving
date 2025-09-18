@@ -37,11 +37,11 @@ export default class Sensor extends Drawable {
     checkCollisions(obstacles: Array<Shape>) {
         this.collisions.length = 0
         for (let ray of this.rays) {
-            this.collisions.push(this.#getReading(ray, obstacles))
+            this.collisions.push(this.getReading(ray, obstacles))
         }
     }
 
-    #getReading(ray: Shape, obstacles: Array<Shape>): Collision | null {
+    private getReading(ray: Shape, obstacles: Array<Shape>): Collision | null {
         const touches: Array<Collision> = []
 
         const flattedObstacles = obstacles.map((o) => o.toArrayOfLines()).flat(2)
@@ -60,7 +60,7 @@ export default class Sensor extends Drawable {
         return touches.find((touch) => touch.getOffset() === minOffset)!
     }
 
-    #castRays() {
+    private castRays() {
         this.rays.length = 0
         const rayRadiants = this.rayCount > 1 ? this.raySpread / (this.rayCount - 1) : 0
 
@@ -78,7 +78,7 @@ export default class Sensor extends Drawable {
     }
 
     drawInstructions(context: CanvasRenderingContext2D): void {
-        this.#castRays()
+        this.castRays()
 
         if (!this.visibleRays) {
             return

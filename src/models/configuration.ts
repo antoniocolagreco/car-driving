@@ -3,13 +3,13 @@ import { DEFAULTS } from 'src/constants'
 type ConfigurationOptions = {
     mutationRate?: number
     carsQuantity?: number
-    neurons?: Array<number>
+    networkArchitecture?: ReadonlyArray<number>
 }
 
 export default class Configuration {
     private mutationRate: number
     private carsQuantity: number
-    private readonly neurons: ReadonlyArray<number>
+    private readonly networkArchitecture: ReadonlyArray<number>
 
     getMutationRate(): number {
         return this.mutationRate
@@ -26,13 +26,13 @@ export default class Configuration {
         this.carsQuantity = value
     }
 
-    getNeurons(): ReadonlyArray<number> {
-        return this.neurons
+    getNetworkArchitecture(): ReadonlyArray<number> {
+        return this.networkArchitecture
     }
 
-    constructor({ carsQuantity, mutationRate, neurons }: ConfigurationOptions) {
+    constructor({ carsQuantity, mutationRate, networkArchitecture }: ConfigurationOptions) {
         this.mutationRate = mutationRate ?? DEFAULTS.mutationRate
         this.carsQuantity = carsQuantity ?? DEFAULTS.carsQuantity
-        this.neurons = neurons ?? [...DEFAULTS.neurons]
+        this.networkArchitecture = networkArchitecture ?? [...DEFAULTS.networkArchitecture]
     }
 }

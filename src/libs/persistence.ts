@@ -18,6 +18,9 @@ export default class Persistence {
 
         try {
             const jsonData = JSON.parse(networkString)
+            console.log(jsonData)
+            const res = NeuralNetwork.fromJSON(jsonData)
+            console.log(res)
             return NeuralNetwork.fromJSON(jsonData)
         } catch (error) {
             console.error('Error loading network backup:', error)
@@ -62,15 +65,15 @@ export default class Persistence {
         localStorage.setItem(STORAGE_KEYS.carsQuantity, String(quantity))
     }
 
-    static loadNeurons(): Array<number> {
-        const neuronString = localStorage.getItem(STORAGE_KEYS.neurons)
-        const neuronsArray = neuronString
-            ? neuronString.split(',').map((n) => Number(n))
-            : [...DEFAULTS.neurons]
-        return neuronsArray
+    static loadNetworkArchitecture(): Array<number> {
+        const networkArchitectureString = localStorage.getItem(STORAGE_KEYS.networkArchitecture)
+        const networkArchitectureArray = networkArchitectureString
+            ? networkArchitectureString.split(',').map((n) => Number(n))
+            : [...DEFAULTS.networkArchitecture]
+        return networkArchitectureArray
     }
 
-    static saveNeurons(neurons: string): void {
-        localStorage.setItem(STORAGE_KEYS.neurons, neurons)
+    static saveNetworkArchitecture(networkArchitecture: string): void {
+        localStorage.setItem(STORAGE_KEYS.networkArchitecture, networkArchitecture)
     }
 }

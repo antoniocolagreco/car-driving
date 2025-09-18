@@ -1,10 +1,16 @@
-import { RacingCar } from '@models/racing-car'
 import Features from '@models/features'
 import NeuralNetwork from '@models/neural-network'
+import { RacingCar } from '@models/racing-car'
 import Road from '@models/road'
 import Sensor from '@models/sensor'
 
-export const generateCars = (carsQuantity: number, neurons: Array<number>, road: Road) => {
+export const generateCars = (
+    carsQuantity: number,
+    networkArchitecture: Array<number>,
+    road: Road,
+    seed?: NeuralNetwork,
+    mutationRate?: number,
+) => {
     const cars: Array<RacingCar> = []
 
     const features = new Features({
@@ -19,7 +25,14 @@ export const generateCars = (carsQuantity: number, neurons: Array<number>, road:
         const lane = Math.floor(road.getLaneCount() / 2)
         const position = road.getLanePosition(lane)
         const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI * 0.5 })
-        const network = new NeuralNetwork(sensor.getRayCount() + 1, ...neurons, 4)
+        let network: NeuralNetwork
+        if (seed && mutationRate) {
+            const randomMutationRate = Math.random() * mutationRate
+            network = NeuralNetwork.getMutatedNetwork(seed, randomMutationRate)
+        } else {
+            network = new NeuralNetwork(sensor.getRayCount() + 1, ...networkArchitecture, 3)
+        }
+
         const car = new RacingCar({ position, features, sensor, network, ghost: true })
         cars.push(car)
     }
