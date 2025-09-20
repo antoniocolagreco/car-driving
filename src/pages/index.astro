@@ -1,10 +1,21 @@
 ---
+import {
+    ChevronsUpIcon,
+    FolderIcon,
+    SquareIcon,
+    PlayIcon,
+    RedoIcon,
+    SaveIcon,
+    TrashIcon,
+} from '@lucide/astro'
 import type { HTMLAttributes } from 'astro/types'
 import { HTML_IDS } from 'src/constants'
 import Button from '../components/button.astro'
+import ControlBox from '../components/control-box.astro'
 import InfoPanel from '../components/info-panel.astro'
 import InfoText from '../components/info-text.astro'
 import Input from '../components/input.astro'
+import Radio from '../components/radio.astro'
 import Range from '../components/range.astro'
 import DefaultLayout from '../layouts/default-layout.astro'
 
@@ -28,54 +39,66 @@ const { class: className, ...rest } = Astro.props
 
 <DefaultLayout title="Self Driving Car">
     <div class="h-full flex flex-col grow">
-        <nav class="flex gap-4 mb-2 w-full flex-wrap justify-between mt-2">
-            <div class="flex gap-4 flex-wrap">
-                <Button
-                    id={HTML_IDS.saveNetworkButton}
-                    class="grow basis-0 min-w-0"
-                    title="Make a backup of the active network">Backup</Button
+        <menu class="flex gap-4 mb-2 w-full flex-wrap justify-between mt-2">
+            <Button
+                id={HTML_IDS.buttons.simulationStart}
+                class="grow basis-0 min-w-0"
+                title="Start the simulation"><PlayIcon slot="icon" size={20} />Start</Button
+            >
+            <Button
+                id={HTML_IDS.buttons.simulationStop}
+                class="grow basis-0 min-w-0"
+                title="Stop the simulation"><SquareIcon slot="icon" size={20} />Stop</Button
+            >
+            <Button
+                id={HTML_IDS.buttons.saveNetwork}
+                class="grow basis-0 min-w-0"
+                title="Make a backup of the active network"
+                ><SaveIcon slot="icon" size={20} />Backup</Button
+            >
+            <Button
+                id={HTML_IDS.buttons.restoreNetwork}
+                class="grow basis-0 min-w-0"
+                title="Restore the last saved network"
+                ><FolderIcon slot="icon" size={20} />Restore</Button
+            >
+            <Button
+                id={HTML_IDS.buttons.resetNetwork}
+                class="grow basis-0 min-w-0"
+                title="Delete the saved network"><TrashIcon slot="icon" size={20} />Reset</Button
+            >
+            <Button
+                id={HTML_IDS.buttons.restartNetwork}
+                class="grow basis-0 min-w-0"
+                title="Restart the simulation without saving"
+                ><RedoIcon slot="icon" size={20} />Restart</Button
+            >
+            <Button
+                id={HTML_IDS.buttons.evolveNetwork}
+                class="grow basis-0 min-w-0"
+                title="Restart the simulation after saving the active network"
+                ><ChevronsUpIcon slot="icon" size={20} />Evolve</Button
+            >
+        </menu>
+        <menu class="flex gap-4 mb-2 flex-wrap mt-2">
+            <ControlBox>
+                <label for="app-mode" class="text-sm">Mode</label>
+                <Radio
+                    id={HTML_IDS.inputs.imitationModeRadio}
+                    name="app-mode"
+                    value="imitation"
+                    checked={true}>Imitation</Radio
                 >
-                <Button
-                    id={HTML_IDS.restoreNetworkButton}
-                    class="grow basis-0 min-w-0"
-                    title="Restore the last saved network">Restore</Button
+                <Radio id={HTML_IDS.inputs.geneticModeRadio} name="app-mode" value="genetic"
+                    >Genetic</Radio
                 >
-                <Button
-                    id={HTML_IDS.resetNetworkButton}
-                    class="grow basis-0 min-w-0"
-                    title="Delete the saved network">Reset</Button
-                >
-                <Button
-                    id={HTML_IDS.restartNetworkButton}
-                    class="grow basis-0 min-w-0"
-                    title="Restart the simulation without saving">Restart</Button
-                >
-                <Button
-                    id={HTML_IDS.evolveNetworkButton}
-                    class="grow basis-0 min-w-0"
-                    title="Restart the simulation after saving the active network">Evolve</Button
-                >
-            </div>
-            <div class="grid">
-                <label for="mutation-rate"
-                    >Max Mutation: <span id={HTML_IDS.mutationRateValue}></span></label
+            </ControlBox>
+            <ControlBox>
+                <label for={HTML_IDS.inputs.carsQuantityRange} class="text-sm"
+                    >Number of Cars: <span id={HTML_IDS.inputs.carsQuantityValue}></span></label
                 >
                 <Range
-                    id={HTML_IDS.mutationRateRange}
-                    type="range"
-                    min="1"
-                    max="100"
-                    value="20"
-                    step="1"
-                    class="w-36"
-                />
-            </div>
-            <div class="grid">
-                <label for="number-of-cars"
-                    >Number of Cars: <span id={HTML_IDS.carsQuantityValue}></span></label
-                >
-                <Range
-                    id={HTML_IDS.carsQuantityRange}
+                    id={HTML_IDS.inputs.carsQuantityRange}
                     type="range"
                     min="10"
                     max="200"
@@ -83,51 +106,67 @@ const { class: className, ...rest } = Astro.props
                     step="10"
                     class="w-36"
                 />
-            </div>
-            <div class="grid">
-                <label for="number-of-cars">Architecture</label>
-                <Input id={HTML_IDS.networkArchitectureInput} class="w-36" />
-            </div>
-        </nav>
+            </ControlBox>
+            <ControlBox>
+                <label for={HTML_IDS.inputs.mutationRateRange} class="text-sm"
+                    >Max Mutation: <span id={HTML_IDS.inputs.mutationRateValue}></span></label
+                >
+                <Range
+                    id={HTML_IDS.inputs.mutationRateRange}
+                    type="range"
+                    min="1"
+                    max="100"
+                    value="20"
+                    step="1"
+                    class="w-36"
+                />
+            </ControlBox>
+            <ControlBox>
+                <label for={HTML_IDS.inputs.networkArchitectureInput} class="text-sm"
+                    >Deep Layers</label
+                >
+                <Input id={HTML_IDS.inputs.networkArchitectureInput} class="w-36" />
+            </ControlBox>
+        </menu>
         <div id={HTML_IDS.appContainer} class="h-full relative" aria-live="polite" {...rest}>
             <InfoPanel class="absolute top-0" }>
                 <InfoText
-                    id={HTML_IDS.infoNetworkId}
+                    id={HTML_IDS.info.networkId}
                     label="Current Car"
                     title="Identifier of the current active car"
                 />
                 <InfoText
-                    id={HTML_IDS.infoPoints}
+                    id={HTML_IDS.info.points}
                     label="Points"
                     title="Points accumulated by the current active car"
                 />
                 <InfoText
-                    id={HTML_IDS.infoRecord}
+                    id={HTML_IDS.info.record}
                     label="Record"
                     title="Highest points achieved by the current active car"
                 />
                 <InfoText
-                    id={HTML_IDS.infoSurvivedRounds}
+                    id={HTML_IDS.info.survivedRounds}
                     label="Survived Rounds"
                     title="Number of rounds this network has survived"
                 />
                 <InfoText
-                    id={HTML_IDS.infoRemainingCars}
+                    id={HTML_IDS.info.remainingCars}
                     label="Remaining Cars"
                     title="Number of cars still competing in current generation"
                 />
                 <InfoText
-                    id={HTML_IDS.infoTimeout}
+                    id={HTML_IDS.info.timeout}
                     label="Timeout"
                     title="Remaining time before game over"
                 />
                 <InfoText
-                    id={HTML_IDS.infoPixelsPerSecond}
+                    id={HTML_IDS.info.pixelsPerSecond}
                     label="Pixels per sec."
                     title="Speed of the active car in pixels per second"
                 />
                 <InfoText
-                    id={HTML_IDS.infoFps}
+                    id={HTML_IDS.info.fps}
                     label="Frame per sec."
                     title="Current frames per second of the simulation"
                 />

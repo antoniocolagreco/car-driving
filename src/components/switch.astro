@@ -1,0 +1,17 @@
+---
+import type { HTMLAttributes } from 'astro/types'
+
+type Props = HTMLAttributes<'input'> & {
+    checked?: boolean
+}
+
+const { class: className, checked = false, ...otherProps } = Astro.props
+---
+
+<label class:list={['relative inline-flex items-center cursor-pointer', className]}>
+    <input type="checkbox" checked={checked} class="sr-only peer" {...otherProps} />
+    <div
+        class="relative w-11 h-6 bg-stone-400 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-rose-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"
+    >
+    </div>
+</label>

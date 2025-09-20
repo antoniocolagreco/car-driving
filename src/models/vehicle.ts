@@ -1,4 +1,4 @@
-import { checkPolygonsIntersection, getRandomColor, normalize } from '../libs/utils'
+import { checkPolygonsIntersection, getRandomColor, normalizeWithThreshold } from '../libs/utils'
 import Controls from './controls'
 import Drawable, { type DrawableProps } from './drawable'
 import type Features from './features'
@@ -55,16 +55,16 @@ export default class Vehicle extends Drawable {
         }
 
         // Handle braking
-        if (braking > 0) {
+        if (braking) {
             if (this.speed > 0) {
-                this.speed -= this.features.getBreakPower() * braking
+                this.speed -= this.features.getBreakPower()
             } else if (this.speed < 0) {
-                this.speed += this.features.getBreakPower() * braking
+                this.speed += this.features.getBreakPower()
             }
         }
 
         // Natural deceleration when no input
-        if (acceleration === 0 && braking === 0) {
+        if (acceleration === 0 && !braking) {
             if (this.speed < 0.02 && this.speed > -0.02) {
                 this.speed = 0
             } else if (this.speed > 0) {
@@ -130,21 +130,21 @@ export default class Vehicle extends Drawable {
             .map((collision) => (collision === null ? 0 : 1 - collision.getOffset()))
 
         //Aggiunge Speed tra i sensori
-        const normalizedSpeed = normalize(
+        const normalizedSpeed = normalizeWithThreshold(
             this.speed,
             -this.features.getMaxReverse(),
             this.features.getMaxSpeed(),
-            0,
+            -1,
             1,
+            0,
         )
         offsets.push(normalizedSpeed)
 
         const outputs = NeuralNetwork.feedForward(offsets, this.network)
 
-        // New 3-output system: acceleration, steering, brake
-        this.controls.setAcceleration(outputs[0]) // -1 to +1
-        this.controls.setSteering(outputs[1]) // -1 to +1
-        this.controls.setBrake(Math.max(0, outputs[2])) // 0 to +1 (clamp negative values)
+        this.controls.setAcceleration(outputs[0])
+        this.controls.setBrake(Boolean(Math.max(outputs[1], 0)))
+        this.controls.setSteering(outputs[2])
     }
 
     beforeDrawing(context: CanvasRenderingContext2D): void {

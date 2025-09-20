@@ -1,0 +1,27 @@
+---
+import type { HTMLAttributes } from 'astro/types'
+
+type Props = HTMLAttributes<'input'> & {
+    checked?: boolean
+    name?: string
+    value?: string
+    id: string
+}
+
+const { class: className, checked = false, name, value, id, ...otherProps } = Astro.props
+---
+
+<div class:list={['flex items-center gap-2', className]}>
+    <input
+        type="radio"
+        name={name}
+        value={value}
+        checked={checked}
+        id={id}
+        class="shrink-0 border-stone-300 rounded-full text-rose-600 focus:ring-rose-500 focus:ring-2 checked:border-rose-600 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+        {...otherProps}
+    />
+    <label for={id} class="text-sm text-stone-200 cursor-pointer select-none">
+        <slot />
+    </label>
+</div>

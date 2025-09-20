@@ -8,8 +8,9 @@ const { class: className, ...otherProps } = Astro.props
 
 <button
     class:list={['', className]}
-    class="bg-rose-600 hover:bg-rose-700 text-stone-50 px-3 py-2 rounded font-semibold text-sm"
+    class="bg-rose-600 hover:bg-rose-700 text-stone-50 px-3 py-2 rounded font-semibold text-sm flex gap-2 items-center justify-between"
     {...otherProps}
 >
-    <slot />
+    <slot name="icon" />
+    <span class="grow text-center"> <slot /></span>
 </button>

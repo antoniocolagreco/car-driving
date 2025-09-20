@@ -92,21 +92,120 @@ export const normalize = (
 ): number => {
     const oldScale = max - min
     const newScale = newMax - newMin
-    const result = Math.min(newMax, Math.max(newMin, ((value - min) / oldScale) * newScale))
-    return result
+    const newValue = ((value - min) / oldScale) * newScale
+    const clampedValue = Math.min(newMax, Math.max(newMin, newValue))
+    return clampedValue
 }
 
 /**
- * Normalizza un valore e lo converte in formato esadecimale a 2 cifre
- * @param value - Valore da normalizzare
- * @param min - Valore minimo del range originale
- * @param max - Valore massimo del range originale
- * @returns Stringa esadecimale a 2 cifre (00-FF)
- * @example normalizeToHex(128, 0, 255) // Returns "80"
+ * Normalizes a value from one range to another with a threshold point.
+ *
+ * This function maps values from the original range [min, max] to a new range [newMin, newMax],
+ * with special handling around a threshold value. Values below or equal to the threshold are
+ * mapped to the lower portion of the new range, while values above the threshold are mapped
+ * to the upper portion.
+ *
+ * @param value - The input value to normalize
+ * @param min - The minimum value of the original range
+ * @param max - The maximum value of the original range
+ * @param newMin - The minimum value of the target range
+ * @param newMax - The maximum value of the target range
+ * @param threshold - The threshold value that divides the mapping behavior (default: 0)
+ * @returns The normalized value clamped within [newMin, newMax]
  */
-export const normalizeToHex = (value: number, min: number, max: number): string => {
-    const normalizedValue = Math.floor(normalize(value, min, max, 0, 255))
-    return normalizedValue.toString(16).padStart(2, '00')
+export const normalizeWithThreshold = (
+    value: number,
+    min: number,
+    max: number,
+    newMin: number,
+    newMax: number,
+    threshold: number = 0,
+): number => {
+    let newValue: number
+
+    if (value <= threshold) {
+        // Mappa [min, threshold] → [newMin, 0]
+        // Se threshold = 0: [min, 0] → [newMin, 0]
+        newValue = ((value - threshold) / (min - threshold)) * (newMin - threshold) + threshold
+    } else {
+        // Mappa [threshold, max] → [0, newMax]
+        // Se threshold = 0: [0, max] → [0, newMax]
+        newValue = ((value - threshold) / (max - threshold)) * (newMax - threshold) + threshold
+    }
+
+    // Clamping per sicurezza
+    return Math.min(newMax, Math.max(newMin, newValue))
+}
+
+/**
+ * Converts a numeric value to a hexadecimal string.
+ *
+ * @param value - The numeric value to be converted.
+ * @param min - The minimum value of value scale.
+ * @param max - The maximum value of value scale.
+ * @returns A two-character hexadecimal string.
+ */
+export const toHex = (value: number, min: number, max: number): string => {
+    const intensity = Math.floor(normalize(value, min, max, 0, 255))
+    const hexString = intensity.toString(16).padStart(2, '0')
+    return hexString
+}
+
+/**
+ * Converts a numeric value within a specified range to a hexadecimal color code.
+ * The resulting color will be a shade of red for negative values, a shade of green for positive values,
+ * and black (`#000000`) for zero.
+ *
+ * @param value - The numeric value to convert to a color.
+ * @param min - The minimum value of the range.
+ * @param max - The maximum value of the range.
+ * @returns A hexadecimal color string in the format `#RRGGBB`.
+ */
+export const toHexDualColorRange = (
+    value: number,
+    min: number,
+    max: number,
+    threshold: number = 0,
+): string => {
+    let red: string = '00',
+        green: string = '00'
+
+    if (value < 0) {
+        red = toHex(value, min, threshold)
+    } else if (value > 0) {
+        green = toHex(value, threshold, max)
+    }
+
+    return `#${red}${green}00`
+}
+
+export const toHexTripleColorRange = (
+    value: number,
+    min: number,
+    max: number,
+    threshold: number = 0,
+): string => {
+    // Clamping per sicurezza
+    const v = Math.min(max, Math.max(min, value))
+
+    let r: number
+    let g: number
+
+    if (v <= threshold) {
+        // [min, threshold] → rosso pieno, verde da 0 → 255
+        const g255 = Math.floor(normalize(v, min, threshold, 0, 255))
+        r = 255
+        g = g255
+    } else {
+        // (threshold, max] → verde pieno, rosso da 255 → 0
+        const t = Math.floor(normalize(v, threshold, max, 0, 255)) // 0..255
+        r = 255 - t
+        g = 255
+    }
+
+    const rh = r.toString(16).padStart(2, '0')
+    const gh = g.toString(16).padStart(2, '0')
+    return `#${rh}${gh}00`
 }
 
 /**
@@ -152,7 +251,7 @@ export const threshold = (sum: number, bias: number) => (sum > bias ? 1 : 0)
  * @returns Valore tra -1 e 1, calcolato come (e^x - e^(-x))/(e^x + e^(-x)) dove x = sum + bias
  * @description Funzione smooth simmetrica, ideale per reti neurali
  */
-export const tanh = (sum: number, bias: number, scale: number): number => {
+export const tanh = (sum: number, bias: number, scale: number = 1): number => {
     const exponent = sum + bias
     const numerator = Math.exp(exponent) - Math.exp(-exponent)
     const denominator = Math.exp(exponent) + Math.exp(-exponent)

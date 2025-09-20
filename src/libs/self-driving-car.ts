@@ -72,22 +72,22 @@ export function createSimulation(element: HTMLElement): SimulationControls {
         },
         (action: UIAction) => {
             switch (action) {
-                case 'save-network':
+                case 'network-save':
                     simulation.saveNetwork()
                     break
-                case 'restore-network':
+                case 'network-restore':
                     if (simulation.restoreNetwork()) {
                         simulation.restart()
                     }
                     break
-                case 'reset-network':
+                case 'network-reset':
                     simulation.resetNetwork()
                     simulation.restart()
                     break
-                case 'restart-network':
+                case 'network-restart':
                     simulation.restart()
                     break
-                case 'evolve-network':
+                case 'network-evolve':
                     if (simulation.evolveNetwork()) {
                         simulation.endRound()
                     }

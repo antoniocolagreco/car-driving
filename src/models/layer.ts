@@ -121,7 +121,7 @@ export default class Layer {
             // Applichiamo la funzione di attivazione (tanh)
             // Se la somma supera il bias, il neurone si "accende"
             // Per controlli analogici, usiamo tanh con scaling migliorato
-            const activationOutput = tanh(weightedSum, layer.biases[outputIndex], 1.2)
+            const activationOutput = tanh(weightedSum, layer.biases[outputIndex])
             layer.outputs[outputIndex] = Math.max(-1, Math.min(1, activationOutput)) // Manteniamo il range [-1, +1]
         }
         return layer.outputs

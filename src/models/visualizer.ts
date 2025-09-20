@@ -1,4 +1,4 @@
-import { normalize, normalizeToHex } from '../libs/utils'
+import { normalize, toHex, toHexDualColorRange, toHexTripleColorRange } from '../libs/utils'
 import type Layer from './layer'
 import type NeuralNetwork from './neural-network'
 
@@ -6,6 +6,7 @@ import type NeuralNetwork from './neural-network'
  * Visualizza graficamente una rete neurale su canvas 2D
  * Ogni layer è disegnato come neuroni (cerchi) connessi da linee (pesi)
  * I colori rappresentano i valori: rosso per negativi, verde per positivi
+ * L'opacità delle linee indica l'influenza reale sul neurone di destinazione
  */
 export default class Visualizer {
     /**
@@ -25,52 +26,19 @@ export default class Visualizer {
             // Calcola posizione Y di inizio e fine per questo layer
             const yStart = ctx.canvas.height - (index * heightSlice + margin)
             const yEnd = ctx.canvas.height - ((index + 1) * heightSlice + margin)
+            const isFirstLayer = index === 0
 
-            // Visualizer.drawLayerRails(
-            //     ctx,
-            //     network.getLayers()[index],
-            //     ctx.canvas.width,
-            //     yStart,
-            //     yEnd,
-            // )
-            // Solo l'ultimo layer (output) ha le icone frecce per indicare le azioni (su, giù, sinistra, destra)
-            const icons = index === network.getLayers().length - 1 ? ['⬆️', '⏹️', '☸️'] : []
+            const icons =
+                index === network.getLayers().length - 1 ? ['Acceleratore', 'Freno', 'Sterzo'] : []
             Visualizer.drawLayer(
                 ctx,
                 network.getLayers()[index],
                 ctx.canvas.width,
                 yStart,
                 yEnd,
+                isFirstLayer,
                 icons,
             )
-        }
-    }
-
-    private static drawLayerRails(
-        ctx: CanvasRenderingContext2D,
-        layer: Layer,
-        width: number,
-        yStart: number,
-        yEnd: number,
-    ) {
-        const inputs = layer.getInputs()
-        const outputs = layer.getOutputs()
-
-        const inputSlice = width / (inputs.length + 1)
-        const outputSlice = width / (outputs.length + 1)
-
-        const yOutput = yEnd
-        const yInput = yStart
-
-        for (let i = 0; i < inputs.length; i++) {
-            for (let j = 0; j < outputs.length; j++) {
-                ctx.beginPath()
-                ctx.lineWidth = 2
-                ctx.strokeStyle = '#111'
-                ctx.moveTo(inputSlice * (i + 1), yInput)
-                ctx.lineTo(outputSlice * (j + 1), yOutput)
-                ctx.stroke()
-            }
         }
     }
 
@@ -81,7 +49,7 @@ export default class Visualizer {
      * @param width - Larghezza totale disponibile del canvas
      * @param yStart - Coordinata Y dove iniziare a disegnare i neuroni di input
      * @param yEnd - Coordinata Y dove disegnare i neuroni di output
-     * @param icons - Array di icone da mostrare sui neuroni di output (es. frecce direzionali)
+     * @param labels - Array di icone da mostrare sui neuroni di output (es. frecce direzionali)
      */
     private static drawLayer(
         ctx: CanvasRenderingContext2D,
@@ -89,7 +57,8 @@ export default class Visualizer {
         width: number,
         yStart: number,
         yEnd: number,
-        icons: Array<string>,
+        isFirstLayer: boolean = false,
+        labels: Array<string>,
     ) {
         const biases = layer.getBiases()
         const inputs = layer.getInputs()
@@ -106,30 +75,28 @@ export default class Visualizer {
 
         // FASE 1: Disegna tutte le connessioni (linee) tra neuroni input e output
         // Ogni linea rappresenta un peso della rete neurale
+        // Spessore = |peso|, colore = segno del peso, opacità = |input × peso|
         for (let i = 0; i < inputs.length; i++) {
             for (let j = 0; j < outputs.length; j++) {
                 ctx.beginPath()
                 // Spessore della linea proporzionale al valore assoluto del peso
                 // Pesi più forti = linee più spesse (da 1 a 6 pixel)
+
                 ctx.lineWidth = Math.floor(normalize(weights[i][j], -1, 1, 1, 6))
 
-                // Colore della connessione basato sul segno del peso:
-                // Pesi negativi = rosso, pesi positivi = verde
-                const r =
-                    weights[i][j] < 0 ? normalizeToHex(Math.max(15, weights[i][j]), -1, 0) : '00'
-                const g =
-                    weights[i][j] > 0 ? normalizeToHex(Math.max(15, weights[i][j]), 0, 1) : '00'
-                // const r = normalizeToHex(-weights[i][j], -1, 1)  // Versione alternativa commentata
-                // const g = normalizeToHex(weights[i][j], -1, 1)   // Versione alternativa commentata
-                const b = '00' // Blu sempre a zero
-
-                // Trasparenza (alpha) basata sull'attivazione del neurone di input
-                // Neuroni più attivi = linee più opache
-                const alpha = normalizeToHex(inputs[i], 0, 1)
-                const color = `#${r}${g}${b}${alpha}`
-
+                let weightColor = '#0000'
+                // Opacità della linea proporzionale al contributo reale sull'output: |input * peso|
+                // Linee trasparenti quando non influenzano, opache quando contribuiscono molto
+                const contribution = Math.abs(inputs[i] * weights[i][j])
+                const weightAlpha = toHex(contribution, 0, 1)
+                if (weights[i][j] > 0) {
+                    weightColor = `#00ff00${weightAlpha}` // Verde per pesi positivi
+                } else if (weights[i][j] < 0) {
+                    weightColor = `#ff0000${weightAlpha}` // Rosso per pesi negativi
+                }
                 // Disegna la linea di connessione dal neurone input al neurone output
-                ctx.strokeStyle = color
+                ctx.strokeStyle = weightColor
+                ctx.setLineDash([])
                 ctx.moveTo(inputSlice * (i + 1), yInput)
                 ctx.lineTo(outputSlice * (j + 1), yOutput)
                 ctx.stroke()
@@ -138,67 +105,78 @@ export default class Visualizer {
 
         const NODE_SIZE = 15 // Raggio dei neuroni in pixel
 
-        // FASE 2: Disegna i neuroni di INPUT (cerchi nella parte alta del layer)
-        for (let index = 0; index < inputs.length; index++) {
-            const x = inputSlice * (index + 1) // Posizione X del neurone
+        // FASE 2: Disegna i neuroni di INPUT se è il primo layer (cerchi nella parte alta del layer)
+        // Colore: gradiente rosso→nero→verde basato sul valore di attivazione [-1, 1]
+        if (isFirstLayer) {
+            for (let index = 0; index < inputs.length; index++) {
+                const x = inputSlice * (index + 1) // Posizione X del neurone
 
-            // Cerchio interno colorato in base al valore di attivazione
-            ctx.beginPath()
-            // Colore: rosso per valori negativi, verde per valori positivi
-            const r = inputs[index] < 0 ? normalizeToHex(inputs[index], -1, 0) : '00'
-            const g = inputs[index] > 0 ? normalizeToHex(inputs[index], 0, 1) : '00'
-            const b = '00'
+                // Cerchio interno colorato in base al valore di attivazione
+                ctx.beginPath()
 
-            ctx.fillStyle = `#${r}${g}${b}`
-            ctx.lineWidth = 1
-            ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2)
-            ctx.fill()
+                // Gradiente smooth: rosso per valori negativi, nero per zero, verde per positivi
+                const inputNeuronColor = toHexDualColorRange(inputs[index], -1, 1)
 
-            // Contorno esterno del neurone (sempre giallo scuro)
-            ctx.beginPath()
-            ctx.setLineDash([]) // Linea continua
-            ctx.strokeStyle = '#550' // Giallo scuro
-            ctx.lineWidth = 2
-            ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2)
-            ctx.stroke()
+                ctx.fillStyle = inputNeuronColor
+                ctx.lineWidth = 1
+                ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2)
+                ctx.fill()
+
+                // Contorno esterno del neurone (bordo giallo per visibilità)
+                ctx.beginPath()
+                ctx.setLineDash([])
+                ctx.strokeStyle = '#ff0'
+                ctx.lineWidth = 4
+                ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2)
+                ctx.stroke()
+            }
         }
 
         // FASE 3: Disegna i neuroni di OUTPUT (cerchi nella parte bassa del layer)
+        // Colore del riempimento: gradiente basato sul valore di output del neurone
+        // Anello del bias: indica se il neurone è attivo (output > bias)
         for (let index = 0; index < outputs.length; index++) {
             const x = outputSlice * (index + 1) // Posizione X del neurone
 
-            // Cerchio interno colorato in base al valore del bias
+            // Cerchio interno colorato in base al valore di output del neurone
             ctx.beginPath()
-            // Colore del bias: rosso per valori negativi, verde per valori positivi
-            const r = biases[index] < 0 ? normalizeToHex(biases[index], -1, 0) : '00'
-            const g = biases[index] > 0 ? normalizeToHex(biases[index], 0, 1) : '00'
-            const b = '00'
-            ctx.fillStyle = `#${r}${g}${b}`
+
+            // Usa il valore di output (non input) per il gradiente rosso→nero→verde
+            const outputNeuronColor = toHexDualColorRange(outputs[index], -1, 1)
+
+            ctx.fillStyle = outputNeuronColor
             ctx.lineWidth = 1
             ctx.arc(x, yOutput, NODE_SIZE, 0, Math.PI * 2)
             ctx.fill()
 
-            // Contorno esterno standard (sempre giallo scuro)
+            // Un neurone è attivo solo se il suo output supera il bias
+            const isNeuronActive = outputs[index] > biases[index]
+            let biasColor = '#000'
+            let outputRingWidth = 2
+
+            if (isNeuronActive) {
+                biasColor = '#FF0' // Giallo quando attivo
+                outputRingWidth = 4
+            } else {
+                // Quando non attivo, colore basato sul segno del bias
+                if (biases[index] > 0) {
+                    biasColor = '#0F0' // Verde per bias positivi
+                } else if (biases[index] < 0) {
+                    biasColor = '#F00' // Rosso per bias negativi
+                }
+            }
+
+            // Nuovo path per l'anello del bias per evitare artefatti con il riempimento
             ctx.beginPath()
+            ctx.strokeStyle = biasColor
+            ctx.lineWidth = outputRingWidth
             ctx.setLineDash([])
-            ctx.strokeStyle = '#550' // Giallo scuro
-            ctx.lineWidth = 2
             ctx.arc(x, yOutput, NODE_SIZE, 0, Math.PI * 2)
             ctx.stroke()
 
-            // Se il neurone di output è attivo (valore > 0), aggiungi un anello giallo brillante
-            // Questo indica quale azione la rete sta "decidendo" di fare
-            if (outputs[index] > 0) {
-                ctx.beginPath()
-                ctx.strokeStyle = '#ff0' // Giallo brillante
-                ctx.lineWidth = 4
-                ctx.arc(x, yOutput, NODE_SIZE, 0, Math.PI * 2)
-                ctx.stroke()
-            }
-
-            // Disegna l'icona sopra il neurone (solo per il layer di output)
-            // Le icone rappresentano le azioni: ↑ (accelera), ↓ (frena), ← (sinistra), → (destra)
-            const icon = icons[index]
+            // Disegna l'icona sopra il neurone (solo per il layer di output finale)
+            // Le icone rappresentano le azioni del veicolo: Acceleratore, Freno, Sterzo
+            const icon = labels[index]
             if (icon) {
                 ctx.beginPath()
                 ctx.textAlign = 'center'

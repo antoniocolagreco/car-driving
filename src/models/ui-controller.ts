@@ -20,11 +20,15 @@ export interface UIState {
 }
 
 export type UIAction =
-    | 'save-network'
-    | 'restore-network'
-    | 'reset-network'
-    | 'restart-network'
-    | 'evolve-network'
+    | 'simulation-start'
+    | 'simulation-stop'
+    | 'network-save'
+    | 'network-restore'
+    | 'network-reset'
+    | 'network-restart'
+    | 'network-evolve'
+    | 'switch-to-imitation'
+    | 'switch-to-genetic'
 
 export class UIController {
     private mutationRate: number
@@ -45,42 +49,43 @@ export class UIController {
         this.setupSliders()
         this.setupButtons()
         this.setupInputs()
+        this.setupModeRadios()
         this.initializeUIValues()
     }
 
     updateHUD(state: UIState): void {
-        const infoId = document.querySelector(`#${HTML_IDS.infoNetworkId}`)
+        const infoId = document.querySelector(`#${HTML_IDS.info.networkId}`)
         if (infoId) {
             infoId.innerHTML = `${state.activeCar?.networkId ?? ''}`
         }
 
-        const infoPts = document.querySelector(`#${HTML_IDS.infoPoints}`)
+        const infoPts = document.querySelector(`#${HTML_IDS.info.points}`)
         if (infoPts) {
             infoPts.innerHTML = `${state.activeCar?.points ?? 0}`
         }
 
-        const infoRec = document.querySelector(`#${HTML_IDS.infoRecord}`)
+        const infoRec = document.querySelector(`#${HTML_IDS.info.record}`)
         if (infoRec) {
             infoRec.innerHTML = `${state.activeCar?.networkId ? state.activeCar.record : 0}`
         }
 
-        const infoSrs = document.querySelector(`#${HTML_IDS.infoSurvivedRounds}`)
+        const infoSrs = document.querySelector(`#${HTML_IDS.info.survivedRounds}`)
         if (infoSrs) {
             infoSrs.innerHTML = `${state.activeCar?.networkSurvivedRounds ?? 0}`
         }
 
-        const infoCrs = document.querySelector(`#${HTML_IDS.infoRemainingCars}`)
+        const infoCrs = document.querySelector(`#${HTML_IDS.info.remainingCars}`)
         if (infoCrs) {
             infoCrs.innerHTML = `${state.remainingCars}`
         }
 
-        const infoPps = document.querySelector(`#${HTML_IDS.infoPixelsPerSecond}`)
+        const infoPps = document.querySelector(`#${HTML_IDS.info.pixelsPerSecond}`)
         if (infoPps) {
             const pixelsPerSecond = (state.activeCar?.speed ?? 0) * state.fps
             infoPps.innerHTML = `${pixelsPerSecond.toFixed(2)}`
         }
 
-        const infoFps = document.querySelector(`#${HTML_IDS.infoFps}`)
+        const infoFps = document.querySelector(`#${HTML_IDS.info.fps}`)
         if (infoFps) {
             infoFps.innerHTML = `${state.fps}`
         }
@@ -88,19 +93,19 @@ export class UIController {
 
     private initializeUIValues(): void {
         const mutationValue = document.querySelector(
-            `#${HTML_IDS.mutationRateValue}`,
+            `#${HTML_IDS.inputs.mutationRateValue}`,
         ) as HTMLSpanElement | null
         const mutationRange = document.querySelector(
-            `#${HTML_IDS.mutationRateRange}`,
+            `#${HTML_IDS.inputs.mutationRateRange}`,
         ) as HTMLInputElement | null
         const carsQuantityValue = document.querySelector(
-            `#${HTML_IDS.carsQuantityValue}`,
+            `#${HTML_IDS.inputs.carsQuantityValue}`,
         ) as HTMLSpanElement | null
         const carsQuantityRange = document.querySelector(
-            `#${HTML_IDS.carsQuantityRange}`,
+            `#${HTML_IDS.inputs.carsQuantityRange}`,
         ) as HTMLInputElement | null
         const neuronsInput = document.querySelector(
-            `#${HTML_IDS.networkArchitectureInput}`,
+            `#${HTML_IDS.inputs.networkArchitectureInput}`,
         ) as HTMLInputElement | null
 
         if (mutationValue) {
@@ -127,10 +132,10 @@ export class UIController {
 
     private setupMutationRateSlider(): void {
         const mutationRange = document.querySelector(
-            `#${HTML_IDS.mutationRateRange}`,
+            `#${HTML_IDS.inputs.mutationRateRange}`,
         ) as HTMLInputElement | null
         const mutationValue = document.querySelector(
-            `#${HTML_IDS.mutationRateValue}`,
+            `#${HTML_IDS.inputs.mutationRateValue}`,
         ) as HTMLSpanElement | null
 
         mutationRange?.addEventListener(
@@ -151,10 +156,10 @@ export class UIController {
 
     private setupCarsQuantitySlider(): void {
         const carsQuantityRange = document.querySelector(
-            `#${HTML_IDS.carsQuantityRange}`,
+            `#${HTML_IDS.inputs.carsQuantityRange}`,
         ) as HTMLInputElement | null
         const carsQuantityValue = document.querySelector(
-            `#${HTML_IDS.carsQuantityValue}`,
+            `#${HTML_IDS.inputs.carsQuantityValue}`,
         ) as HTMLSpanElement | null
 
         carsQuantityRange?.addEventListener(
@@ -174,39 +179,49 @@ export class UIController {
 
     private setupButtons(): void {
         document
-            .querySelector(`#${HTML_IDS.saveNetworkButton}`)
-            ?.addEventListener('click', () => this.onAction('save-network'), {
+            .querySelector(`#${HTML_IDS.buttons.simulationStart}`)
+            ?.addEventListener('click', () => this.onAction('simulation-start'), {
+                signal: this.abortController.signal,
+            })
+        document
+            .querySelector(`#${HTML_IDS.buttons.simulationStop}`)
+            ?.addEventListener('click', () => this.onAction('simulation-stop'), {
+                signal: this.abortController.signal,
+            })
+        document
+            .querySelector(`#${HTML_IDS.buttons.saveNetwork}`)
+            ?.addEventListener('click', () => this.onAction('network-save'), {
                 signal: this.abortController.signal,
             })
 
         document
-            .querySelector(`#${HTML_IDS.restoreNetworkButton}`)
-            ?.addEventListener('click', () => this.onAction('restore-network'), {
+            .querySelector(`#${HTML_IDS.buttons.restoreNetwork}`)
+            ?.addEventListener('click', () => this.onAction('network-restore'), {
                 signal: this.abortController.signal,
             })
 
         document
-            .querySelector(`#${HTML_IDS.resetNetworkButton}`)
-            ?.addEventListener('click', () => this.onAction('reset-network'), {
+            .querySelector(`#${HTML_IDS.buttons.resetNetwork}`)
+            ?.addEventListener('click', () => this.onAction('network-reset'), {
                 signal: this.abortController.signal,
             })
 
         document
-            .querySelector(`#${HTML_IDS.restartNetworkButton}`)
-            ?.addEventListener('click', () => this.onAction('restart-network'), {
+            .querySelector(`#${HTML_IDS.buttons.restartNetwork}`)
+            ?.addEventListener('click', () => this.onAction('network-restart'), {
                 signal: this.abortController.signal,
             })
 
         document
-            .querySelector(`#${HTML_IDS.evolveNetworkButton}`)
-            ?.addEventListener('click', () => this.onAction('evolve-network'), {
+            .querySelector(`#${HTML_IDS.buttons.evolveNetwork}`)
+            ?.addEventListener('click', () => this.onAction('network-evolve'), {
                 signal: this.abortController.signal,
             })
     }
 
     private setupInputs(): void {
         const neuronsInput = document.querySelector(
-            `#${HTML_IDS.networkArchitectureInput}`,
+            `#${HTML_IDS.inputs.networkArchitectureInput}`,
         ) as HTMLInputElement | null
 
         neuronsInput?.addEventListener(
@@ -227,7 +242,36 @@ export class UIController {
                     this.networkArchitecture = values
                     Persistence.clearBestNetwork()
                     this.onConfigChange({ networkArchitecture: this.networkArchitecture })
-                    this.onAction('restart-network')
+                    this.onAction('network-restart')
+                }
+            },
+            { signal: this.abortController.signal },
+        )
+    }
+
+    private setupModeRadios(): void {
+        const imitationRadio = document.querySelector(
+            `#${HTML_IDS.inputs.imitationModeRadio}`,
+        ) as HTMLInputElement | null
+        const geneticRadio = document.querySelector(
+            `#${HTML_IDS.inputs.geneticModeRadio}`,
+        ) as HTMLInputElement | null
+
+        imitationRadio?.addEventListener(
+            'change',
+            () => {
+                if (imitationRadio.checked) {
+                    this.onAction('switch-to-imitation')
+                }
+            },
+            { signal: this.abortController.signal },
+        )
+
+        geneticRadio?.addEventListener(
+            'change',
+            () => {
+                if (geneticRadio.checked) {
+                    this.onAction('switch-to-genetic')
                 }
             },
             { signal: this.abortController.signal },

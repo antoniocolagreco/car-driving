@@ -24,7 +24,7 @@ export const generateCars = (
         // Tutte le auto partono dalla corsia centrale nella stessa posizione
         const lane = Math.floor(road.getLaneCount() / 2)
         const position = road.getLanePosition(lane)
-        const sensor = new Sensor({ rayCount: 7, rayLength: 500, raySpread: Math.PI * 0.5 })
+        const sensor = new Sensor({ rayCount: 5, rayLength: 500, raySpread: Math.PI * 0.25 })
         let network: NeuralNetwork
         if (seed && mutationRate) {
             const randomMutationRate = Math.random() * mutationRate

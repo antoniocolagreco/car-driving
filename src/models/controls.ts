@@ -1,7 +1,7 @@
 export default class Controls {
-    private acceleration: number = 0 // -1 (reverse) to +1 (forward)
-    private steering: number = 0 // -1 (left) to +1 (right)
-    private brake: number = 0 // 0 (no brake) to 1 (full brake)
+    private acceleration: number = 0
+    private steering: number = 0
+    private brake: boolean = false
     private active: boolean = false
 
     private handleKeyDown(key: string) {
@@ -23,7 +23,7 @@ export default class Controls {
                 this.steering = 1.0 // Full right
                 break
             case ' ':
-                this.brake = 1.0 // Full brake with spacebar
+                this.brake = true
                 break
         }
     }
@@ -43,7 +43,7 @@ export default class Controls {
                 this.steering = 0 // Center steering
                 break
             case ' ':
-                this.brake = 0 // Release brake
+                this.brake = false
                 break
         }
     }
@@ -69,7 +69,7 @@ export default class Controls {
         return this.steering
     }
 
-    getBrake(): number {
+    getBrake(): boolean {
         return this.brake
     }
 
@@ -96,15 +96,15 @@ export default class Controls {
 
     // New analog setters
     setAcceleration(value: number): void {
-        this.acceleration = Math.max(-1, Math.min(1, value)) // Clamp to [-1, 1]
+        this.acceleration = value
     }
 
     setSteering(value: number): void {
-        this.steering = Math.max(-1, Math.min(1, value)) // Clamp to [-1, 1]
+        this.steering = value
     }
 
-    setBrake(value: number): void {
-        this.brake = Math.max(0, Math.min(1, value)) // Clamp to [0, 1]
+    setBrake(value: boolean): void {
+        this.brake = value
     }
 
     // Legacy boolean setters for backward compatibility
