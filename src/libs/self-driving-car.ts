@@ -72,6 +72,12 @@ export function createSimulation(element: HTMLElement): SimulationControls {
         },
         (action: UIAction) => {
             switch (action) {
+                case 'simulation-start':
+                    simulation.start()
+                    break
+                case 'simulation-stop':
+                    simulation.stop()
+                    break
                 case 'network-save':
                     simulation.saveNetwork()
                     break

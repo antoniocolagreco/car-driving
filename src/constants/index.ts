@@ -26,8 +26,6 @@ export const DEFAULTS = {
 export const HTML_IDS = {
     appContainer: 'app-container',
     buttons: {
-        simulationStart: 'simulation-start-button',
-        simulationStop: 'simulation-stop-button',
         saveNetwork: 'save-network-button',
         restoreNetwork: 'restore-network-button',
         resetNetwork: 'reset-network-button',

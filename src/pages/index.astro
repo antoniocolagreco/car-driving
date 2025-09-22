@@ -39,43 +39,33 @@ const { class: className, ...rest } = Astro.props
 
 <DefaultLayout title="Self Driving Car">
     <div class="h-full flex flex-col grow">
-        <menu class="flex gap-4 mb-2 w-full flex-wrap justify-between mt-2">
-            <Button
-                id={HTML_IDS.buttons.simulationStart}
-                class="grow basis-0 min-w-0"
-                title="Start the simulation"><PlayIcon slot="icon" size={20} />Start</Button
-            >
-            <Button
-                id={HTML_IDS.buttons.simulationStop}
-                class="grow basis-0 min-w-0"
-                title="Stop the simulation"><SquareIcon slot="icon" size={20} />Stop</Button
-            >
+        <menu class="flex gap-4 mb-2 w-full flex-wrap mt-2">
             <Button
                 id={HTML_IDS.buttons.saveNetwork}
-                class="grow basis-0 min-w-0"
+                class="flex-1 min-w-24"
                 title="Make a backup of the active network"
                 ><SaveIcon slot="icon" size={20} />Backup</Button
             >
             <Button
                 id={HTML_IDS.buttons.restoreNetwork}
-                class="grow basis-0 min-w-0"
+                class="flex-1 min-w-24"
                 title="Restore the last saved network"
                 ><FolderIcon slot="icon" size={20} />Restore</Button
             >
             <Button
                 id={HTML_IDS.buttons.resetNetwork}
-                class="grow basis-0 min-w-0"
+                class="flex-1 min-w-24"
                 title="Delete the saved network"><TrashIcon slot="icon" size={20} />Reset</Button
             >
             <Button
                 id={HTML_IDS.buttons.restartNetwork}
-                class="grow basis-0 min-w-0"
+                class="flex-1 min-w-24"
                 title="Restart the simulation without saving"
                 ><RedoIcon slot="icon" size={20} />Restart</Button
             >
             <Button
                 id={HTML_IDS.buttons.evolveNetwork}
-                class="grow basis-0 min-w-0"
+                class="flex-1 min-w-24"
                 title="Restart the simulation after saving the active network"
                 ><ChevronsUpIcon slot="icon" size={20} />Evolve</Button
             >

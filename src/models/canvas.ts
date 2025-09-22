@@ -1,4 +1,4 @@
-export interface CanvasOptions {
+interface CanvasOptions {
     width?: number
     height?: number
     role?: string

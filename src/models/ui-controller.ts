@@ -20,8 +20,6 @@ export interface UIState {
 }
 
 export type UIAction =
-    | 'simulation-start'
-    | 'simulation-stop'
     | 'network-save'
     | 'network-restore'
     | 'network-reset'
@@ -178,16 +176,6 @@ export class UIController {
     }
 
     private setupButtons(): void {
-        document
-            .querySelector(`#${HTML_IDS.buttons.simulationStart}`)
-            ?.addEventListener('click', () => this.onAction('simulation-start'), {
-                signal: this.abortController.signal,
-            })
-        document
-            .querySelector(`#${HTML_IDS.buttons.simulationStop}`)
-            ?.addEventListener('click', () => this.onAction('simulation-stop'), {
-                signal: this.abortController.signal,
-            })
         document
             .querySelector(`#${HTML_IDS.buttons.saveNetwork}`)
             ?.addEventListener('click', () => this.onAction('network-save'), {

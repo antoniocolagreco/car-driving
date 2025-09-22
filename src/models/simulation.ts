@@ -226,10 +226,6 @@ export class Simulation {
         }
     }
 
-    stop(): void {
-        this.stopTimers()
-    }
-
     saveNetwork(): boolean {
         if (this.state.activeCar?.getNetwork()) {
             Persistence.saveNetworkBackup(this.state.activeCar.getNetwork()!)

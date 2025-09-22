@@ -1,4 +1,4 @@
-import { normalize, toHex, toHexDualColorRange, toHexTripleColorRange } from '../libs/utils'
+import { normalize, toHex, toHexDualColorRange } from '../libs/utils'
 import type Layer from './layer'
 import type NeuralNetwork from './neural-network'
 
