@@ -65,7 +65,7 @@ export const isTurningToAvoidCollision = (racingCar: RacingCar, traffic: Vehicle
 
     // Check if the car is steering significantly (at least 0.05 degrees)
     const steeringDegree = Math.abs(racingCar.getSteeringDegree())
-    if (steeringDegree < SCORE.settings.steeringDegreeReaction) {
+    if (steeringDegree < SCORE.settings.averageSteeringDegreeReaction) {
         return false
     }
 

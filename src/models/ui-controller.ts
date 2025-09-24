@@ -137,20 +137,13 @@ export class UIController {
 
         const infoSteeringDegree = document.querySelector(`#${HTML_IDS.info.steeringDegree}`)
         if (infoSteeringDegree) {
-            //     const steeringInput = state.getActiveCar()?.getControls().getSteering() ?? 0
-            //     const steeringPercentage = Math.abs(steeringInput * 100) // Converti in percentuale
+            const absoluteSteeringValue = state.getActiveCar()?.getAbsoluteSteeringDegree() ?? 0
+            const absoluteSteeringLabel = absoluteSteeringValue.toFixed(2)
+            const steeringValue = state.getActiveCar()?.getSteeringDegree() ?? 0
+            const steeringLabel =
+                steeringValue >= 0 ? `+${steeringValue.toFixed(2)}` : `${steeringValue.toFixed(2)}`
 
-            //     let steeringLabel: string
-            //     if (steeringInput > 0.009) {
-            //         steeringLabel = 'RIGHT' // input positivo = destra (corretto)
-            //     } else if (steeringInput < -0.009) {
-            //         steeringLabel = 'LEFT' // input negativo = sinistra (corretto)
-            //     } else {
-            //         steeringLabel = '' // Straight
-            //     }
-
-            const steeringValue = state.getActiveCar()?.getAbsoluteSteeringDegree() ?? 0
-            infoSteeringDegree.innerHTML = `${steeringValue.toFixed(2)}°`
+            infoSteeringDegree.innerHTML = `${absoluteSteeringLabel}° (${steeringLabel}°)`
         }
 
         const infoFps = document.querySelector(`#${HTML_IDS.info.fps}`)

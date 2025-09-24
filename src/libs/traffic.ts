@@ -84,11 +84,44 @@ const leftL = (road: Road, offset: number) => {
     ]
 }
 
-const getRandomInteger = (min: number, max: number): number => {
-    return Math.floor(Math.random() * (max - min)) + min
+class SeededRandom {
+    private seed: number
+
+    constructor(seed: string | number) {
+        this.seed = typeof seed === 'string' ? this.hashString(seed) : seed
+    }
+
+    private hashString(str: string): number {
+        let hash = 0
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i)
+            hash = (hash << 5) - hash + char
+            hash = hash & hash // Convert to 32bit integer
+        }
+        return Math.abs(hash)
+    }
+
+    next(): number {
+        // Linear Congruential Generator
+        this.seed = (this.seed * 1664525 + 1013904223) % 4294967296
+        return this.seed / 4294967296
+    }
+
+    nextInteger(min: number, max: number): number {
+        return Math.floor(this.next() * (max - min)) + min
+    }
+
+    shuffle<T>(array: T[]): T[] {
+        const shuffled = [...array]
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = this.nextInteger(0, i + 1)
+            ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+        }
+        return shuffled
+    }
 }
 
-const generateRoadConfiguration = (numberOfRows: number): Array<number> => {
+const generateRoadConfiguration = (numberOfRows: number, random: SeededRandom): Array<number> => {
     if (numberOfRows < 12) {
         numberOfRows = 12
     }
@@ -108,46 +141,51 @@ const generateRoadConfiguration = (numberOfRows: number): Array<number> => {
     // Easy section: guarantee all types (0-3), then fill with random
     const easySectionArray = [0, 1, 2, 3]
     while (easySectionArray.length < easySectionLength) {
-        easySectionArray.push(getRandomInteger(0, 4))
+        easySectionArray.push(random.nextInteger(0, 4))
     }
-    easySectionArray.sort(() => Math.random() - 0.5)
+    const shuffledEasySection = random.shuffle(easySectionArray)
 
     // Medium section: guarantee all types (4-7), then fill with random
     const mediumSectionArray = [4, 5, 6, 7]
     while (mediumSectionArray.length < mediumSectionLength) {
-        mediumSectionArray.push(getRandomInteger(0, 8))
+        mediumSectionArray.push(random.nextInteger(0, 8))
     }
-    mediumSectionArray.sort(() => Math.random() - 0.5)
+    const shuffledMediumSection = random.shuffle(mediumSectionArray)
 
     // Hard section: guarantee all types (8-9), then fill with random
     const hardSectionArray = [8, 9]
     while (hardSectionArray.length < hardSectionLength) {
-        hardSectionArray.push(getRandomInteger(0, 10))
+        hardSectionArray.push(random.nextInteger(0, 10))
     }
-    hardSectionArray.sort(() => Math.random() - 0.5)
+    const shuffledHardSection = random.shuffle(hardSectionArray)
 
     // Very Hard section: guarantee all types (10-11), then fill with random
     const veryHardSectionArray = [10, 11]
     while (veryHardSectionArray.length < veryHardSectionLength) {
-        veryHardSectionArray.push(getRandomInteger(0, 12))
+        veryHardSectionArray.push(random.nextInteger(0, 12))
     }
-    veryHardSectionArray.sort(() => Math.random() - 0.5)
+    const shuffledVeryHardSection = random.shuffle(veryHardSectionArray)
 
     const configuration = [
-        ...easySectionArray,
-        ...mediumSectionArray,
-        ...hardSectionArray,
-        ...veryHardSectionArray,
+        ...shuffledEasySection,
+        ...shuffledMediumSection,
+        ...shuffledHardSection,
+        ...shuffledVeryHardSection,
     ]
 
     return configuration
 }
 
-export const generateTraffic = (numberOfRows: number, road: Road): Array<Car> => {
+export const generateTraffic = (
+    numberOfRows: number,
+    road: Road,
+    seed?: string | number,
+): Array<Car> => {
     const traffic: Array<Car> = []
     const offset = -400
 
-    const roadConfiguration = generateRoadConfiguration(numberOfRows)
+    const random = new SeededRandom(seed ?? '1234')
+    const roadConfiguration = generateRoadConfiguration(numberOfRows, random)
 
     roadConfiguration.forEach((value, i) => {
         switch (value) {

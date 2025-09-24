@@ -9,8 +9,8 @@ export const generateCars = (
     carsQuantity: number,
     networkArchitecture: Array<number>,
     road: Road,
-    seed?: NeuralNetwork,
-    mutationRate?: number,
+    seed: NeuralNetwork | undefined,
+    mutationRate: number,
 ) => {
     const cars: Array<RacingCar> = []
 
@@ -27,9 +27,13 @@ export const generateCars = (
         const position = road.getLanePosition(lane)
         const sensor = new Sensor({ rayCount: 5, rayLength: 500, raySpread: Math.PI * 0.25 })
         let network: NeuralNetwork
-        if (seed && mutationRate) {
-            const randomMutationRate = Math.random() * mutationRate
-            network = NeuralNetwork.getMutatedNetwork(seed, randomMutationRate)
+        if (seed) {
+            const randomMutationRate = Math.min(1, Math.max(0, Math.random() * mutationRate * 2))
+            if (index > carsQuantity / 2) {
+                network = NeuralNetwork.getMutatedNetwork(seed, mutationRate)
+            } else {
+                network = NeuralNetwork.getMutatedNetwork(seed, randomMutationRate)
+            }
         } else {
             network = new NeuralNetwork(sensor.getRayCount() + 1, ...networkArchitecture, 3)
         }

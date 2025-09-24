@@ -3,6 +3,7 @@ import {
     isBreakingToAvoidCollision,
     isTurningToAvoidCollision,
 } from '@libs/score'
+import { SCORE } from 'src/constants'
 import { Car, type CarProps } from './car'
 import { CarStats } from './car-stats'
 import type Shape from './shape'
@@ -34,7 +35,7 @@ export class RacingCar extends Car {
         this.stats.calculateScore()
     }
 
-    private calculatePoints(traffic: Array<Car>) {
+    private updateStats(traffic: Array<Car>) {
         const currentOvertakenCars = getOvertakenCars(this, traffic)
         if (currentOvertakenCars > this.stats.getOvertakenCars()) {
             this.timeout.reset()
@@ -49,10 +50,15 @@ export class RacingCar extends Car {
 
         const isTurning = isTurningToAvoidCollision(this, traffic)
         if (isTurning) {
-            this.stats.incrementTurningCount()
+            if (this.steeringDegree >= SCORE.settings.greaterSteeringDegreeReaction) {
+                this.stats.incrementGreaterTurningCount()
+            } else if (this.steeringDegree >= SCORE.settings.averageSteeringDegreeReaction) {
+                this.stats.incrementAverageTurningCount()
+            } else if (this.steeringDegree >= SCORE.settings.lesserSteeringDegreeReaction) {
+                this.stats.incrementLesserTurningCount()
+            }
         }
 
-        // One-time flags based on direct controls/telemetry
         const controls = this.getControls()
         const accel = controls.getAcceleration()
         if (accel > 0.1) {
@@ -62,9 +68,9 @@ export class RacingCar extends Car {
             this.stats.markHasBreaked()
         }
         const steering = controls.getSteering()
-        if (steering < -0.05) {
+        if (steering < -0.1) {
             this.stats.markHasTurnedLeft()
-        } else if (steering > 0.05) {
+        } else if (steering > 0.1) {
             this.stats.markHasTurnedRight()
         }
 
@@ -89,7 +95,7 @@ export class RacingCar extends Car {
 
     updateStatus(traffic: Array<Car>, obstacles: Array<Shape>): void {
         super.updateStatus(traffic, obstacles)
-        this.calculatePoints(traffic)
+        this.updateStats(traffic)
     }
 
     isWinner(): boolean {

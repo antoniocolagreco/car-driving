@@ -23,12 +23,16 @@ export const DEFAULTS = {
 
 export const SCORE = {
     overtake: 40,
-    turning: 1,
-    breaking: 0.5,
-    distanceTravelled: 0.005,
+    lesserTurning: 0.25,
+    averageTurning: 0.5,
+    greaterTurning: 1,
+    breaking: 0.3,
+    distanceTravelled: 0.01,
     settings: {
         reactionDistanceThreshold: 300,
-        steeringDegreeReaction: Math.PI / 60,
+        lesserSteeringDegreeReaction: 0.025,
+        averageSteeringDegreeReaction: 0.05,
+        greaterSteeringDegreeReaction: 0.1,
         frontAngleToCheckForCars: Math.PI / 4,
     },
 }

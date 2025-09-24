@@ -7,7 +7,9 @@ export class CarStats {
     private overtakesScore: number
     private breakingsCount: number
     private breakingsScore: number
-    private turningCount: number
+    private lesserTurningCount: number
+    private averageTurningCount: number
+    private greaterTurningCount: number
     private turningScore: number
     private distanceTravelled: number
 
@@ -24,7 +26,9 @@ export class CarStats {
     constructor(initialDrivingPosition: Point) {
         this.overtakenCars = 0
         this.breakingsCount = 0
-        this.turningCount = 0
+        this.lesserTurningCount = 0
+        this.averageTurningCount = 0
+        this.greaterTurningCount = 0
         this.initialDrivingPosition = new Point(
             initialDrivingPosition.getX(),
             initialDrivingPosition.getY(),
@@ -49,7 +53,19 @@ export class CarStats {
     }
 
     getTurningCount(): number {
-        return this.turningCount
+        return this.lesserTurningCount + this.averageTurningCount + this.greaterTurningCount
+    }
+
+    getLesserTurningCount(): number {
+        return this.lesserTurningCount
+    }
+
+    getAverageTurningCount(): number {
+        return this.averageTurningCount
+    }
+
+    getGreaterTurningCount(): number {
+        return this.greaterTurningCount
     }
 
     getFormattedScore(): string {
@@ -99,8 +115,16 @@ export class CarStats {
         this.overtakenCars = value
     }
 
-    incrementTurningCount(delta: number = 1): void {
-        this.turningCount += delta
+    incrementLesserTurningCount(delta: number = 1): void {
+        this.lesserTurningCount += delta
+    }
+
+    incrementAverageTurningCount(delta: number = 1): void {
+        this.averageTurningCount += delta
+    }
+
+    incrementGreaterTurningCount(delta: number = 1): void {
+        this.greaterTurningCount += delta
     }
 
     increaseBreakingsCount(delta: number = 1): void {
@@ -151,7 +175,10 @@ export class CarStats {
 
         this.breakingsScore = this.breakingsCount * SCORE.breaking
 
-        this.turningScore = this.turningCount * SCORE.turning
+        this.turningScore =
+            this.lesserTurningCount * SCORE.lesserTurning +
+            this.averageTurningCount * SCORE.averageTurning +
+            this.greaterTurningCount * SCORE.greaterTurning
 
         this.distanceScore = this.distanceTravelled * SCORE.distanceTravelled
 
@@ -162,6 +189,6 @@ export class CarStats {
             this.distanceScore +
             this.timeoutScore
 
-        return this.totalScore
+        return this.timeoutScore
     }
 }

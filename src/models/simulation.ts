@@ -1,6 +1,6 @@
 import { CONSTANTS } from '../constants'
 import Persistence from '../libs/persistence'
-import { generateCars, getLeadingCar, getBestCar, getRemainingCars } from '../libs/simulation'
+import { generateCars, getBestCar, getLeadingCar, getRemainingCars } from '../libs/simulation'
 import { generateTraffic } from '../libs/traffic'
 import NeuralNetwork from './neural-network'
 import type { SimulationConfig } from './simulation-config'
@@ -54,20 +54,20 @@ export class Simulation {
         this.state.setGameoverAt(null)
 
         // Carica la migliore rete neurale salvata in precedenza
-        let bestNetwork = Persistence.loadBestNetwork()
+        const bestNetwork = Persistence.loadBestNetwork()
 
         // Confronta la rete neurale dell'auto attiva con quella salvata
         // Se l'auto attiva ha ottenuto un punteggio migliore, la usa come base
-        const activeNetwork = this.state.getActiveCar()?.getNetwork()
+        // const activeNetwork = this.state.getActiveCar()?.getNetwork()
 
-        if (activeNetwork && bestNetwork) {
-            const activeNetworkPoints = activeNetwork.getBestScore()
-            const bestNetworkPoints = bestNetwork.getBestScore()
+        // if (activeNetwork && bestNetwork) {
+        //     const activeNetworkPoints = activeNetwork.getBestScore()
+        //     const bestNetworkPoints = bestNetwork.getBestScore()
 
-            if (activeNetworkPoints > bestNetworkPoints) {
-                bestNetwork = activeNetwork
-            }
-        }
+        //     if (activeNetworkPoints > bestNetworkPoints) {
+        //         bestNetwork = activeNetwork
+        //     }
+        // }
 
         // Genera una nuova popolazione di auto basata sulla migliore rete neurale
         this.state.setAllCars(
@@ -141,7 +141,12 @@ export class Simulation {
         if (this.state.isGameover() && this.state.getBestCar()) {
             this.state.setActiveCar(this.state.getBestCar())
         } else {
-            this.state.setActiveCar(getLeadingCar(this.state.getRemainingCars()))
+            // Solo se ci sono auto rimaste, altrimenti mantieni l'active car precedente
+            const remainingCars = this.state.getRemainingCars()
+            if (remainingCars.length > 0) {
+                this.state.setActiveCar(getLeadingCar(remainingCars))
+            }
+            // Se remainingCars.length === 0, activeCar resta quella precedente (bestCar)
         }
 
         // Aggiorna continuamente il record di punti della rete neurale attiva
@@ -196,15 +201,6 @@ export class Simulation {
                     const currentPoints = bestCar.getStats().getTotalScore()
                     bestNetwork.updatePointsRecordIfBetter(currentPoints)
                     Persistence.saveBestNetwork(bestNetwork)
-                }
-            } else {
-                // Nessuna auto ha vinto il round - il messaggio verrà mostrato sul canvas
-
-                // Prova a ricaricare il seed precedente
-                const previousSeed = Persistence.loadBestNetwork()
-                if (!previousSeed) {
-                    // Se non c'è un seed precedente, rimuovi tutto per forzare la rigenerazione
-                    Persistence.clearBestNetwork()
                 }
             }
             this.endRound()
