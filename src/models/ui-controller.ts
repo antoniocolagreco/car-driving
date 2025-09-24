@@ -1,23 +1,7 @@
 import { HTML_IDS } from 'src/constants'
 import Persistence from '../libs/persistence'
-
-export interface UIConfig {
-    mutationRate: number
-    carsQuantity: number
-    networkArchitecture: number[]
-}
-
-export interface UIState {
-    activeCar?: {
-        networkId?: string
-        points: number
-        record?: number
-        networkSurvivedRounds?: number
-        speed: number
-    }
-    remainingCars: number
-    fps: number
-}
+import type { SimulationConfig } from './simulation-config'
+import type { SimulationState } from './simulation-state'
 
 export type UIAction =
     | 'network-save'
@@ -35,7 +19,7 @@ export class UIController {
 
     constructor(
         private abortController: AbortController,
-        private onConfigChange: (config: Partial<UIConfig>) => void,
+        private simulationConfig: SimulationConfig,
         private onAction: (action: UIAction) => void,
     ) {
         this.mutationRate = Persistence.loadMutationRate()
@@ -51,41 +35,127 @@ export class UIController {
         this.initializeUIValues()
     }
 
-    updateHUD(state: UIState): void {
+    updateHUD(state: SimulationState, fps: number): void {
         const infoId = document.querySelector(`#${HTML_IDS.info.networkId}`)
         if (infoId) {
-            infoId.innerHTML = `${state.activeCar?.networkId ?? ''}`
+            infoId.innerHTML = `${state.getActiveCar()?.getNetwork()?.getId()}`
         }
 
-        const infoPts = document.querySelector(`#${HTML_IDS.info.points}`)
-        if (infoPts) {
-            infoPts.innerHTML = `${state.activeCar?.points ?? 0}`
+        // Score panel fields
+        const stats = state.getActiveCar()?.getStats()
+
+        if (stats) {
+            const overtakeScoreElement = document.querySelector(
+                `#${HTML_IDS.info.score.overtakesScore}`,
+            )
+            if (overtakeScoreElement) {
+                overtakeScoreElement.innerHTML = `Overtakes: ${stats.getOvertakesScore().toFixed(0)}`
+            }
+
+            const breakingsScoreElement = document.querySelector(
+                `#${HTML_IDS.info.score.breakingsScore}`,
+            )
+            if (breakingsScoreElement) {
+                breakingsScoreElement.innerHTML = `Breakings: ${stats.getBreakingsScore().toFixed(0)}`
+            }
+
+            const turningsScoreElement = document.querySelector(
+                `#${HTML_IDS.info.score.turningsScore}`,
+            )
+            if (turningsScoreElement) {
+                turningsScoreElement.innerHTML = `Turnings: ${stats.getTurningScore().toFixed(0)}`
+            }
+
+            const distanceScoreElement = document.querySelector(
+                `#${HTML_IDS.info.score.distanceScore}`,
+            )
+            if (distanceScoreElement) {
+                distanceScoreElement.innerHTML = `Distance: ${stats.getDistanceScore().toFixed(0)}`
+            }
+
+            const totalScoreElement = document.querySelector(`#${HTML_IDS.info.score.totalScore}`)
+            if (totalScoreElement) {
+                totalScoreElement.innerHTML = `Total: ${stats.getFormattedTotalScore()}`
+            }
+        } else {
+            // Clear score panel when no active stats
+            const fields = [
+                HTML_IDS.info.score.distanceScore,
+                HTML_IDS.info.score.breakingsScore,
+                HTML_IDS.info.score.turningsScore,
+                HTML_IDS.info.score.distanceScore,
+                HTML_IDS.info.score.totalScore,
+            ]
+            fields.forEach((id) => {
+                const el = document.querySelector(`#${id}`)
+                if (el) {
+                    el.innerHTML = '0'
+                }
+            })
         }
 
         const infoRec = document.querySelector(`#${HTML_IDS.info.record}`)
         if (infoRec) {
-            infoRec.innerHTML = `${state.activeCar?.networkId ? state.activeCar.record : 0}`
+            infoRec.innerHTML = `${state.getActiveCar()?.getNetwork()?.getFormattedBestScore() ?? 0}`
         }
 
         const infoSrs = document.querySelector(`#${HTML_IDS.info.survivedRounds}`)
         if (infoSrs) {
-            infoSrs.innerHTML = `${state.activeCar?.networkSurvivedRounds ?? 0}`
+            infoSrs.innerHTML = `${state.getActiveCar()?.getNetwork()?.getSurvivedRounds() ?? 0}`
         }
 
         const infoCrs = document.querySelector(`#${HTML_IDS.info.remainingCars}`)
         if (infoCrs) {
-            infoCrs.innerHTML = `${state.remainingCars}`
+            infoCrs.innerHTML = `${state.getRemainingCars().length}`
+        }
+
+        const infoTimeout = document.querySelector(`#${HTML_IDS.info.timeout}`)
+        if (infoTimeout) {
+            const activeCar = state.getActiveCar()
+            const timeout = activeCar?.getTimeout()
+
+            if (timeout) {
+                const remainingTime = timeout.getRemainingTime()
+                if (timeout.isRunning() && remainingTime > 0) {
+                    // Mostra tempo rimanente se il timeout è attivo
+                    const seconds = (remainingTime / 1000).toFixed(2)
+                    infoTimeout.innerHTML = `${seconds}s`
+                } else {
+                    // Se il timeout è scaduto o non è attivo, mostra 0
+                    infoTimeout.innerHTML = '0.00s'
+                }
+            } else {
+                infoTimeout.innerHTML = 'N/A'
+            }
         }
 
         const infoPps = document.querySelector(`#${HTML_IDS.info.pixelsPerSecond}`)
         if (infoPps) {
-            const pixelsPerSecond = (state.activeCar?.speed ?? 0) * state.fps
+            const pixelsPerSecond = (state.getActiveCar()?.getSpeed() ?? 0) * fps
             infoPps.innerHTML = `${pixelsPerSecond.toFixed(2)}`
+        }
+
+        const infoSteeringDegree = document.querySelector(`#${HTML_IDS.info.steeringDegree}`)
+        if (infoSteeringDegree) {
+            //     const steeringInput = state.getActiveCar()?.getControls().getSteering() ?? 0
+            //     const steeringPercentage = Math.abs(steeringInput * 100) // Converti in percentuale
+
+            //     let steeringLabel: string
+            //     if (steeringInput > 0.009) {
+            //         steeringLabel = 'RIGHT' // input positivo = destra (corretto)
+            //     } else if (steeringInput < -0.009) {
+            //         steeringLabel = 'LEFT' // input negativo = sinistra (corretto)
+            //     } else {
+            //         steeringLabel = '' // Straight
+            //     }
+
+            const steeringValue = state.getActiveCar()?.getAbsoluteSteeringDegree() ?? 0
+            infoSteeringDegree.innerHTML = `${steeringValue.toFixed(2)}°`
         }
 
         const infoFps = document.querySelector(`#${HTML_IDS.info.fps}`)
         if (infoFps) {
-            infoFps.innerHTML = `${state.fps}`
+            infoFps.innerHTML = `${fps}`
         }
     }
 
@@ -146,7 +216,8 @@ export class UIController {
                 mutationValue.innerText = `${value}%`
                 this.mutationRate = value / 100
                 Persistence.saveMutationRate(this.mutationRate)
-                this.onConfigChange({ mutationRate: this.mutationRate })
+
+                this.simulationConfig.setMutationRate(this.mutationRate)
             },
             { signal: this.abortController.signal },
         )
@@ -169,7 +240,8 @@ export class UIController {
                 carsQuantityValue.innerText = carsQuantityRange.value
                 this.carsQuantity = Number(carsQuantityRange.value)
                 Persistence.saveCarsQuantity(this.carsQuantity)
-                this.onConfigChange({ carsQuantity: this.carsQuantity })
+                this.simulationConfig.setCarsQuantity(this.carsQuantity)
+                this.onAction('network-restart')
             },
             { signal: this.abortController.signal },
         )
@@ -229,7 +301,7 @@ export class UIController {
                     Persistence.saveNetworkArchitecture(values.join(','))
                     this.networkArchitecture = values
                     Persistence.clearBestNetwork()
-                    this.onConfigChange({ networkArchitecture: this.networkArchitecture })
+                    this.simulationConfig.setNetworkArchitecture(this.networkArchitecture)
                     this.onAction('network-restart')
                 }
             },
@@ -264,13 +336,5 @@ export class UIController {
             },
             { signal: this.abortController.signal },
         )
-    }
-
-    getConfig(): UIConfig {
-        return {
-            mutationRate: this.mutationRate,
-            carsQuantity: this.carsQuantity,
-            networkArchitecture: this.networkArchitecture,
-        }
     }
 }

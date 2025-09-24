@@ -1,7 +1,7 @@
 export default class Controls {
     private acceleration: number = 0
     private steering: number = 0
-    private brake: boolean = false
+    private braking: boolean = false
     private active: boolean = false
 
     private handleKeyDown(key: string) {
@@ -23,7 +23,7 @@ export default class Controls {
                 this.steering = 1.0 // Full right
                 break
             case ' ':
-                this.brake = true
+                this.braking = true
                 break
         }
     }
@@ -43,7 +43,7 @@ export default class Controls {
                 this.steering = 0 // Center steering
                 break
             case ' ':
-                this.brake = false
+                this.braking = false
                 break
         }
     }
@@ -69,8 +69,8 @@ export default class Controls {
         return this.steering
     }
 
-    getBrake(): boolean {
-        return this.brake
+    isBreaking(): boolean {
+        return this.braking
     }
 
     // Legacy boolean getters for backward compatibility
@@ -103,8 +103,8 @@ export default class Controls {
         this.steering = value
     }
 
-    setBrake(value: boolean): void {
-        this.brake = value
+    setBraking(value: boolean): void {
+        this.braking = value
     }
 
     // Legacy boolean setters for backward compatibility

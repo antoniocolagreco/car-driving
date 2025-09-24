@@ -18,6 +18,7 @@ import Input from '../components/input.astro'
 import Radio from '../components/radio.astro'
 import Range from '../components/range.astro'
 import DefaultLayout from '../layouts/default-layout.astro'
+import ScorePanel from '../components/score-panel.astro'
 
 type Props = HTMLAttributes<'div'>
 const { class: className, ...rest } = Astro.props
@@ -74,12 +75,13 @@ const { class: className, ...rest } = Astro.props
             <ControlBox>
                 <label for="app-mode" class="text-sm">Mode</label>
                 <Radio
+                    disabled
                     id={HTML_IDS.inputs.imitationModeRadio}
                     name="app-mode"
                     value="imitation"
-                    checked={true}>Imitation</Radio
+                    checked={true}>Manual</Radio
                 >
-                <Radio id={HTML_IDS.inputs.geneticModeRadio} name="app-mode" value="genetic"
+                <Radio id={HTML_IDS.inputs.geneticModeRadio} name="app-mode" value="genetic" checked
                     >Genetic</Radio
                 >
             </ControlBox>
@@ -90,8 +92,8 @@ const { class: className, ...rest } = Astro.props
                 <Range
                     id={HTML_IDS.inputs.carsQuantityRange}
                     type="range"
-                    min="10"
-                    max="200"
+                    min="50"
+                    max="500"
                     value="50"
                     step="10"
                     class="w-36"
@@ -125,15 +127,11 @@ const { class: className, ...rest } = Astro.props
                     label="Current Car"
                     title="Identifier of the current active car"
                 />
-                <InfoText
-                    id={HTML_IDS.info.points}
-                    label="Points"
-                    title="Points accumulated by the current active car"
-                />
+                <ScorePanel />
                 <InfoText
                     id={HTML_IDS.info.record}
                     label="Record"
-                    title="Highest points achieved by the current active car"
+                    title="Highest score achieved by the current active car"
                 />
                 <InfoText
                     id={HTML_IDS.info.survivedRounds}
@@ -154,6 +152,11 @@ const { class: className, ...rest } = Astro.props
                     id={HTML_IDS.info.pixelsPerSecond}
                     label="Pixels per sec."
                     title="Speed of the active car in pixels per second"
+                />
+                <InfoText
+                    id={HTML_IDS.info.steeringDegree}
+                    label="Direction"
+                    title="Current steering direction of the active car"
                 />
                 <InfoText
                     id={HTML_IDS.info.fps}

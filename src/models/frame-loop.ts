@@ -91,10 +91,6 @@ export class FrameLoop {
     destroy(): void {
         this.stop()
         this.abortController.abort()
-        try {
-            this.container.removeChild(this.simulationCanvas.getElement())
-            this.container.removeChild(this.networkCanvas.getElement())
-        } catch {}
     }
 
     private animate(timestamp: number): void {

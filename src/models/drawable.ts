@@ -60,13 +60,15 @@ export default class Drawable {
         return new Shape(topLeft, topRight, bottomRight, bottomLeft)
     }
 
-    beforeDrawing(_context: CanvasRenderingContext2D) {}
+    protected beforeDrawing(_context: CanvasRenderingContext2D) {}
 
-    afterDrawing(_context: CanvasRenderingContext2D) {}
+    protected afterDrawing(_context: CanvasRenderingContext2D) {}
 
-    drawInstructions(context: CanvasRenderingContext2D) {
+    protected drawInstructions(context: CanvasRenderingContext2D) {
         if (this.ghost) {
             context.globalAlpha = 0.5
+        } else {
+            context.globalAlpha = 1
         }
         context.beginPath()
         context.fillStyle = this.fillStyle

@@ -1,4 +1,9 @@
-import { checkPolygonsIntersection, getRandomColor, normalizeWithThreshold } from '../libs/utils'
+import {
+    booleanThreshold,
+    checkPolygonsIntersection,
+    getRandomColor,
+    normalizeWithThreshold,
+} from '../libs/utils'
 import Controls from './controls'
 import Drawable, { type DrawableProps } from './drawable'
 import type Features from './features'
@@ -16,6 +21,8 @@ export type VehicleProps = Omit<DrawableProps, 'fillStyle' | 'strokeStyle'> & {
 export default class Vehicle extends Drawable {
     protected speed: number
     protected steeringPower: number
+    protected steeringDegree: number
+    protected absoluteSteeringDegree: number
     protected features: Features
     protected damaged: boolean
     protected controls: Controls
@@ -27,6 +34,8 @@ export default class Vehicle extends Drawable {
         super({ ...otherProps, fillStyle: color ?? getRandomColor() })
         this.speed = 0
         this.steeringPower = 0
+        this.steeringDegree = 0
+        this.absoluteSteeringDegree = 0
         this.features = features
         this.controls = new Controls()
         this.damaged = false
@@ -39,7 +48,7 @@ export default class Vehicle extends Drawable {
 
     protected move() {
         const acceleration = this.controls.getAcceleration()
-        const braking = this.controls.getBrake()
+        const braking = this.controls.isBreaking()
 
         // Handle acceleration/deceleration with analog input
         if (acceleration > 0) {
@@ -82,8 +91,21 @@ export default class Vehicle extends Drawable {
         // Analog steering
         if (Math.abs(this.speed) > 0) {
             const steering = this.controls.getSteering()
-            this.direction += this.steeringPower * steering
+            const rotationRadians = this.steeringPower * steering
+            this.direction += rotationRadians
+
+            // Converti la ROTAZIONE (non la direction totale) in gradi
+            this.steeringDegree = -(rotationRadians * (180 / Math.PI))
+        } else {
+            this.steeringDegree = 0
         }
+
+        // Absolute heading deviation vs road axis (road forward is direction = 0 rad)
+        // Map current heading to [0, 360), then take the minimal angle to the forward axis in [0, 180]
+        const directionDeg = (this.direction * (180 / Math.PI)) % 360
+        const normalizedHeading = (directionDeg + 360) % 360
+        this.absoluteSteeringDegree =
+            normalizedHeading <= 180 ? normalizedHeading : 360 - normalizedHeading
 
         const newX = this.getPosition().getX() - Math.sin(this.direction) * this.speed
         const newY = this.getPosition().getY() - Math.cos(this.direction) * this.speed
@@ -143,11 +165,11 @@ export default class Vehicle extends Drawable {
         const outputs = NeuralNetwork.feedForward(offsets, this.network)
 
         this.controls.setAcceleration(outputs[0])
-        this.controls.setBrake(Boolean(Math.max(outputs[1], 0)))
+        this.controls.setBraking(booleanThreshold(outputs[1], 0.5))
         this.controls.setSteering(outputs[2])
     }
 
-    beforeDrawing(context: CanvasRenderingContext2D): void {
+    protected beforeDrawing(context: CanvasRenderingContext2D): void {
         if (this.isGhost()) {
             context.globalAlpha = 0.5
         }
@@ -159,7 +181,7 @@ export default class Vehicle extends Drawable {
         }
     }
 
-    afterDrawing(_context: CanvasRenderingContext2D): void {}
+    protected afterDrawing(_context: CanvasRenderingContext2D): void {}
 
     setGhost(value: boolean): void {
         // Keep this setter free of side-effects; only toggle ghost flag
@@ -195,5 +217,13 @@ export default class Vehicle extends Drawable {
 
     getSensor(): Sensor | undefined {
         return this.sensor
+    }
+
+    getSteeringDegree(): number {
+        return this.steeringDegree
+    }
+
+    getAbsoluteSteeringDegree(): number {
+        return this.absoluteSteeringDegree
     }
 }

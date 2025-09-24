@@ -1,8 +1,9 @@
 import Canvas from '@models/canvas'
 import { FrameLoop } from '@models/frame-loop'
 import { Renderer } from '@models/renderer'
-import { Simulation, type SimulationConfig } from '@models/simulation'
-import { UIController, type UIAction, type UIConfig, type UIState } from '@models/ui-controller'
+import { Simulation } from '@models/simulation'
+import { SimulationConfig } from '@models/simulation-config'
+import { UIController, type UIAction } from '@models/ui-controller'
 import World, { type WorldConfig } from '@models/world'
 import Persistence from './persistence'
 
@@ -41,66 +42,42 @@ export function createSimulation(element: HTMLElement): SimulationControls {
     const world = new World(worldConfig)
 
     // Create simulation manager
-    const simulationConfig: SimulationConfig = {
-        mutationRate: Persistence.loadMutationRate(),
-        carsQuantity: Persistence.loadCarsQuantity(),
-        networkArchitecture: Persistence.loadNetworkArchitecture(),
-    }
+    const simulationConfig = new SimulationConfig(
+        Persistence.loadMutationRate(),
+        Persistence.loadCarsQuantity(),
+        Persistence.loadNetworkArchitecture(),
+    )
 
     const simulation = new Simulation(world, simulationConfig)
 
     // Create rendering manager
-    const renderingManager = new Renderer(simulationCanvas, networkCanvas, world)
+    const renderer = new Renderer(simulationCanvas, networkCanvas, world)
 
     // Setup UI controller
-    const uiController = new UIController(
-        abortController,
-        (config: Partial<UIConfig>) => {
-            // Update simulation configuration when UI changes
-            const simConfig: Partial<SimulationConfig> = {}
-            if (config.mutationRate !== undefined) {
-                simConfig.mutationRate = config.mutationRate
-            }
-            if (config.carsQuantity !== undefined) {
-                simConfig.carsQuantity = config.carsQuantity
-            }
-            if (config.networkArchitecture !== undefined) {
-                simConfig.networkArchitecture = config.networkArchitecture
-            }
-
-            simulation.updateConfig(simConfig)
-        },
-        (action: UIAction) => {
-            switch (action) {
-                case 'simulation-start':
-                    simulation.start()
-                    break
-                case 'simulation-stop':
-                    simulation.stop()
-                    break
-                case 'network-save':
-                    simulation.saveNetwork()
-                    break
-                case 'network-restore':
-                    if (simulation.restoreNetwork()) {
-                        simulation.restart()
-                    }
-                    break
-                case 'network-reset':
-                    simulation.resetNetwork()
+    const uiController = new UIController(abortController, simulationConfig, (action: UIAction) => {
+        switch (action) {
+            case 'network-save':
+                simulation.saveNetwork()
+                break
+            case 'network-restore':
+                if (simulation.restoreNetwork()) {
                     simulation.restart()
-                    break
-                case 'network-restart':
-                    simulation.restart()
-                    break
-                case 'network-evolve':
-                    if (simulation.evolveNetwork()) {
-                        simulation.endRound()
-                    }
-                    break
-            }
-        },
-    )
+                }
+                break
+            case 'network-reset':
+                simulation.resetNetwork()
+                simulation.restart()
+                break
+            case 'network-restart':
+                simulation.restart()
+                break
+            case 'network-evolve':
+                if (simulation.evolveNetwork()) {
+                    simulation.endRound()
+                }
+                break
+        }
+    })
 
     uiController.setupEventListeners()
 
@@ -121,32 +98,18 @@ export function createSimulation(element: HTMLElement): SimulationControls {
             simulation.updateVehicles()
 
             // Render everything
-            renderingManager.render(state, timestamp)
+            renderer.render(state, timestamp)
 
             // Update HUD
             const currentFps = frameLoop.getCurrentFps()
 
-            const uiState: UIState = {
-                activeCar: state.activeCar
-                    ? {
-                          networkId: state.activeCar.getNetwork()?.getId(),
-                          points: state.activeCar.getPoints(),
-                          record: state.activeCar.getNetwork()?.getPointsRecord(),
-                          networkSurvivedRounds: state.activeCar.getNetwork()?.getSurvivedRounds(),
-                          speed: state.activeCar.getSpeed(),
-                      }
-                    : undefined,
-                remainingCars: state.remainingCars.length,
-                fps: currentFps,
-            }
-
-            uiController.updateHUD(uiState)
+            // Update UI
+            uiController.updateHUD(simulation.getState(), currentFps)
         })
     }
 
     const stop = () => {
         frameLoop.stop()
-        simulation.stop()
     }
 
     const destroy = () => {

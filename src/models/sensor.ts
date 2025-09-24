@@ -16,6 +16,7 @@ export default class Sensor extends Drawable {
     private rayLength: number
     private raySpread: number
     private rays: Array<Shape>
+    private raysAngle: Array<number>
     private collisions: Array<Collision | null>
     private visibleRays: boolean
 
@@ -26,6 +27,7 @@ export default class Sensor extends Drawable {
         this.rayLength = rayLength
         this.raySpread = raySpread
         this.rays = []
+        this.raysAngle = []
         this.collisions = []
         this.visibleRays = visibleRays ?? false
     }
@@ -60,6 +62,23 @@ export default class Sensor extends Drawable {
         return touches.find((touch) => touch.getOffset() === minOffset)!
     }
 
+    getDistanceFromObstacles(shapes: Array<Shape>, fromAngle: number, toAngle: number): number {
+        let distance = Infinity
+
+        for (let i = 0; i < this.rayCount; i++) {
+            if (this.raysAngle[i] >= fromAngle && this.raysAngle[i] <= toAngle) {
+                const collision = this.getReading(this.rays[i], shapes)
+                if (collision === null) {
+                    continue
+                }
+                const offsetValue = collision.getOffset()
+                const distanceFromObstacle = offsetValue * this.rayLength
+                distance = Math.min(distance, distanceFromObstacle)
+            }
+        }
+        return distance
+    }
+
     private castRays() {
         this.rays.length = 0
         const rayRadiants = this.rayCount > 1 ? this.raySpread / (this.rayCount - 1) : 0
@@ -73,6 +92,7 @@ export default class Sensor extends Drawable {
                 this.position.getY() - Math.cos(rayDirection + this.direction) * this.rayLength,
             )
 
+            this.raysAngle.unshift(rayDirection)
             this.rays.unshift(new Shape(start, end))
         }
     }
@@ -83,6 +103,9 @@ export default class Sensor extends Drawable {
         if (!this.visibleRays) {
             return
         }
+
+        // Reset alpha to full opacity for sensor rays
+        context.globalAlpha = 1
 
         for (let i = 0; i < this.rayCount; i++) {
             const start = this.rays[i].getFirst()

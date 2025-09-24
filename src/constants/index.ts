@@ -7,20 +7,30 @@ export const STORAGE_KEYS = {
 } as const
 
 export const CONSTANTS = {
-    deathTimeout: 12000,
-    demeritTimeout: 8000,
+    deathTimeout: 15000,
     gameoverDuration: 3000,
     targetFps: 60,
     networkDrawThrottleMs: 120,
-    viewportYFactor: 0.7,
-    initialTrafficRows: 20,
-    maximumDistanceFromFirstCar: 3000,
+    cameraViewportHeightRatio: 0.7,
+    trafficRows: 20,
 } as const
 
 export const DEFAULTS = {
-    mutationRate: 0.2,
-    carsQuantity: 50,
+    mutationRate: 0.1,
+    carsQuantity: 200,
     networkArchitecture: [4],
+}
+
+export const SCORE = {
+    overtake: 40,
+    turning: 1,
+    breaking: 0.5,
+    distanceTravelled: 0.005,
+    settings: {
+        reactionDistanceThreshold: 300,
+        steeringDegreeReaction: Math.PI / 60,
+        frontAngleToCheckForCars: Math.PI / 4,
+    },
 }
 
 export const HTML_IDS = {
@@ -47,12 +57,19 @@ export const HTML_IDS = {
     },
     info: {
         networkId: 'info-network-id',
-        points: 'info-points',
         record: 'info-record',
         survivedRounds: 'info-survived-rounds',
         remainingCars: 'info-remaining-cars',
         timeout: 'info-timeout',
         pixelsPerSecond: 'info-pixels-per-second',
+        steeringDegree: 'info-steering-degree',
         fps: 'info-fps',
+        score: {
+            overtakesScore: 'info-score-overtakes',
+            breakingsScore: 'info-score-breakings',
+            turningsScore: 'info-score-turnings',
+            distanceScore: 'info-score-distance',
+            totalScore: 'info-score-total',
+        },
     },
 } as const

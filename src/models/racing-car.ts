@@ -1,35 +1,80 @@
+import {
+    getOvertakenCars,
+    isBreakingToAvoidCollision,
+    isTurningToAvoidCollision,
+} from '@libs/score'
 import { Car, type CarProps } from './car'
+import { CarStats } from './car-stats'
 import type Shape from './shape'
+import { Timeout } from './timeout'
+
+type RacingCarProps = CarProps & {
+    timeout: number
+}
 
 export class RacingCar extends Car {
-    private meritPoints: number = 0
-    private demeritPoints: number = 0
-    private checkpoints: number = 0
-    private secondsFromLastCheckpoint: number = 0
-    private points: number = 0
+    private stats: CarStats = new CarStats(this.position)
     private winner: boolean = false
+    private timeout: Timeout
 
-    constructor(props: CarProps) {
+    constructor(props: RacingCarProps) {
         super(props)
+        this.timeout = new Timeout(props.timeout, () => {
+            this.stats.setDeadByTimeout(true)
+            this.crash()
+        })
+        this.timeout.start()
     }
 
-    protected calculatePoints(traffic: Array<Car>) {
-        // Bonus per superare traffico
-        let trafficReward = 0
-        for (let trafficVehicle of traffic) {
-            if (trafficVehicle.getPosition().getY() > this.getPosition().getY()) {
-                trafficReward += 1
-            }
+    crash(): void {
+        super.crash()
+        if (this.timeout) {
+            this.timeout.stop()
         }
-
-        if (trafficReward > this.meritPoints) {
-            this.meritPoints = trafficReward
-        }
-
-        this.points = this.meritPoints - this.demeritPoints
+        this.stats.calculateScore()
     }
 
-    afterDrawing(context: CanvasRenderingContext2D): void {
+    private calculatePoints(traffic: Array<Car>) {
+        const currentOvertakenCars = getOvertakenCars(this, traffic)
+        if (currentOvertakenCars > this.stats.getOvertakenCars()) {
+            this.timeout.reset()
+            this.stats.setOvertakenCars(currentOvertakenCars)
+        }
+
+        const isBreaking = isBreakingToAvoidCollision(this, traffic)
+        if (isBreaking) {
+            this.stats.increaseBreakingsCount()
+            this.stats.markHasBreaked()
+        }
+
+        const isTurning = isTurningToAvoidCollision(this, traffic)
+        if (isTurning) {
+            this.stats.incrementTurningCount()
+        }
+
+        // One-time flags based on direct controls/telemetry
+        const controls = this.getControls()
+        const accel = controls.getAcceleration()
+        if (accel > 0.1) {
+            this.stats.markHasAccelerated()
+        }
+        if (controls.isBreaking()) {
+            this.stats.markHasBreaked()
+        }
+        const steering = controls.getSteering()
+        if (steering < -0.05) {
+            this.stats.markHasTurnedLeft()
+        } else if (steering > 0.05) {
+            this.stats.markHasTurnedRight()
+        }
+
+        this.stats.updateDistanceTravelled(this.position)
+
+        this.stats.calculateScore()
+    }
+
+    protected afterDrawing(context: CanvasRenderingContext2D): void {
+        super.afterDrawing(context)
         context.globalAlpha = 1
         if (!this.winner) {
             return
@@ -47,38 +92,6 @@ export class RacingCar extends Car {
         this.calculatePoints(traffic)
     }
 
-    getDemeritPoints(): number {
-        return this.demeritPoints
-    }
-
-    setDemeritPoints(value: number): void {
-        this.demeritPoints = value
-    }
-
-    addDemeritPoints(value: number): void {
-        this.demeritPoints += value
-    }
-
-    getCheckPoints(): number {
-        return this.checkpoints // checkPoints alias for passedCheckPoints
-    }
-
-    setCheckPoints(value: number): void {
-        this.checkpoints = value
-    }
-
-    getMeritPoints(): number {
-        return this.meritPoints
-    }
-
-    setMeritPoints(value: number): void {
-        this.meritPoints = value
-    }
-
-    getPoints(): number {
-        return this.points
-    }
-
     isWinner(): boolean {
         return this.winner
     }
@@ -87,11 +100,15 @@ export class RacingCar extends Car {
         this.winner = value
     }
 
-    getSecondsFromLastCheckpoint(): number {
-        return this.secondsFromLastCheckpoint
+    getTimeout(): Timeout | null {
+        return this.timeout
     }
 
-    setSecondsFromLastCheckpoint(value: number): void {
-        this.secondsFromLastCheckpoint = value
+    getStats(): CarStats {
+        return this.stats
+    }
+
+    resetStats(): void {
+        this.stats = new CarStats(this.position)
     }
 }

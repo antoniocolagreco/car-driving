@@ -3,6 +3,7 @@ import NeuralNetwork from '@models/neural-network'
 import { RacingCar } from '@models/racing-car'
 import Road from '@models/road'
 import Sensor from '@models/sensor'
+import { CONSTANTS } from '../constants'
 
 export const generateCars = (
     carsQuantity: number,
@@ -14,8 +15,8 @@ export const generateCars = (
     const cars: Array<RacingCar> = []
 
     const features = new Features({
-        maxSpeed: 7,
-        acceleration: 0.03,
+        maxSpeed: 10,
+        acceleration: 0.05,
         maxReverse: 1,
         breakPower: 0.2,
     })
@@ -33,7 +34,14 @@ export const generateCars = (
             network = new NeuralNetwork(sensor.getRayCount() + 1, ...networkArchitecture, 3)
         }
 
-        const car = new RacingCar({ position, features, sensor, network, ghost: true })
+        const car = new RacingCar({
+            position,
+            features,
+            sensor,
+            network,
+            ghost: true,
+            timeout: CONSTANTS.deathTimeout,
+        })
         cars.push(car)
     }
     return cars
@@ -41,31 +49,54 @@ export const generateCars = (
 
 export const getRemainingCars = (cars: Array<RacingCar>) => cars.filter((car) => !car.isDamaged())
 
-export const getActiveCar = (cars: Array<RacingCar>) => {
-    const leadingCarPosition = Math.min(...cars.map((c) => c.getPosition().getY()))
-    const car = cars.find((car) => car.getPosition().getY() === leadingCarPosition)
-    // Reset active state for all cars (ghost + hide rays)
-    cars.forEach((c) => c.setActive(false))
-    // Mark the current leader as active (non-ghost + show rays)
-    if (car) {
-        car.setActive(true)
+/**
+ * Trova l'auto più avanti nella gara.
+ * NOTA: Nel canvas l'asse Y è invertito (0 = top, crescente verso il basso).
+ * Le auto partono con Y alto e "avanzano" diminuendo Y, quindi:
+ * - Auto più avanti = Y più piccola
+ * - Cerchiamo il valore Y minimo per trovare l'auto leader
+ */
+export const getLeadingCar = (cars: Array<RacingCar>) => {
+    let leadingCar: RacingCar | undefined
+    let leadingPosition = +Infinity // Inizializza con +Infinity per trovare il valore Y più piccolo
+
+    for (const car of cars) {
+        car.setActive(false)
+
+        // Y più piccola = auto più avanti (asse Y invertito nel canvas)
+        if (car.getPosition().getY() < leadingPosition) {
+            leadingPosition = car.getPosition().getY()
+            leadingCar = car
+        }
     }
 
-    return car
+    leadingCar?.setActive(true)
+    return leadingCar
 }
 
 export const getBestCar = (cars: Array<RacingCar>) => {
-    // Reset winner flag for all cars
-    cars.forEach((car) => car.setWinner(false))
+    const capableCars = cars.filter((car) => {
+        const stats = car.getStats()
+        if (
+            stats.hasEverAccelerated() &&
+            stats.hasEverTurnedLeft() &&
+            stats.hasEverTurnedRight() &&
+            stats.hasEverBreaked() &&
+            stats.getOvertakenCars() > 0
+        ) {
+            return true
+        }
 
-    const bestScore = Math.max(...cars.map((c) => c.getPoints()))
-    const bestCars = cars.filter((c) => c.getPoints() === bestScore)
-    const mostDistanceCovered = Math.min(...bestCars.map((c) => c.getPosition().getY()))
-    const bestCarLastToDie = bestCars.find(
-        (car) => car.getPosition().getY() === mostDistanceCovered,
-    )
-    if (bestCarLastToDie) {
-        bestCarLastToDie.setWinner(true)
+        return false
+    })
+
+    let bestScore = 0
+    for (const car of capableCars) {
+        car.setWinner(false)
+        bestScore = Math.max(bestScore, car.getStats().getTotalScore())
     }
-    return bestCarLastToDie
+    const bestCar = cars.find((car) => car.getStats().getTotalScore() === bestScore)
+
+    bestCar?.setWinner(true)
+    return bestCar
 }

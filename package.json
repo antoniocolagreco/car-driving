@@ -8,9 +8,10 @@
         "build": "astro check && astro build",
         "preview": "astro preview",
         "astro": "astro",
-        "deploy:github": "astro build && node ./scripts/deploy-github",
+        "typecheck": "tsc --noEmit",
         "lint": "eslint \"src/**/*.{ts,tsx}\"",
         "lint:fix": "pnpm lint --fix",
+        "validate": "pnpm typecheck && pnpm lint",
         "format": "prettier --write .",
         "format:check": "prettier --check ."
     },

@@ -14,7 +14,7 @@ export default class NeuralNetwork {
     private layers: Array<Layer>
     private architecture: ReadonlyArray<number>
     private survivedRounds: number = 0
-    private pointsRecord: number = 0
+    private bestScore: number = 0
 
     // L'array che gli passiamo imposta il numero di neuroni per ogni layer
     constructor(...neuronCount: Array<number>) {
@@ -193,8 +193,12 @@ export default class NeuralNetwork {
         return this.survivedRounds
     }
 
-    getPointsRecord(): number {
-        return this.pointsRecord
+    getBestScore(): number {
+        return this.bestScore
+    }
+
+    getFormattedBestScore(): string {
+        return Math.floor(this.bestScore).toString()
     }
 
     setSurvivedRounds(value: number) {
@@ -202,7 +206,17 @@ export default class NeuralNetwork {
     }
 
     setPointsRecord(value: number) {
-        this.pointsRecord = value
+        this.bestScore = value
+    }
+
+    // Aggiorna il record dei punti solo se il nuovo valore è maggiore
+    // Ritorna true se il record è stato aggiornato, altrimenti false
+    updatePointsRecordIfBetter(newPoints: number): boolean {
+        if (newPoints > this.bestScore) {
+            this.bestScore = newPoints
+            return true
+        }
+        return false
     }
 
     // Serialization/Deserialization methods
@@ -221,7 +235,7 @@ export default class NeuralNetwork {
         const network = new NeuralNetwork(...jsonData.architecture)
         network.id = jsonData.id
         network.survivedRounds = jsonData.survivedRounds
-        network.pointsRecord = jsonData.pointsRecord
+        network.bestScore = jsonData.pointsRecord
 
         // Ricostruisci i layer correttamente
         network.layers = []
@@ -270,7 +284,7 @@ export default class NeuralNetwork {
             id: this.id,
             architecture: this.architecture,
             survivedRounds: this.survivedRounds,
-            pointsRecord: this.pointsRecord,
+            pointsRecord: this.bestScore,
             layers: this.layers.map((layer) => ({
                 inputs: layer.getInputs(),
                 outputs: layer.getOutputs(),

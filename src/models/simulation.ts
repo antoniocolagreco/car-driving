@@ -1,160 +1,210 @@
 import { CONSTANTS } from '../constants'
 import Persistence from '../libs/persistence'
-import { generateCars, getActiveCar, getBestCar, getRemainingCars } from '../libs/simulation'
+import { generateCars, getLeadingCar, getBestCar, getRemainingCars } from '../libs/simulation'
 import { generateTraffic } from '../libs/traffic'
-import type { Car } from './car'
 import NeuralNetwork from './neural-network'
-import type { RacingCar } from './racing-car'
+import type { SimulationConfig } from './simulation-config'
+import { SimulationState } from './simulation-state'
 import type World from './world'
 
-export interface SimulationState {
-    allCars: RacingCar[]
-    traffic: Car[]
-    remainingCars: RacingCar[]
-    activeCar?: RacingCar
-    bestCar?: RacingCar
-    gameover: boolean
-    gameoverAt: number | null
-    trafficCounter: number
-}
-
-export interface SimulationConfig {
-    mutationRate: number
-    carsQuantity: number
-    networkArchitecture: number[]
-}
-
+/**
+ * Gestisce l'intera simulazione di auto a guida autonoma
+ * Coordina la generazione delle auto, il traffico, l'evoluzione delle reti neurali
+ * e il ciclo di vita della simulazione (restart, game over, evoluzione)
+ */
 export class Simulation {
-    private state: SimulationState
+    /** Il mondo virtuale contenente la mappa e la strada */
+    private world: World
+    /** Configurazione della simulazione (numero auto, tasso mutazione, ecc.) */
     private config: SimulationConfig
-    private deathCheckInterval?: ReturnType<typeof setInterval>
-    private demeritCheckInterval?: ReturnType<typeof setInterval>
+    /** Stato corrente della simulazione (auto attiva, traffico, punteggi, ecc.) */
+    private state: SimulationState
 
-    constructor(
-        private world: World,
-        config: SimulationConfig,
-    ) {
+    /**
+     * Crea una nuova simulazione e la avvia immediatamente
+     * @param world - Il mondo in cui far girare la simulazione
+     * @param config - La configurazione iniziale della simulazione
+     */
+    constructor(world: World, config: SimulationConfig) {
+        this.world = world
         this.config = config
-        this.state = {
-            allCars: [],
-            traffic: [],
-            remainingCars: [],
-            activeCar: undefined,
-            bestCar: undefined,
-            gameover: false,
-            gameoverAt: null,
-            trafficCounter: 0,
-        }
+        this.state = new SimulationState()
+        this.restart()
     }
 
+    /** Restituisce lo stato corrente della simulazione */
     getState(): SimulationState {
-        return { ...this.state }
+        return this.state
     }
 
-    updateConfig(config: Partial<SimulationConfig>): void {
-        this.config = { ...this.config, ...config }
+    /** Aggiorna la configurazione della simulazione */
+    updateConfig(config: SimulationConfig): void {
+        this.config = config
     }
 
+    /**
+     * Riavvia completamente la simulazione:
+     * - Resetta lo stato di game over
+     * - Carica la migliore rete neurale salvata
+     * - Genera nuove auto con mutazioni della rete migliore
+     * - Crea nuovo traffico casuale
+     */
     restart(): void {
-        this.state.gameover = false
-        this.state.gameoverAt = null
+        this.state.setGameover(false)
+        this.state.setGameoverAt(null)
+
+        // Carica la migliore rete neurale salvata in precedenza
         let bestNetwork = Persistence.loadBestNetwork()
 
-        const activeNetwork = this.state.activeCar?.getNetwork()
+        // Confronta la rete neurale dell'auto attiva con quella salvata
+        // Se l'auto attiva ha ottenuto un punteggio migliore, la usa come base
+        const activeNetwork = this.state.getActiveCar()?.getNetwork()
 
         if (activeNetwork && bestNetwork) {
-            const activeNetworkPoints = activeNetwork.getPointsRecord()
-            const bestNetworkPoints = bestNetwork.getPointsRecord()
+            const activeNetworkPoints = activeNetwork.getBestScore()
+            const bestNetworkPoints = bestNetwork.getBestScore()
 
             if (activeNetworkPoints > bestNetworkPoints) {
                 bestNetwork = activeNetwork
             }
         }
 
-        this.stopTimers()
-
-        this.state.allCars = generateCars(
-            this.config.carsQuantity,
-            this.config.networkArchitecture,
-            this.world.getRoad(),
-            bestNetwork,
-            this.config.mutationRate,
+        // Genera una nuova popolazione di auto basata sulla migliore rete neurale
+        this.state.setAllCars(
+            generateCars(
+                this.config.getCarsQuantity(),
+                this.config.getNetworkArchitecture(),
+                this.world.getRoad(),
+                bestNetwork,
+                this.config.getMutationRate(),
+            ),
         )
-        this.state.remainingCars = this.state.allCars
-        // Ensure all start inactive (ghost)
-        this.state.remainingCars.forEach((c) => c.setActive(false))
-        // Mark the first alive car as active
-        this.state.activeCar = this.state.remainingCars[0]
-        this.state.trafficCounter = 0
 
-        if (this.state.activeCar) {
-            this.state.activeCar.setFillStyle('white')
-            this.state.activeCar.setActive(true)
+        // Inizializza lo stato delle auto
+        this.state.setRemainingCars(this.state.getAllCars())
+        // Tutte le auto iniziano inattive (come "fantasmi")
+        this.state.getRemainingCars().forEach((c) => c.setActive(false))
+        // La prima auto diventa quella attiva (quella che seguiamo)
+        this.state.setActiveCar(this.state.getRemainingCars()[0])
+        this.state.setTrafficCounter(0)
+
+        // Configura l'auto attiva (quella che seguiamo con la telecamera)
+        if (this.state.getActiveCar()) {
+            this.state.getActiveCar()!.setFillStyle('white') // Colore bianco per distinguerla
+            this.state.getActiveCar()!.setActive(true)
         }
 
-        if (bestNetwork && this.state.activeCar) {
-            this.state.activeCar.setNetwork(bestNetwork)
-            if (this.state.activeCar.getNetwork()) {
-                for (let index = 1; index < this.state.allCars.length; index++) {
-                    this.state.remainingCars[index].setNetwork(
-                        NeuralNetwork.getMutatedNetwork(bestNetwork, this.config.mutationRate),
-                    )
+        // Assegna le reti neurali alle auto
+        if (bestNetwork && this.state.getActiveCar()) {
+            // L'auto attiva usa la migliore rete neurale senza mutazioni
+            this.state.getActiveCar()!.setNetwork(bestNetwork)
+
+            if (this.state.getActiveCar()!.getNetwork()) {
+                // Tutte le altre auto ricevono versioni mutate della rete migliore
+                // Questo crea diversità genetica nella popolazione
+                for (let index = 1; index < this.state.getAllCars().length; index++) {
+                    this.state
+                        .getRemainingCars()
+                        [
+                            index
+                        ].setNetwork(NeuralNetwork.getMutatedNetwork(bestNetwork, this.config.getMutationRate()))
                 }
             }
         }
 
-        this.state.traffic = generateTraffic(CONSTANTS.initialTrafficRows, this.world.getRoad())
-        this.startTimers()
-
-        // if (this.networkContext && this.state.activeCar?.getNetwork()) {
-        //     Visualizer.drawNetworkIn(this.networkContext, this.state.activeCar.getNetwork()!)
-        // }
+        // Genera il traffico casuale sulla strada
+        this.state.setTraffic(generateTraffic(CONSTANTS.trafficRows, this.world.getRoad()))
     }
 
+    /**
+     * Termina il round corrente e avvia il timer per il game over
+     * Dopo alcuni secondi la simulazione si riavvierà automaticamente
+     */
     endRound(): void {
-        this.state.gameover = true
-        this.state.gameoverAt = performance.now()
+        this.state.setGameover(true)
+        this.state.setGameoverAt(performance.now())
     }
 
+    /**
+     * Aggiorna lo stato della simulazione ad ogni frame:
+     * - Calcola quali auto sono ancora vive
+     * - Identifica l'auto con il punteggio migliore
+     * - Aggiorna l'auto attiva (quella seguita dalla telecamera)
+     * - Mantiene aggiornato il record di punteggio della rete neurale
+     */
     update(): void {
-        this.state.remainingCars = getRemainingCars(this.state.allCars)
-        this.state.bestCar = getBestCar(this.state.allCars)
-        this.state.activeCar = this.state.gameover
-            ? this.state.bestCar
-            : getActiveCar(this.state.remainingCars)
-
-        // Aggiorna continuamente il record di punti della rete attiva
-        if (this.state.activeCar?.getNetwork()) {
-            const network = this.state.activeCar.getNetwork()!
-            const currentPoints = this.state.activeCar.getPoints()
-            if (currentPoints > network.getPointsRecord()) {
-                network.setPointsRecord(currentPoints)
-            }
+        // Filtra le auto ancora in gioco (non morte)
+        this.state.setRemainingCars(getRemainingCars(this.state.getAllCars()))
+        // Trova l'auto con il punteggio più alto
+        this.state.setBestCar(getBestCar(this.state.getAllCars()))
+        // Seleziona quale auto seguire: la migliore se è game over, altrimenti una viva
+        if (this.state.isGameover() && this.state.getBestCar()) {
+            this.state.setActiveCar(this.state.getBestCar())
+        } else {
+            this.state.setActiveCar(getLeadingCar(this.state.getRemainingCars()))
         }
+
+        // Aggiorna continuamente il record di punti della rete neurale attiva
+        // Questo serve per tenere traccia del miglior punteggio mai raggiunto
+        const activeCar = this.state.getActiveCar()
+        if (!activeCar) {
+            return
+        }
+
+        const network = activeCar.getNetwork()
+        if (!network) {
+            return
+        }
+
+        const currentPoints = activeCar.getStats().getTotalScore()
+        network.updatePointsRecordIfBetter(currentPoints)
     }
 
-    checkGameOver(timestamp: number): boolean {
+    /**
+     * Controlla le condizioni di game over e gestisce il riavvio automatico:
+     * 1. Se è già game over, aspetta il tempo di visualizzazione e poi riavvia
+     * 2. Se non ci sono più auto vive, salva la migliore rete e termina il round
+     *
+     * @param currentTimestamp - Timestamp corrente per calcolare la durata del game over
+     * @returns true se la simulazione è stata riavviata, false altrimenti
+     */
+    checkGameOver(currentTimestamp: number): boolean {
+        const isGameover = this.state.isGameover()
+        const gameoverTimestamp = this.state.getGameoverAt()
+
+        // Se è game over e sono passati abbastanza secondi, riavvia la simulazione
         if (
-            this.state.gameover &&
-            this.state.gameoverAt !== null &&
-            timestamp - this.state.gameoverAt >= CONSTANTS.gameoverDuration
+            isGameover &&
+            gameoverTimestamp &&
+            currentTimestamp - gameoverTimestamp >= CONSTANTS.gameoverDuration
         ) {
             this.restart()
-            this.state.gameoverAt = null
+            this.state.setGameoverAt(null)
             return true
         }
 
-        if (this.state.remainingCars.length === 0 && !this.state.gameover) {
-            if (this.state.bestCar?.getNetwork()) {
-                const network = this.state.bestCar.getNetwork()
-                if (network) {
-                    network.setSurvivedRounds(network.getSurvivedRounds() + 1)
-                    // Aggiorna il record di punti solo se è maggiore del precedente
-                    const currentPoints = this.state.bestCar.getPoints()
-                    if (currentPoints > network.getPointsRecord()) {
-                        network.setPointsRecord(currentPoints)
-                    }
-                    Persistence.saveBestNetwork(network)
+        const remainingCars = this.state.getRemainingCars()
+        const bestCar = this.state.getBestCar()
+
+        // Se tutte le auto sono morte, gestisci il risultato del round
+        if (remainingCars.length === 0 && !isGameover) {
+            if (bestCar) {
+                // C'è una vincitrice: salva la sua rete e continua l'evoluzione
+                const bestNetwork = bestCar.getNetwork()
+                if (bestNetwork) {
+                    bestNetwork.setSurvivedRounds(bestNetwork.getSurvivedRounds() + 1)
+                    const currentPoints = bestCar.getStats().getTotalScore()
+                    bestNetwork.updatePointsRecordIfBetter(currentPoints)
+                    Persistence.saveBestNetwork(bestNetwork)
+                }
+            } else {
+                // Nessuna auto ha vinto il round - il messaggio verrà mostrato sul canvas
+
+                // Prova a ricaricare il seed precedente
+                const previousSeed = Persistence.loadBestNetwork()
+                if (!previousSeed) {
+                    // Se non c'è un seed precedente, rimuovi tutto per forzare la rigenerazione
+                    Persistence.clearBestNetwork()
                 }
             }
             this.endRound()
@@ -166,74 +216,34 @@ export class Simulation {
 
     updateVehicles(): void {
         // Update AI-controlled cars
-        for (const car of this.state.allCars) {
-            car.updateStatus(this.state.traffic, this.world.getRoad().getBorders())
+        for (const car of this.state.getAllCars()) {
+            car.updateStatus(this.state.getTraffic(), this.world.getRoad().getBorders())
         }
 
         // Update traffic vehicles
-        for (const vehicle of this.state.traffic) {
-            vehicle.updateStatus(this.state.traffic, this.world.getRoad().getBorders())
+        for (const vehicle of this.state.getTraffic()) {
+            vehicle.updateStatus(this.state.getTraffic(), this.world.getRoad().getBorders())
         }
     }
 
-    private startTimers(): void {
-        // Death check interval
-        this.deathCheckInterval = setInterval(() => {
-            const firstCar = getActiveCar(this.state.remainingCars)
-            for (const car of this.state.remainingCars) {
-                const t = this.state.traffic[this.state.trafficCounter]
-                if (t && car.getPosition().getY() > t.getPosition().getY()) {
-                    car.crash()
-                }
-                if (
-                    firstCar &&
-                    car.getPosition().getY() - CONSTANTS.maximumDistanceFromFirstCar >
-                        firstCar.getPosition().getY()
-                ) {
-                    car.crash()
-                }
-                if (car.getMeritPoints() === car.getCheckPoints()) {
-                    car.addDemeritPoints(1)
-                } else {
-                    car.setDemeritPoints(0)
-                }
-                car.setCheckPoints(car.getMeritPoints())
-            }
-            this.state.trafficCounter += 1
-        }, CONSTANTS.deathTimeout)
-
-        // Demerit check interval
-        this.demeritCheckInterval = setInterval(() => {
-            for (const car of this.state.remainingCars) {
-                if (car.getMeritPoints() <= car.getCheckPoints()) {
-                    car.addDemeritPoints(1)
-                } else {
-                    car.setDemeritPoints(0)
-                }
-                car.setCheckPoints(car.getMeritPoints())
-            }
-        }, CONSTANTS.demeritTimeout)
-    }
-
-    private stopTimers(): void {
-        if (this.deathCheckInterval) {
-            clearInterval(this.deathCheckInterval)
-            this.deathCheckInterval = undefined
-        }
-        if (this.demeritCheckInterval) {
-            clearInterval(this.demeritCheckInterval)
-            this.demeritCheckInterval = undefined
-        }
-    }
-
+    /**
+     * Salva un backup della rete neurale dell'auto attiva
+     * Utile per fare un "salvataggio manuale" prima di sperimentare
+     * @returns true se il salvataggio è riuscito, false altrimenti
+     */
     saveNetwork(): boolean {
-        if (this.state.activeCar?.getNetwork()) {
-            Persistence.saveNetworkBackup(this.state.activeCar.getNetwork()!)
+        if (this.state.getActiveCar()?.getNetwork()) {
+            Persistence.saveNetworkBackup(this.state.getActiveCar()!.getNetwork()!)
             return true
         }
         return false
     }
 
+    /**
+     * Ripristina l'ultimo backup della rete neurale salvato
+     * Lo imposta come nuova "migliore rete" per la prossima generazione
+     * @returns true se il ripristino è riuscito, false se non c'era alcun backup
+     */
     restoreNetwork(): boolean {
         const restored = Persistence.loadNetworkBackup()
         if (restored) {
@@ -243,24 +253,39 @@ export class Simulation {
         return false
     }
 
+    /**
+     * Cancella completamente la migliore rete neurale salvata
+     * La prossima simulazione ripartirà da zero con reti casuali
+     */
     resetNetwork(): void {
         Persistence.clearBestNetwork()
     }
 
+    /**
+     * Forza l'evoluzione salvando manualmente la rete dell'auto migliore
+     * Incrementa i round sopravvissuti e aggiorna il record di punteggio
+     * Utile quando l'utente vuole "promuovere" una rete promettente
+     * @returns true se l'evoluzione è riuscita, false altrimenti
+     */
     evolveNetwork(): boolean {
-        if (this.state.bestCar?.getNetwork()) {
-            const network = this.state.bestCar.getNetwork()!
-            const currentPoints = this.state.bestCar.getPoints()
+        if (this.state.getBestCar()?.getNetwork()) {
+            const bestCar = this.state.getBestCar()
+            if (!bestCar) {
+                return false
+            }
+            const bestNetwork = bestCar.getNetwork()
+            if (!bestNetwork) {
+                return false
+            }
+            const bestNetworkPoints = bestCar.getStats().getTotalScore()
 
             // Incrementa i survived rounds quando si evolve manualmente
-            network.setSurvivedRounds(network.getSurvivedRounds() + 1)
+            bestNetwork.setSurvivedRounds(bestNetwork.getSurvivedRounds() + 1)
 
             // Aggiorna il record di punti se è maggiore
-            if (currentPoints > network.getPointsRecord()) {
-                network.setPointsRecord(currentPoints)
-            }
+            bestNetwork.updatePointsRecordIfBetter(bestNetworkPoints)
 
-            Persistence.saveBestNetwork(network)
+            Persistence.saveBestNetwork(bestNetwork)
             return true
         }
         return false
