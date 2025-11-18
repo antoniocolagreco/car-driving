@@ -12,7 +12,7 @@
         "typecheck": "tsc --noEmit",
         "lint": "eslint \"src/**/*.{ts,tsx}\"",
         "lint:fix": "pnpm lint --fix",
-        "validate": "pnpm typecheck && pnpm lint",
+        "validate": "astro check && pnpm typecheck && pnpm lint",
         "format": "prettier --write .",
         "format:check": "prettier --check ."
     },
@@ -32,7 +32,6 @@
         "@typescript-eslint/parser": "^8.4.0",
         "eslint": "^9.8.0",
         "eslint-plugin-unicorn": "^56.0.0",
-        "node": "^21.7.3",
         "prettier": "^3.3.3"
     }
 }

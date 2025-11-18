@@ -16,6 +16,8 @@ export class UIController {
     private mutationRate: number
     private carsQuantity: number
     private networkArchitecture: Array<number>
+    private sensorCount: number
+    private sensorSpread: number
 
     constructor(
         private abortController: AbortController,
@@ -25,6 +27,8 @@ export class UIController {
         this.mutationRate = Persistence.loadMutationRate()
         this.carsQuantity = Persistence.loadCarsQuantity()
         this.networkArchitecture = Persistence.loadNetworkArchitecture()
+        this.sensorCount = Persistence.loadSensorCount()
+        this.sensorSpread = Persistence.loadSensorSpread()
     }
 
     setupEventListeners(): void {
@@ -139,11 +143,12 @@ export class UIController {
         if (infoSteeringDegree) {
             const absoluteSteeringValue = state.getActiveCar()?.getAbsoluteSteeringDegree() ?? 0
             const absoluteSteeringLabel = absoluteSteeringValue.toFixed(2)
-            const steeringValue = state.getActiveCar()?.getSteeringDegree() ?? 0
-            const steeringLabel =
-                steeringValue >= 0 ? `+${steeringValue.toFixed(2)}` : `${steeringValue.toFixed(2)}`
+            // const steeringValue = state.getActiveCar()?.getSteeringDegree() ?? 0
+            // const steeringLabel =
+            // steeringValue >= 0 ? `+${steeringValue.toFixed(2)}` : `${steeringValue.toFixed(2)}`
 
-            infoSteeringDegree.innerHTML = `${absoluteSteeringLabel}° (${steeringLabel}°)`
+            // infoSteeringDegree.innerHTML = `${absoluteSteeringLabel}° (${steeringLabel}°)`
+            infoSteeringDegree.innerHTML = `${absoluteSteeringLabel}°`
         }
 
         const infoFps = document.querySelector(`#${HTML_IDS.info.fps}`)
@@ -168,6 +173,18 @@ export class UIController {
         const neuronsInput = document.querySelector(
             `#${HTML_IDS.inputs.networkArchitectureInput}`,
         ) as HTMLInputElement | null
+        const sensorsCountInput = document.querySelector(
+            `#${HTML_IDS.inputs.sensorsQuantityInput}`,
+        ) as HTMLInputElement | null
+        const sensorsCountValue = document.querySelector(
+            `#${HTML_IDS.inputs.sensorsQuantityValue}`,
+        ) as HTMLSpanElement | null
+        const sensorsSpreadRange = document.querySelector(
+            `#${HTML_IDS.inputs.sensorsAngleRange}`,
+        ) as HTMLInputElement | null
+        const sensorsSpreadValue = document.querySelector(
+            `#${HTML_IDS.inputs.sensorsAngleValue}`,
+        ) as HTMLSpanElement | null
 
         if (mutationValue) {
             mutationValue.innerText = `${Math.round(this.mutationRate * 100)}%`
@@ -184,11 +201,27 @@ export class UIController {
         if (neuronsInput) {
             neuronsInput.value = this.networkArchitecture.join(',')
         }
+        if (sensorsCountInput) {
+            sensorsCountInput.value = `${this.sensorCount}`
+        }
+        if (sensorsCountValue) {
+            sensorsCountValue.innerText = `${this.sensorCount}`
+        }
+        const spreadDeg = Math.round((this.sensorSpread * 180) / Math.PI)
+        const clampedDeg = Math.min(360, Math.max(30, spreadDeg))
+
+        if (sensorsSpreadRange) {
+            sensorsSpreadRange.value = `${clampedDeg}`
+        }
+        if (sensorsSpreadValue) {
+            sensorsSpreadValue.innerText = `${clampedDeg}°`
+        }
     }
 
     private setupSliders(): void {
         this.setupMutationRateSlider()
         this.setupCarsQuantitySlider()
+        this.setupSensorSpreadSlider()
     }
 
     private setupMutationRateSlider(): void {
@@ -240,6 +273,32 @@ export class UIController {
         )
     }
 
+    private setupSensorSpreadSlider(): void {
+        const sensorsSpreadRange = document.querySelector(
+            `#${HTML_IDS.inputs.sensorsAngleRange}`,
+        ) as HTMLInputElement | null
+        const sensorsSpreadValue = document.querySelector(
+            `#${HTML_IDS.inputs.sensorsAngleValue}`,
+        ) as HTMLSpanElement | null
+
+        sensorsSpreadRange?.addEventListener(
+            'input',
+            () => {
+                if (!sensorsSpreadRange || !sensorsSpreadValue) {
+                    return
+                }
+                const degrees = Number(sensorsSpreadRange.value)
+                const radians = (degrees * Math.PI) / 180
+                sensorsSpreadValue.innerText = `${degrees}°`
+                this.sensorSpread = radians
+                Persistence.saveSensorSpread(this.sensorSpread)
+                this.simulationConfig.setSensorSpread(this.sensorSpread)
+                this.onAction('network-restart')
+            },
+            { signal: this.abortController.signal },
+        )
+    }
+
     private setupButtons(): void {
         document
             .querySelector(`#${HTML_IDS.buttons.saveNetwork}`)
@@ -276,6 +335,12 @@ export class UIController {
         const neuronsInput = document.querySelector(
             `#${HTML_IDS.inputs.networkArchitectureInput}`,
         ) as HTMLInputElement | null
+        const sensorsCountInput = document.querySelector(
+            `#${HTML_IDS.inputs.sensorsQuantityInput}`,
+        ) as HTMLInputElement | null
+        const sensorsCountValue = document.querySelector(
+            `#${HTML_IDS.inputs.sensorsQuantityValue}`,
+        ) as HTMLSpanElement | null
 
         neuronsInput?.addEventListener(
             'keypress',
@@ -297,6 +362,30 @@ export class UIController {
                     this.simulationConfig.setNetworkArchitecture(this.networkArchitecture)
                     this.onAction('network-restart')
                 }
+            },
+            { signal: this.abortController.signal },
+        )
+
+        sensorsCountInput?.addEventListener(
+            'input',
+            () => {
+                if (!sensorsCountInput) {
+                    return
+                }
+                const parsed = Number(sensorsCountInput.value)
+                if (!Number.isFinite(parsed)) {
+                    sensorsCountInput.value = `${this.sensorCount}`
+                    return
+                }
+                const sanitized = Math.min(36, Math.max(3, Math.round(parsed)))
+                sensorsCountInput.value = `${sanitized}`
+                if (sensorsCountValue) {
+                    sensorsCountValue.innerText = `${sanitized}`
+                }
+                this.sensorCount = sanitized
+                Persistence.saveSensorCount(this.sensorCount)
+                this.simulationConfig.setSensorCount(this.sensorCount)
+                this.onAction('network-restart')
             },
             { signal: this.abortController.signal },
         )

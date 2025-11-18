@@ -21,7 +21,6 @@ export class RacingCar extends Car {
     constructor(props: RacingCarProps) {
         super(props)
         this.timeout = new Timeout(props.timeout, () => {
-            this.stats.setDeadByTimeout(true)
             this.crash()
         })
         this.timeout.start()

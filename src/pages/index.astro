@@ -2,8 +2,6 @@
 import {
     ChevronsUpIcon,
     FolderIcon,
-    SquareIcon,
-    PlayIcon,
     RedoIcon,
     SaveIcon,
     TrashIcon,
@@ -118,6 +116,34 @@ const { class: className, ...rest } = Astro.props
                     >Deep Layers</label
                 >
                 <Input id={HTML_IDS.inputs.networkArchitectureInput} class="w-36" />
+            </ControlBox>
+            <ControlBox>
+                <label for={HTML_IDS.inputs.sensorsQuantityInput} class="text-sm"
+                    >Sensors: <span id={HTML_IDS.inputs.sensorsQuantityValue}></span></label
+                >
+                <Range
+                    id={HTML_IDS.inputs.sensorsQuantityInput}
+                    type="range"
+                    min="3"
+                    max="36"
+                    value="5"
+                    step="1"
+                    class="w-36"
+                />
+            </ControlBox>
+            <ControlBox>
+                <label for={HTML_IDS.inputs.sensorsAngleRange} class="text-sm"
+                    >Sensor Spread: <span id={HTML_IDS.inputs.sensorsAngleValue}></span></label
+                >
+                <Range
+                    id={HTML_IDS.inputs.sensorsAngleRange}
+                    type="range"
+                    min="30"
+                    max="360"
+                    value="90"
+                    step="5"
+                    class="w-36"
+                />
             </ControlBox>
         </menu>
         <div id={HTML_IDS.appContainer} class="h-full relative" aria-live="polite" {...rest}>

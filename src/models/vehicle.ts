@@ -1,8 +1,8 @@
 import {
-    booleanThreshold,
     checkPolygonsIntersection,
     getRandomColor,
     normalizeWithThreshold,
+    threshold,
 } from '../libs/utils'
 import Controls from './controls'
 import Drawable, { type DrawableProps } from './drawable'
@@ -165,7 +165,7 @@ export default class Vehicle extends Drawable {
         const outputs = NeuralNetwork.feedForward(offsets, this.network)
 
         this.controls.setAcceleration(outputs[0])
-        this.controls.setBraking(booleanThreshold(outputs[1], 0.5))
+        this.controls.setBraking(Boolean(threshold(outputs[1], 0.5)))
         this.controls.setSteering(outputs[2])
     }
 

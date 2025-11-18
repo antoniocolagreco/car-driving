@@ -76,4 +76,37 @@ export default class Persistence {
     static saveNetworkArchitecture(networkArchitecture: string): void {
         localStorage.setItem(STORAGE_KEYS.networkArchitecture, networkArchitecture)
     }
+
+    static loadSensorCount(): number {
+        const sensorCountString = localStorage.getItem(STORAGE_KEYS.sensorCount)
+        const parsed = sensorCountString ? Number(sensorCountString) : DEFAULTS.sensorCount
+        if (!Number.isFinite(parsed)) {
+            return DEFAULTS.sensorCount
+        }
+        return Math.min(36, Math.max(3, Math.round(parsed)))
+    }
+
+    static saveSensorCount(sensorCount: number): void {
+        localStorage.setItem(STORAGE_KEYS.sensorCount, String(sensorCount))
+    }
+
+    static loadSensorSpread(): number {
+        const sensorSpreadString = localStorage.getItem(STORAGE_KEYS.sensorSpread)
+        const parsed = sensorSpreadString ? Number(sensorSpreadString) : DEFAULTS.sensorSpread
+        if (!Number.isFinite(parsed)) {
+            return DEFAULTS.sensorSpread
+        }
+        const twoPi = Math.PI * 2
+        if (parsed < 0) {
+            return 0
+        }
+        if (parsed > twoPi) {
+            return twoPi
+        }
+        return parsed
+    }
+
+    static saveSensorSpread(sensorSpread: number): void {
+        localStorage.setItem(STORAGE_KEYS.sensorSpread, String(sensorSpread))
+    }
 }

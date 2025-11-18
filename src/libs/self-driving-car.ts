@@ -46,6 +46,8 @@ export function createSimulation(element: HTMLElement): SimulationControls {
         Persistence.loadMutationRate(),
         Persistence.loadCarsQuantity(),
         Persistence.loadNetworkArchitecture(),
+        Persistence.loadSensorCount(),
+        Persistence.loadSensorSpread(),
     )
 
     const simulation = new Simulation(world, simulationConfig)
@@ -98,7 +100,7 @@ export function createSimulation(element: HTMLElement): SimulationControls {
             simulation.updateVehicles()
 
             // Render everything
-            renderer.render(state, timestamp)
+            renderer.render(state)
 
             // Update HUD
             const currentFps = frameLoop.getCurrentFps()

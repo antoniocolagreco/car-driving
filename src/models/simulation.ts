@@ -77,6 +77,8 @@ export class Simulation {
                 this.world.getRoad(),
                 bestNetwork,
                 this.config.getMutationRate(),
+                this.config.getSensorCount(),
+                this.config.getSensorSpread(),
             ),
         )
 

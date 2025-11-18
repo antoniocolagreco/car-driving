@@ -1,16 +1,16 @@
 ---
-import type { HTMLAttributes } from 'astro/types'
+import type { HTMLAttributes } from "astro/types";
 
-type Props = HTMLAttributes<'div'> & {
-    label?: string
-}
-const { class: className, title, id, label, ...otherProps } = Astro.props
+type Props = HTMLAttributes<"div"> & {
+    label?: string;
+};
+const { class: className, title, id, label, ...otherProps } = Astro.props;
 ---
 
 <div
     title={title}
     class:list={[
-        'border border-white/50 p-2 flex flex-col gap-1 rounded antialiased grow overflow-hidden backdrop-blur-sm bg-black/30 text-sm',
+        "border border-white/50 p-2 flex flex-col gap-1 rounded antialiased grow overflow-hidden backdrop-blur-sm bg-black/30 text-sm",
         className,
     ]}
     {...otherProps}

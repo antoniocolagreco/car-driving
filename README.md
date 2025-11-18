@@ -30,10 +30,10 @@ An advanced neural network-powered car racing simulation built with **Astro**, *
 ### 📊 **Advanced Scoring System**
 
 - **Multi-factor scoring** based on:
-  - 🏁 **Overtakes**: Points for passing traffic cars
-  - 🚙 **Smart braking**: Rewards for collision avoidance
-  - 🔄 **Intelligent turning**: Points for evasive maneuvers
-  - 📏 **Distance traveled**: Progression rewards
+    - 🏁 **Overtakes**: Points for passing traffic cars
+    - 🚙 **Smart braking**: Rewards for collision avoidance
+    - 🔄 **Intelligent turning**: Points for evasive maneuvers
+    - 📏 **Distance traveled**: Progression rewards
 - **Real-time statistics** and performance tracking
 - **Timeout system** to prevent infinite rounds
 

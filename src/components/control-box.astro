@@ -7,7 +7,10 @@ const { class: className, ...otherProps } = Astro.props
 ---
 
 <div
-    class:list={['grid gap-1 border border-white/40 rounded-md p-2 bg-white/10', className]}
+    class:list={[
+        'grid gap-1 border border-white/40 rounded-md p-2 bg-white/10 grow max-w-48',
+        className,
+    ]}
     {...otherProps}
 >
     <slot />

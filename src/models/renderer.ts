@@ -14,7 +14,6 @@ export interface Viewport {
 }
 
 export class Renderer {
-    private lastNetworkDrawAt = 0
     private simulationCanvas: Canvas
     private networkCanvas: Canvas
     private simulationContext: CanvasRenderingContext2D | null
@@ -87,7 +86,7 @@ export class Renderer {
         }
     }
 
-    render(state: SimulationState, timestamp: number): void {
+    render(state: SimulationState): void {
         if (!this.simulationContext) {
             return
         }
@@ -132,10 +131,10 @@ export class Renderer {
         }
 
         // Draw neural network visualization for active car
-        this.renderNeuralNetwork(state.getActiveCar(), timestamp)
+        this.renderNeuralNetwork(state.getActiveCar())
     }
 
-    private renderNeuralNetwork(activeCar?: Vehicle, timestamp: number = 0): void {
+    private renderNeuralNetwork(activeCar?: Vehicle): void {
         if (!this.networkContext || !activeCar?.getNetwork()) {
             return
         }
@@ -148,7 +147,6 @@ export class Renderer {
             this.networkCanvas.getElement().height,
         )
         Visualizer.drawNetworkIn(this.networkContext, activeCar.getNetwork()!)
-        this.lastNetworkDrawAt = timestamp
     }
 
     initialNetworkRender(activeCar?: Vehicle): void {

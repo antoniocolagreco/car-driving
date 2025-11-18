@@ -17,7 +17,6 @@ export class CarStats {
     private hasTurnedLeft: boolean = false
     private hasTurnedRight: boolean = false
     private hasAccelerated: boolean = false
-    private deadByTimeout: boolean = false
 
     private distanceScore: number
     private timeoutScore: number
@@ -136,10 +135,6 @@ export class CarStats {
             currentPosition.getX() - this.initialDrivingPosition.getX(),
             currentPosition.getY() - this.initialDrivingPosition.getY(),
         )
-    }
-
-    setDeadByTimeout(value: boolean): void {
-        this.deadByTimeout = value
     }
 
     getOvertakesScore(): number {

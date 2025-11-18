@@ -244,8 +244,6 @@ export const sigmoid = (sum: number, bias: number) => 1 / (1 + Math.exp(-(sum + 
  */
 export const threshold = (sum: number, bias: number) => (sum > bias ? 1 : 0)
 
-export const booleanThreshold = (sum: number, bias: number) => (sum > bias ? true : false)
-
 /**
  * Funzione di attivazione tangente iperbolica
  * @param sum - Somma pesata degli input
@@ -384,4 +382,16 @@ export const generateId = (): string => {
     }
 
     return generatedId
+}
+
+/**
+ * Clamps a number within the specified range.
+ *
+ * @param min - The minimum value to clamp to.
+ * @param max - The maximum value to clamp to.
+ * @param value - The number to be clamped.
+ * @returns The clamped value, which will be within the range [min, max].
+ */
+export const clamp = (min: number, max: number, value: number) => {
+    return Math.max(min, Math.min(max, value))
 }
