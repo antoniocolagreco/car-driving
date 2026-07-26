@@ -34,7 +34,6 @@ export const ELEMENT_IDS = {
     hud: {
         networkId: 'hud-network-id',
         generation: 'hud-generation',
-        completedGenerations: 'hud-completed-generations',
         aliveCars: 'hud-alive-cars',
         bestFitness: 'hud-best-fitness',
         currentFitness: 'hud-current-fitness',

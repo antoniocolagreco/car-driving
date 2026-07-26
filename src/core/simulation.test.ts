@@ -152,12 +152,10 @@ describe('createSimulation: generation lifecycle', () => {
         }
 
         const generationBefore = sim.state.generation
-        const completedBefore = sim.state.completedGenerations
         sim.step(SIMULATION.stepSeconds)
 
         expect(sim.state.aliveCars).toHaveLength(0)
         expect(sim.state.gameOver).toBe(true)
-        expect(sim.state.completedGenerations).toBe(completedBefore + 1)
         expect(events).toHaveLength(1)
         // Everybody crashed on the first step, so this round produced nothing worth
         // carrying forward: whether a wreck clears zero by the single frame of survival
@@ -171,18 +169,7 @@ describe('createSimulation: generation lifecycle', () => {
         expect(events).toHaveLength(1) // never fires again while paused or on restart
         expect(sim.state.gameOver).toBe(false)
         expect(sim.state.generation).toBe(generationBefore + 1)
-        expect(sim.state.completedGenerations).toBe(completedBefore + 1)
         expect(sim.state.aliveCars.length).toBeGreaterThan(0)
-    })
-
-    it('does not count a manually restarted generation as completed', () => {
-        const sim = createSimulation(smallSettings, { trafficSeed: 'manual-restart-counter' })
-        const generationBefore = sim.state.generation
-
-        sim.restart()
-
-        expect(sim.state.generation).toBe(generationBefore + 1)
-        expect(sim.state.completedGenerations).toBe(0)
     })
 
     it('replaces the historical record holder with the winner of the current round', () => {

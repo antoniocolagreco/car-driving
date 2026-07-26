@@ -36,7 +36,6 @@ type BreakdownElements = {
 type HudElements = {
     networkId: HTMLElement
     generation: HTMLElement
-    completedGenerations: HTMLElement
     aliveCars: HTMLElement
     bestFitness: HTMLElement
     currentFitness: HTMLElement
@@ -54,7 +53,6 @@ const resolveElements = (): HudElements | undefined => {
     const ids = ELEMENT_IDS.hud
     const networkId = findElement(ids.networkId)
     const generation = findElement(ids.generation)
-    const completedGenerations = findElement(ids.completedGenerations)
     const aliveCars = findElement(ids.aliveCars)
     const bestFitness = findElement(ids.bestFitness)
     const currentFitness = findElement(ids.currentFitness)
@@ -75,7 +73,6 @@ const resolveElements = (): HudElements | undefined => {
     if (
         !networkId ||
         !generation ||
-        !completedGenerations ||
         !aliveCars ||
         !bestFitness ||
         !currentFitness ||
@@ -99,7 +96,6 @@ const resolveElements = (): HudElements | undefined => {
     return {
         networkId,
         generation,
-        completedGenerations,
         aliveCars,
         bestFitness,
         currentFitness,
@@ -181,7 +177,6 @@ export const createHud = (): Hud => {
 
         setText(elements.networkId, activeCar?.network.id ?? '–')
         setText(elements.generation, String(state.generation))
-        setText(elements.completedGenerations, String(state.completedGenerations))
         setText(elements.aliveCars, `${state.aliveCars.length} / ${state.cars.length}`)
         setText(elements.bestFitness, formatNumber(state.champion?.bestFitness))
         setText(elements.currentFitness, formatNumber(stats?.fitness))

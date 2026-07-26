@@ -29,17 +29,14 @@ export const SIMULATION = {
 	 * A car that has not covered `idleProgressThreshold` px in this many seconds is
 	 * considered stuck and dies.
 	 *
-	 * Read these two numbers together: they define a *minimum average speed* of
-	 * 200 px / 3 s ≈ 67 px/s, about a ninth of a racing car's top speed (10 px per
-	 * step = 600 px/s). That ratio is the whole point. The previous pair — 50 px in
-	 * 10 s — asked for 5 px/s, and a car creeping forward at 6 px/s reset the timer
-	 * forever: it counted as stalled by every other measure, bled stall penalties,
-	 * and still never died, so the generation ran for as long as anyone watched it.
-	 * The threshold has to demand real driving, not mere motion.
+	 * Read these two numbers together: they define a minimum average speed of roughly
+	 * 17 px/s. Six seconds gives a car time to negotiate dense traffic at low speed,
+	 * while the separate overtake deadline still eliminates policies that merely creep
+	 * forever without passing anybody.
 	 */
-	idleTimeoutSeconds: 3,
+	idleTimeoutSeconds: 6,
 	/** Forward progress, in pixels, that counts as "still making progress" and resets the idle timer. */
-	idleProgressThreshold: 200,
+	idleProgressThreshold: 100,
 	/** Maximum seconds allowed between overtakes before the car is eliminated and excluded. */
 	overtakeTimeoutSeconds: 12,
 	/** Vertical position of the followed car on screen, as a fraction of canvas height. */
