@@ -50,6 +50,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
     let lastNetworkDrawMs = 0
     // A paint-only preference: changing it must never alter or restart the simulation.
     let trafficVisible: boolean = true
+    let radarVisible: boolean = true
 
     const onGenerationEnd = (champion: Network | undefined): void => {
         if (champion) {
@@ -113,7 +114,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             accumulator.seconds = 0
         }
 
-        drawScene(simulationLayer, simulation.state, { trafficVisible })
+        drawScene(simulationLayer, simulation.state, { trafficVisible, radarVisible })
         drawNetworkThrottled(performance.now())
         hud.update(simulation.state, fps)
     }
@@ -187,6 +188,9 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             },
             onTrafficVisibilityToggle: (visible) => {
                 trafficVisible = visible
+            },
+            onRadarVisibilityToggle: (visible) => {
+                radarVisible = visible
             },
         },
         abortController.signal,

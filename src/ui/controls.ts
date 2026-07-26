@@ -18,6 +18,8 @@ export type ControlPanelHandlers = {
     onDriveToggle(driving: boolean): void
     /** Traffic paint switched on or off; it must not affect the simulation. */
     onTrafficVisibilityToggle(visible: boolean): void
+    /** Radar paint switched on or off; sensing and network inputs remain active. */
+    onRadarVisibilityToggle(visible: boolean): void
 }
 
 const isPositiveInteger = (value: number): boolean =>
@@ -220,6 +222,32 @@ export const createControlPanel = (
     }
 
     trafficButton?.addEventListener('click', toggleTrafficVisibility, { signal })
+
+    // --- Radar visibility -----------------------------------------------------
+    const radarButton = findElement<HTMLButtonElement>(ELEMENT_IDS.buttons.radar)
+    const radarState = findElement<HTMLSpanElement>(ELEMENT_IDS.radarState)
+    let radarVisible: boolean = true
+
+    const setRadarLabel = (): void => {
+        if (!radarButton) {
+            return
+        }
+        if (radarState) {
+            radarState.textContent = radarVisible ? 'Radar: visible' : 'Radar: hidden'
+        }
+        radarButton.setAttribute('aria-checked', String(radarVisible))
+        radarButton.classList.toggle('bg-emerald-600', radarVisible)
+        radarButton.classList.toggle('hover:bg-emerald-700', radarVisible)
+    }
+    setRadarLabel()
+
+    const toggleRadarVisibility = (): void => {
+        radarVisible = !radarVisible
+        setRadarLabel()
+        handlers.onRadarVisibilityToggle(radarVisible)
+    }
+
+    radarButton?.addEventListener('click', toggleRadarVisibility, { signal })
 
     document.addEventListener(
         'keydown',

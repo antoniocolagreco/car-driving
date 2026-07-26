@@ -123,6 +123,18 @@ const iconSize = 15
                 <span id={ELEMENT_IDS.trafficState}>Traffic: visible</span>
             </Button>
 
+            <Button
+                id={ELEMENT_IDS.buttons.radar}
+                type="button"
+                role="switch"
+                aria-checked="true"
+                class="min-w-36 bg-emerald-600 hover:bg-emerald-700"
+                title="Show or hide the radar polygon without changing sensing or neural-network inputs"
+            >
+                <EyeIcon slot="icon" size={iconSize} aria-hidden="true" />
+                <span id={ELEMENT_IDS.radarState}>Radar: visible</span>
+            </Button>
+
             <div class="h-5 w-px bg-current opacity-20" aria-hidden="true"></div>
 
             <div class="flex flex-wrap items-center gap-x-3 gap-y-2">

@@ -67,6 +67,17 @@ describe('drawScene traffic visibility', () => {
         })
         expect(drawSensors).toHaveBeenCalledWith(layer.context, activeCar.sensorState)
     })
+
+    it('hides only the radar while continuing to draw traffic and racing cars', () => {
+        drawScene(layer, state, { radarVisible: false })
+
+        expect(drawSensors).not.toHaveBeenCalled()
+        expect(drawCar).toHaveBeenCalledWith(layer.context, activeCar.car, {
+            ghost: false,
+            winner: undefined,
+        })
+        expect(drawCar).toHaveBeenCalledWith(layer.context, trafficCar)
+    })
 })
 
 describe('drawScene racing-car paint order', () => {

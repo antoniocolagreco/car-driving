@@ -24,7 +24,7 @@ const createContext = (): DrawingContextStub =>
     }) as unknown as DrawingContextStub
 
 describe('drawSensors', () => {
-    it('draws each area once, truncating the front at its closest transverse contact', () => {
+    it('draws a lone collision marker without filling its sensor area', () => {
         const context: DrawingContextStub = createContext()
         const sensor: SensorState = {
             origin: { x: 0, y: 0 },
@@ -41,13 +41,10 @@ describe('drawSensors', () => {
 
         drawSensors(context, sensor)
 
-        expect(context.moveTo).toHaveBeenCalledWith(-20, 0)
-        expect(context.lineTo).toHaveBeenNthCalledWith(1, 20, 0)
-        expect(context.lineTo).toHaveBeenNthCalledWith(2, 20, -140)
-        expect(context.lineTo).toHaveBeenNthCalledWith(3, -20, -140)
         expect(context.arc).toHaveBeenCalledWith(5, -140, 3, 0, Math.PI * 2)
-        expect(context.fillStyle).toBe('#facc15')
+        expect(context.fillStyle).toBe('#ef4444')
         expect(context.stroke).not.toHaveBeenCalled()
+        expect(context.closePath).not.toHaveBeenCalled()
     })
 
     it('does nothing for no perception zones', () => {
@@ -56,33 +53,88 @@ describe('drawSensors', () => {
         expect(context.save).not.toHaveBeenCalled()
     })
 
-    it('truncates an extended side area perpendicular to the car body', () => {
+    it('connects collision points from left to right without outlining sensor areas', () => {
         const context: DrawingContextStub = createContext()
+        const points = [
+            { x: -100, y: -120 },
+            { x: 0, y: -180 },
+            { x: 90, y: -130 },
+        ] as const
         const sensor: SensorState = {
-            origin: { x: 0, y: -35 },
-            readings: [0.75],
-            zones: [{
-                id: SENSOR_ZONE.LEFT_SIDE,
-                area: [
-                    { x: -20, y: -35 },
-                    { x: -20, y: 35 },
-                    { x: -720, y: 35 },
-                    { x: -720, y: -35 },
-                ],
-                range: 700,
-                distance: 140,
-                closestHit: { point: { x: -160, y: 0 }, distance: 140 },
-                reading: 0.8,
-            }],
+            origin: { x: 0, y: 0 },
+            readings: [0.8, 0.7, 0.8],
+            zones: [SENSOR_ZONE.LEFT_INNER, SENSOR_ZONE.RIGHT_INNER, SENSOR_ZONE.RIGHT_MIDDLE].map(
+                (id, index) => ({
+                    id,
+                    area: [{ x: 0, y: 0 }, { x: -150 + index * 100, y: -700 }, { x: -50 + index * 100, y: -700 }],
+                    range: 700,
+                    distance: 140,
+                    closestHit: { point: points[index], distance: 140 },
+                    reading: 0.8,
+                }),
+            ),
         }
 
         drawSensors(context, sensor)
 
-        expect(context.moveTo).toHaveBeenCalledWith(-20, -35)
-        expect(context.lineTo).toHaveBeenNthCalledWith(1, -20, 35)
-        expect(context.lineTo).toHaveBeenNthCalledWith(2, -160, 35)
-        expect(context.lineTo).toHaveBeenNthCalledWith(3, -160, -35)
-        expect(context.stroke).not.toHaveBeenCalled()
+        expect(context.moveTo).toHaveBeenCalledWith(points[0].x, points[0].y)
+        expect(context.lineTo).toHaveBeenCalledWith(points[1].x, points[1].y)
+        expect(context.lineTo).toHaveBeenCalledWith(points[2].x, points[2].y)
+        expect(context.strokeStyle).toBe('#facc15')
+        expect(context.lineWidth).toBe(2)
+        expect(context.setLineDash).toHaveBeenCalledWith([])
+        expect(context.closePath).toHaveBeenCalledTimes(1)
+        expect(context.stroke).toHaveBeenCalledTimes(1)
+        expect(context.stroke.mock.invocationCallOrder[0]).toBeLessThan(
+            context.arc.mock.invocationCallOrder[0],
+        )
+    })
+
+    it('places green markers at the midpoint of clear zones outer edges', () => {
+        const context: DrawingContextStub = createContext()
+        const sensor: SensorState = {
+            origin: { x: 0, y: 0 },
+            readings: [0, 0, 0],
+            zones: [
+                {
+                    id: SENSOR_ZONE.LEFT_INNER,
+                    area: [{ x: 0, y: 0 }, { x: -100, y: -700 }, { x: 0, y: -700 }],
+                    range: 700,
+                    distance: Infinity,
+                    closestHit: null,
+                    reading: 0,
+                },
+                {
+                    id: SENSOR_ZONE.FRONT,
+                    area: [
+                        { x: -21, y: 0 },
+                        { x: 21, y: 0 },
+                        { x: 21, y: -700 },
+                        { x: -21, y: -700 },
+                    ],
+                    range: 700,
+                    distance: Infinity,
+                    closestHit: null,
+                    reading: 0,
+                },
+                {
+                    id: SENSOR_ZONE.RIGHT_INNER,
+                    area: [{ x: 0, y: 0 }, { x: 0, y: -700 }, { x: 100, y: -700 }],
+                    range: 700,
+                    distance: Infinity,
+                    closestHit: null,
+                    reading: 0,
+                },
+            ],
+        }
+
+        drawSensors(context, sensor)
+
+        expect(context.arc).toHaveBeenCalledWith(-50, -700, 3, 0, Math.PI * 2)
+        expect(context.arc).toHaveBeenCalledWith(0, -700, 3, 0, Math.PI * 2)
+        expect(context.arc).toHaveBeenCalledWith(50, -700, 3, 0, Math.PI * 2)
+        expect(context.fillStyle).toBe('#22c55e')
+        expect(context.stroke).toHaveBeenCalledTimes(1)
     })
 })
 

@@ -12,6 +12,8 @@ export const ELEMENT_IDS = {
     manualDriveState: 'manual-drive-state',
     /** Text inside the traffic-visibility switch. */
     trafficState: 'traffic-state',
+    /** Text inside the radar-visibility switch. */
+    radarState: 'radar-state',
     buttons: {
         backup: 'backup-network-button',
         restore: 'restore-network-button',
@@ -20,6 +22,7 @@ export const ELEMENT_IDS = {
         evolve: 'evolve-network-button',
         drive: 'drive-button',
         traffic: 'traffic-button',
+        radar: 'radar-button',
     },
     inputs: {
         carsQuantityRange: 'cars-quantity-range',

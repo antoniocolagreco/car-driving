@@ -124,8 +124,9 @@ const patternsOf = (...difficulties: readonly TrafficPattern['difficulty'][]): T
 
 /**
  * Builds one quarter of the course: every pattern of `difficulty` is guaranteed
- * to appear at least once, then the row is padded up to `length` with random
- * patterns of `difficulty` or easier, and the whole thing is shuffled.
+ * to appear at least once, then the section is padded up to `length` with random
+ * patterns of `difficulty` or easier. Every choice excludes the previous row,
+ * including the final row of the preceding section.
  *
  * If the guaranteed patterns alone already exceed `length` (few rows requested,
  * many patterns of that difficulty), no patterns are dropped — the guarantee
@@ -136,30 +137,62 @@ const buildSection = (
     difficulty: TrafficPattern['difficulty'],
     pool: readonly TrafficPattern[],
     length: number,
+    previousPatternName?: string,
 ): TrafficPattern[] => {
-    const section = [...patternsOf(difficulty)]
-    while (section.length < length) {
-        section.push(pool[random.nextInt(0, pool.length)])
+    const remainingRequired: TrafficPattern[] = random.shuffle(patternsOf(difficulty))
+    const targetLength: number = Math.max(length, remainingRequired.length)
+    const section: TrafficPattern[] = []
+    let previousName: string | undefined = previousPatternName
+
+    while (section.length < targetLength) {
+        const remainingSlots: number = targetLength - section.length
+        const candidates: readonly TrafficPattern[] =
+            remainingRequired.length === remainingSlots ? remainingRequired : pool
+        const nonRepeating: TrafficPattern[] = candidates.filter(
+            (pattern) => pattern.name !== previousName,
+        )
+
+        // Every difficulty catalogue contains at least two distinct patterns, so a
+        // different candidate always exists even when a new section starts.
+        const selected: TrafficPattern = nonRepeating[random.nextInt(0, nonRepeating.length)]
+        section.push(selected)
+        previousName = selected.name
+
+        const requiredIndex: number = remainingRequired.findIndex(
+            (pattern) => pattern.name === selected.name,
+        )
+        if (requiredIndex >= 0) {
+            remainingRequired.splice(requiredIndex, 1)
+        }
     }
-    return random.shuffle(section)
+
+    return section
 }
 
 /** Builds the full, ordered row-by-row course: easy, then medium, then hard, then very hard. */
 const buildCourse = (random: Random, rows: number): TrafficPattern[] => {
     const sectionSize = Math.floor(rows / 4)
+    const course: TrafficPattern[] = []
+    const appendSection = (
+        difficulty: TrafficPattern['difficulty'],
+        pool: readonly TrafficPattern[],
+        length: number,
+    ): void => {
+        const previousName: string | undefined = course[course.length - 1]?.name
+        course.push(...buildSection(random, difficulty, pool, length, previousName))
+    }
 
-    const easy = buildSection(random, 'easy', patternsOf('easy'), sectionSize)
-    const medium = buildSection(random, 'medium', patternsOf('easy', 'medium'), sectionSize)
-    const hard = buildSection(random, 'hard', patternsOf('easy', 'medium', 'hard'), sectionSize)
+    appendSection('easy', patternsOf('easy'), sectionSize)
+    appendSection('medium', patternsOf('easy', 'medium'), sectionSize)
+    appendSection('hard', patternsOf('easy', 'medium', 'hard'), sectionSize)
     const veryHardLength = rows - sectionSize * 3
-    const veryHard = buildSection(
-        random,
+    appendSection(
         'veryHard',
         patternsOf('easy', 'medium', 'hard', 'veryHard'),
         veryHardLength,
     )
 
-    return [...easy, ...medium, ...hard, ...veryHard]
+    return course
 }
 
 /**

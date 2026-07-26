@@ -1,6 +1,6 @@
-import { type Polygon, type Vec2, vec } from '@core/geometry'
+import { type Vec2, vec } from '@core/geometry'
 import { type Car, carShape } from '@core/car'
-import { SENSOR_ZONE, type SensorState, type SensorZone } from '@core/sensor'
+import { type SensorState, type SensorZone } from '@core/sensor'
 
 /**
  * Drawing a single car: its body, its rear lights and, when it won its round,
@@ -50,10 +50,13 @@ const BRAKE_LIGHT_THICKNESS = 4
 const BRAKE_LIGHT_COLOR = 'red'
 const BRAKE_LIGHT_ALPHA = 1
 
-/** Yellow perception areas with red markers reserved for closest contacts. */
+/** Yellow radar polygon, with red contact markers and green clear-range markers. */
 const SENSOR_FAN_COLOR = '#facc15'
 const SENSOR_HIT_COLOR = '#ef4444'
+const SENSOR_CLEAR_COLOR = '#22c55e'
 const SENSOR_AREA_ALPHA = 0.18
+const SENSOR_COLLISION_LINE_WIDTH = 2
+const SENSOR_MARKER_RADIUS = 3
 
 /** World-space centre point of each rear light, offset sideways and forward of the car's rear edge. */
 const rearLightCenters = (car: Car): { left: Vec2; right: Vec2 } => {
@@ -177,77 +180,56 @@ export const drawCar = (ctx: CanvasRenderingContext2D, car: Car, style?: CarStyl
 }
 
 /**
- * Draws eleven filled perception areas below the car. Areas stop at their first
- * collision: front and flank rectangles are cut on their measurement axis while
- * angular zones shrink radially.
+ * Draws one closed radar polygon through the eleven zone markers. A marker is the
+ * closest collision or, for a clear zone, the midpoint of its outer edge.
  */
 export const drawSensors = (ctx: CanvasRenderingContext2D, sensor: SensorState): void => {
     if (sensor.zones.length === 0) {
         return
     }
 
-    const truncatedArea = (zone: SensorZone): Polygon => {
-        const distance = zone.distance
-        if (!Number.isFinite(distance)) {
-            return zone.area
+    const markerPoint = (zone: SensorZone): Vec2 => {
+        if (zone.closestHit) {
+            return zone.closestHit.point
         }
-        if (zone.id === SENSOR_ZONE.FRONT) {
-            const ratio = distance / zone.range
-            const nearLeft = zone.area[0]
-            const nearRight = zone.area[1]
-            const farRight = zone.area[2]
-            const farLeft = zone.area[3]
-            const atRatio = (near: Vec2, far: Vec2): Vec2 =>
-                vec(near.x + (far.x - near.x) * ratio, near.y + (far.y - near.y) * ratio)
-            return [nearLeft, nearRight, atRatio(nearRight, farRight), atRatio(nearLeft, farLeft)]
-        }
-        if (zone.id === SENSOR_ZONE.LEFT_SIDE || zone.id === SENSOR_ZONE.RIGHT_SIDE) {
-            const ratio = distance / zone.range
-            const innerFront = zone.area[0]
-            const innerRear = zone.area[1]
-            const outerRear = zone.area[2]
-            const outerFront = zone.area[3]
-            const atRatio = (inner: Vec2, outer: Vec2): Vec2 =>
-                vec(
-                    inner.x + (outer.x - inner.x) * ratio,
-                    inner.y + (outer.y - inner.y) * ratio,
-                )
-            return [
-                innerFront,
-                innerRear,
-                atRatio(innerRear, outerRear),
-                atRatio(innerFront, outerFront),
-            ]
-        }
-        const origin = zone.area[0]
-        const ratio = distance / zone.range
-        return zone.area.map((point): Vec2 =>
-            vec(origin.x + (point.x - origin.x) * ratio, origin.y + (point.y - origin.y) * ratio),
-        )
+
+        // Rectangles store their outer edge at [2]-[3], triangles at [1]-[2].
+        const outerStart = zone.area[zone.area.length === 4 ? 2 : 1]
+        const outerEnd = zone.area[zone.area.length === 4 ? 3 : 2]
+        return vec((outerStart.x + outerEnd.x) / 2, (outerStart.y + outerEnd.y) / 2)
     }
 
+    const markerPoints: Vec2[] = sensor.zones.map(markerPoint)
+
     ctx.save()
-    ctx.fillStyle = SENSOR_FAN_COLOR
-    ctx.globalAlpha = SENSOR_AREA_ALPHA
-    for (const zone of sensor.zones) {
-        const area = truncatedArea(zone)
+    if (markerPoints.length >= 3) {
+        // One solid closed path replaces every former per-zone fill and outline.
+        ctx.setLineDash([])
+        ctx.strokeStyle = SENSOR_FAN_COLOR
+        ctx.fillStyle = SENSOR_FAN_COLOR
+        ctx.lineWidth = SENSOR_COLLISION_LINE_WIDTH
+        ctx.lineJoin = 'round'
+        ctx.lineCap = 'round'
         ctx.beginPath()
-        ctx.moveTo(area[0].x, area[0].y)
-        for (let index = 1; index < area.length; index++) {
-            ctx.lineTo(area[index].x, area[index].y)
+        ctx.moveTo(markerPoints[0].x, markerPoints[0].y)
+        for (let index = 1; index < markerPoints.length; index++) {
+            ctx.lineTo(markerPoints[index].x, markerPoints[index].y)
         }
         ctx.closePath()
         ctx.globalAlpha = SENSOR_AREA_ALPHA
         ctx.fill()
+        ctx.globalAlpha = 1
+        ctx.stroke()
+    }
 
-        if (zone.closestHit) {
-            ctx.globalAlpha = 1
-            ctx.fillStyle = SENSOR_HIT_COLOR
-            ctx.beginPath()
-            ctx.arc(zone.closestHit.point.x, zone.closestHit.point.y, 3, 0, Math.PI * 2)
-            ctx.fill()
-            ctx.fillStyle = SENSOR_FAN_COLOR
-        }
+    for (let index = 0; index < sensor.zones.length; index++) {
+        const zone = sensor.zones[index]
+        const point = markerPoints[index]
+        ctx.globalAlpha = 1
+        ctx.fillStyle = zone.closestHit ? SENSOR_HIT_COLOR : SENSOR_CLEAR_COLOR
+        ctx.beginPath()
+        ctx.arc(point.x, point.y, SENSOR_MARKER_RADIUS, 0, Math.PI * 2)
+        ctx.fill()
     }
 
     ctx.restore()

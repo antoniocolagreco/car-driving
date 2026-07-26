@@ -83,6 +83,20 @@ describe('generateTraffic', () => {
         expect(b.map((car) => car.position)).not.toEqual(a.map((car) => car.position))
     })
 
+    it('never repeats the same traffic pattern in two consecutive rows', () => {
+        const road = createRoad()
+        const rows = 20
+
+        for (let seed = 0; seed < 100; seed++) {
+            const traffic = generateTraffic(road, rows, `no-repeat-${seed}`)
+            const patterns = identifyPatternPerRow(road, traffic, rows)
+
+            for (let row = 1; row < patterns.length; row++) {
+                expect(patterns[row]).not.toBe(patterns[row - 1])
+            }
+        }
+    })
+
     it('places every car within the road bounds and in a valid lane', () => {
         const road = createRoad()
         const traffic = generateTraffic(road, 20, 'bounds-seed')

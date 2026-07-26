@@ -10,6 +10,8 @@ import { drawCar, drawSensors } from './car'
 export type SceneOptions = {
     /** Whether black traffic cars are drawn. Simulation state is always unchanged. */
     readonly trafficVisible?: boolean
+    /** Whether the followed car's radar is drawn. Perception remains active. */
+    readonly radarVisible?: boolean
 }
 
 /**
@@ -27,6 +29,7 @@ export const drawScene = (
 ): void => {
     const ctx = layer.context
     const trafficVisible: boolean = options.trafficVisible ?? true
+    const radarVisible: boolean = options.radarVisible ?? true
     layer.clear()
 
     // Fall back to the first traffic car when nothing is being followed (an
@@ -51,7 +54,7 @@ export const drawScene = (
 
     // Perception belongs below every car body, so it never paints sensor colour across
     // either the followed racer or the traffic obstacles.
-    if (state.activeCar) {
+    if (radarVisible && state.activeCar) {
         drawSensors(ctx, state.activeCar.sensorState)
     }
 
