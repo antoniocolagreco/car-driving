@@ -6,4 +6,11 @@ type Props = HTMLAttributes<'input'>
 const { class: className, ...otherProps } = Astro.props
 ---
 
-<input type="range" class:list={['bg-rose-700 accent-rose-700', className]} {...otherProps} />
+<input
+    type="range"
+    class:list={[
+        'accent-rose-600 focus-visible:outline-2 focus-visible:outline-rose-400',
+        className,
+    ]}
+    {...otherProps}
+/>

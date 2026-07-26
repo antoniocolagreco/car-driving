@@ -1,3 +1,20 @@
+@import 'tailwindcss';
+
+@theme {
+    /*
+     * Inter, not Nunito. The whole UI is now 12px controls and a dense stats
+     * panel, and Nunito is a rounded display face: at that size its strokes
+     * blur together and the difference between its weights all but disappears.
+     * Inter was designed for exactly this — small, tightly spaced interface
+     * text — and its weight axis stays legible down to 11px.
+     */
+    --font-sans:
+        'Inter Variable', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+@plugin '@tailwindcss/forms';
+
 html,
 body {
     height: 100%;

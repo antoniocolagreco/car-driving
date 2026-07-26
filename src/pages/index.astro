@@ -1,195 +1,257 @@
 ---
-import {
-    ChevronsUpIcon,
-    FolderIcon,
-    RedoIcon,
-    SaveIcon,
-    TrashIcon,
-} from '@lucide/astro'
+import { ChevronsUpIcon, EyeIcon, FolderIcon, RedoIcon, SaveIcon, TrashIcon } from '@lucide/astro'
 import type { HTMLAttributes } from 'astro/types'
-import { HTML_IDS } from 'src/constants'
-import Button from '../components/button.astro'
-import ControlBox from '../components/control-box.astro'
-import InfoPanel from '../components/info-panel.astro'
-import InfoText from '../components/info-text.astro'
-import Input from '../components/input.astro'
-import Radio from '../components/radio.astro'
-import Range from '../components/range.astro'
-import DefaultLayout from '../layouts/default-layout.astro'
-import ScorePanel from '../components/score-panel.astro'
+import { CARS_QUANTITY, DEFAULTS, MUTATION } from '@core/config'
+import { ELEMENT_IDS } from '@ui/dom'
+import Button from '@components/button.astro'
+import Field from '@components/field.astro'
+import InfoPanel from '@components/info-panel.astro'
+import InfoText from '@components/info-text.astro'
+import Input from '@components/input.astro'
+import NumberInput from '@components/number-input.astro'
+import Range from '@components/range.astro'
+import ScorePanel from '@components/score-panel.astro'
+import DefaultLayout from '@layouts/default-layout.astro'
 
 type Props = HTMLAttributes<'div'>
 const { class: className, ...rest } = Astro.props
+
+// Every numeric control is offered twice — a slider to sweep and a number field to
+// type into. Mutation is shown as a percentage while the simulation stores a 0-1 fraction.
+const mutationMinPercent = Math.round(MUTATION.minRate * 100)
+const mutationMaxPercent = Math.round(MUTATION.maxRate * 100)
+const mutationDefaultPercent = Math.round(DEFAULTS.mutationRate * 100)
+
+const iconSize = 15
 ---
 
 <script>
-    import { createSimulation } from '../libs/self-driving-car'
-    let simulation: { destroy: () => void } | null = null
+    import { createSimulationApp } from '@app'
+    let app: { start: () => void; destroy: () => void } | null = null
     const boot = () => {
         const appContainer = document.querySelector('#app-container') as HTMLElement | null
         if (!appContainer) return
-        simulation?.destroy?.()
-        simulation = createSimulation(appContainer)
+        app?.destroy?.()
+        app = createSimulationApp(appContainer)
+        app.start()
     }
     document.addEventListener('astro:page-load', boot)
-    document.addEventListener('astro:before-swap', () => simulation?.destroy?.())
-    window.addEventListener('pagehide', () => simulation?.destroy?.())
+    document.addEventListener('astro:before-swap', () => app?.destroy?.())
+    window.addEventListener('pagehide', () => app?.destroy?.())
 </script>
 
 <DefaultLayout title="Self Driving Car">
-    <div class="h-full flex flex-col grow">
-        <menu class="flex gap-4 mb-2 w-full flex-wrap mt-2">
+    <div class="flex h-full min-h-0 flex-col gap-2 py-2">
+        <!--
+            One wrapping toolbar instead of a button row plus three bordered
+            fieldsets. Groups are separated by thin dividers rather than by boxes
+            and legends, because a box costs ~2rem of height per row and tells
+            the reader nothing a label does not already say. Every control keeps
+            its own `<label for>`, so grouping is the only thing that was lost.
+        -->
+        <section
+            aria-label="Simulation controls"
+            class="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs"
+        >
+            <menu class="flex flex-wrap gap-1.5">
+                <Button
+                    id={ELEMENT_IDS.buttons.backup}
+                    type="button"
+                    title="Make a backup of the active network"
+                    ><SaveIcon slot="icon" size={iconSize} />Backup</Button
+                >
+                <Button
+                    id={ELEMENT_IDS.buttons.restore}
+                    type="button"
+                    title="Restore the last saved network"
+                    ><FolderIcon slot="icon" size={iconSize} />Restore</Button
+                >
+                <Button
+                    id={ELEMENT_IDS.buttons.reset}
+                    type="button"
+                    title="Delete the saved network and start from random ones"
+                    ><TrashIcon slot="icon" size={iconSize} />Reset</Button
+                >
+                <Button
+                    id={ELEMENT_IDS.buttons.restart}
+                    type="button"
+                    title="Restart the simulation without saving"
+                    ><RedoIcon slot="icon" size={iconSize} />Restart</Button
+                >
+                <Button
+                    id={ELEMENT_IDS.buttons.evolve}
+                    type="button"
+                    title="Save the active network as champion and restart"
+                    ><ChevronsUpIcon slot="icon" size={iconSize} />Evolve</Button
+                >
+            </menu>
+
+            <div class="h-5 w-px bg-current opacity-20" aria-hidden="true"></div>
+
+            <!--
+                Manual driving reads as a switch rather than a button: its label says which
+                state it is in, its colour changes with it, and the keys it enables are on the
+                control itself. A plain button that toggles something invisible is how the
+                first version of this ended up looking broken.
+            -->
             <Button
-                id={HTML_IDS.buttons.saveNetwork}
-                class="flex-1 min-w-24"
-                title="Make a backup of the active network"
-                ><SaveIcon slot="icon" size={20} />Backup</Button
+                id={ELEMENT_IDS.buttons.drive}
+                type="button"
+                role="switch"
+                aria-checked="false"
+                aria-keyshortcuts="M"
+                class="min-w-44"
+                title="Start a fresh manual round with M or click. The race waits for your first Arrow/WASD/Space input. The network learns from your driving in real time."
             >
+                <span id={ELEMENT_IDS.manualDriveState}>Manual driving: off</span>
+                <kbd
+                    class="rounded border border-current px-1 text-[10px] leading-4 opacity-80"
+                    aria-hidden="true">M</kbd
+                >
+            </Button
+            >
+
             <Button
-                id={HTML_IDS.buttons.restoreNetwork}
-                class="flex-1 min-w-24"
-                title="Restore the last saved network"
-                ><FolderIcon slot="icon" size={20} />Restore</Button
+                id={ELEMENT_IDS.buttons.traffic}
+                type="button"
+                role="switch"
+                aria-checked="true"
+                class="min-w-36 bg-emerald-600 hover:bg-emerald-700"
+                title="Show or hide traffic cars without changing the simulation"
             >
-            <Button
-                id={HTML_IDS.buttons.resetNetwork}
-                class="flex-1 min-w-24"
-                title="Delete the saved network"><TrashIcon slot="icon" size={20} />Reset</Button
+                <EyeIcon slot="icon" size={iconSize} aria-hidden="true" />
+                <span id={ELEMENT_IDS.trafficState}>Traffic: visible</span>
+            </Button>
+
+            <div class="h-5 w-px bg-current opacity-20" aria-hidden="true"></div>
+
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <Field
+                    label="Cars"
+                    for={ELEMENT_IDS.inputs.carsQuantityRange}
+                    title="Population size; a new generation starts when the value changes"
+                >
+                    <Range
+                        id={ELEMENT_IDS.inputs.carsQuantityRange}
+                        class="w-24"
+                        min={CARS_QUANTITY.min}
+                        max={CARS_QUANTITY.max}
+                        step={CARS_QUANTITY.step}
+                        value={DEFAULTS.carsQuantity}
+                    />
+                    <NumberInput
+                        id={ELEMENT_IDS.inputs.carsQuantityNumber}
+                        min={CARS_QUANTITY.min}
+                        max={CARS_QUANTITY.max}
+                        step={CARS_QUANTITY.step}
+                        value={DEFAULTS.carsQuantity}
+                        aria-label="Number of cars"
+                    />
+                </Field>
+                <Field
+                    label="Mutation %"
+                    for={ELEMENT_IDS.inputs.mutationRateRange}
+                    title="Base mutation rate in percent, applied to the next generation"
+                >
+                    <Range
+                        id={ELEMENT_IDS.inputs.mutationRateRange}
+                        class="w-24"
+                        min={mutationMinPercent}
+                        max={mutationMaxPercent}
+                        step="1"
+                        value={mutationDefaultPercent}
+                    />
+                    <NumberInput
+                        id={ELEMENT_IDS.inputs.mutationRateNumber}
+                        min={mutationMinPercent}
+                        max={mutationMaxPercent}
+                        step="1"
+                        value={mutationDefaultPercent}
+                        aria-label="Mutation rate, percent"
+                    />
+                </Field>
+                <Field
+                    label="Layers"
+                    for={ELEMENT_IDS.inputs.hiddenLayersInput}
+                    title="Hidden layers as comma-separated positive integers, applied on Enter"
+                >
+                    <Input
+                        id={ELEMENT_IDS.inputs.hiddenLayersInput}
+                        class="w-20 py-0.5 text-xs"
+                        type="text"
+                        value={DEFAULTS.hiddenLayers.join(', ')}
+                        placeholder="16, 12, 8"
+                    />
+                </Field>
+            </div>
+        </section>
+
+        <section aria-label="Simulation" class="relative min-h-0 grow">
+            <div
+                id={ELEMENT_IDS.appContainer}
+                class:list={[
+                    // The road is only 240 px wide, so a half-width canvas is mostly
+                    // grass; the network graph, on the other hand, gets easier to read
+                    // with every pixel it is given. Hence 2fr / 3fr rather than 1fr / 1fr.
+                    'grid h-full w-full grid-cols-1 grid-rows-2 gap-2 overflow-hidden rounded-md bg-neutral-900 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:grid-rows-1',
+                    className,
+                ]}
+                {...rest}
             >
-            <Button
-                id={HTML_IDS.buttons.restartNetwork}
-                class="flex-1 min-w-24"
-                title="Restart the simulation without saving"
-                ><RedoIcon slot="icon" size={20} />Restart</Button
+            </div>
+            <InfoPanel
+                label="Live stats"
+                class="absolute top-2 left-2 max-h-[calc(100%-1rem)] w-44"
             >
-            <Button
-                id={HTML_IDS.buttons.evolveNetwork}
-                class="flex-1 min-w-24"
-                title="Restart the simulation after saving the active network"
-                ><ChevronsUpIcon slot="icon" size={20} />Evolve</Button
-            >
-        </menu>
-        <menu class="flex gap-4 mb-2 flex-wrap mt-2">
-            <ControlBox>
-                <label for="app-mode" class="text-sm">Mode</label>
-                <Radio
-                    disabled
-                    id={HTML_IDS.inputs.imitationModeRadio}
-                    name="app-mode"
-                    value="imitation"
-                    checked={true}>Manual</Radio
-                >
-                <Radio id={HTML_IDS.inputs.geneticModeRadio} name="app-mode" value="genetic" checked
-                    >Genetic</Radio
-                >
-            </ControlBox>
-            <ControlBox>
-                <label for={HTML_IDS.inputs.carsQuantityRange} class="text-sm"
-                    >Number of Cars: <span id={HTML_IDS.inputs.carsQuantityValue}></span></label
-                >
-                <Range
-                    id={HTML_IDS.inputs.carsQuantityRange}
-                    type="range"
-                    min="50"
-                    max="500"
-                    value="50"
-                    step="10"
-                    class="w-36"
-                />
-            </ControlBox>
-            <ControlBox>
-                <label for={HTML_IDS.inputs.mutationRateRange} class="text-sm"
-                    >Mutation: <span id={HTML_IDS.inputs.mutationRateValue}></span></label
-                >
-                <Range
-                    id={HTML_IDS.inputs.mutationRateRange}
-                    type="range"
-                    min="1"
-                    max="100"
-                    value="20"
-                    step="1"
-                    class="w-36"
-                />
-            </ControlBox>
-            <ControlBox>
-                <label for={HTML_IDS.inputs.networkArchitectureInput} class="text-sm"
-                    >Deep Layers</label
-                >
-                <Input id={HTML_IDS.inputs.networkArchitectureInput} class="w-36" />
-            </ControlBox>
-            <ControlBox>
-                <label for={HTML_IDS.inputs.sensorsQuantityInput} class="text-sm"
-                    >Sensors: <span id={HTML_IDS.inputs.sensorsQuantityValue}></span></label
-                >
-                <Range
-                    id={HTML_IDS.inputs.sensorsQuantityInput}
-                    type="range"
-                    min="3"
-                    max="36"
-                    value="5"
-                    step="1"
-                    class="w-36"
-                />
-            </ControlBox>
-            <ControlBox>
-                <label for={HTML_IDS.inputs.sensorsAngleRange} class="text-sm"
-                    >Sensor Spread: <span id={HTML_IDS.inputs.sensorsAngleValue}></span></label
-                >
-                <Range
-                    id={HTML_IDS.inputs.sensorsAngleRange}
-                    type="range"
-                    min="30"
-                    max="360"
-                    value="90"
-                    step="5"
-                    class="w-36"
-                />
-            </ControlBox>
-        </menu>
-        <div id={HTML_IDS.appContainer} class="h-full relative" aria-live="polite" {...rest}>
-            <InfoPanel class="absolute top-0" }>
                 <InfoText
-                    id={HTML_IDS.info.networkId}
-                    label="Current Car"
-                    title="Identifier of the current active car"
+                    id={ELEMENT_IDS.hud.networkId}
+                    label="Network"
+                    title="Identifier of the followed car's network"
                 />
-                <ScorePanel />
                 <InfoText
-                    id={HTML_IDS.info.record}
+                    id={ELEMENT_IDS.hud.generation}
+                    label="Generation"
+                    title="Current generation number"
+                />
+                <InfoText
+                    id={ELEMENT_IDS.hud.aliveCars}
+                    label="Alive"
+                    title="Cars still racing, out of the total population"
+                />
+                <InfoText
+                    id={ELEMENT_IDS.hud.bestFitness}
                     label="Record"
-                    title="Highest score achieved by the current active car"
+                    title="Best fitness ever scored by the champion"
                 />
                 <InfoText
-                    id={HTML_IDS.info.survivedRounds}
-                    label="Survived Rounds"
-                    title="Number of rounds this network has survived"
+                    id={ELEMENT_IDS.hud.currentFitness}
+                    label="Fitness"
+                    title="Current fitness of the followed car"
                 />
                 <InfoText
-                    id={HTML_IDS.info.remainingCars}
-                    label="Remaining Cars"
-                    title="Number of cars still competing in current generation"
+                    id={ELEMENT_IDS.hud.idleTimeout}
+                    label="Idle timeout"
+                    title="Seconds left before the followed car is considered stuck and retired"
                 />
                 <InfoText
-                    id={HTML_IDS.info.timeout}
-                    label="Timeout"
-                    title="Remaining time before game over"
+                    id={ELEMENT_IDS.hud.overtakeTimeout}
+                    label="Overtake timeout"
+                    title="Seconds left to make the next overtake before the car is eliminated and forfeits its score"
                 />
                 <InfoText
-                    id={HTML_IDS.info.pixelsPerSecond}
-                    label="Pixels per sec."
-                    title="Speed of the active car in pixels per second"
+                    id={ELEMENT_IDS.hud.speed}
+                    label="Speed"
+                    title="Speed of the followed car, in pixels per second"
                 />
                 <InfoText
-                    id={HTML_IDS.info.steeringDegree}
-                    label="Direction"
-                    title="Current steering direction of the active car"
+                    id={ELEMENT_IDS.hud.headingDeviation}
+                    label="Heading"
+                    title="Deviation from the road axis, in degrees"
                 />
-                <InfoText
-                    id={HTML_IDS.info.fps}
-                    label="Frame per sec."
-                    title="Current frames per second of the simulation"
-                />
+                <InfoText id={ELEMENT_IDS.hud.fps} label="FPS" title="Rendered frames per second" />
+                <ScorePanel class="mt-1 border-t border-white/20 pt-1" />
             </InfoPanel>
-        </div>
+            <div id={ELEMENT_IDS.statusRegion} class="sr-only" aria-live="polite"></div>
+        </section>
     </div>
 </DefaultLayout>

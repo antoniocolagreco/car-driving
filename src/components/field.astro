@@ -1,0 +1,23 @@
+---
+import type { HTMLAttributes } from 'astro/types'
+
+/**
+ * One inline control of the toolbar: a label and the control itself (the slot).
+ *
+ * Inline on purpose. The previous version stacked the label above the control in a box
+ * with a 10rem minimum width, inside a bordered fieldset — five controls laid out that
+ * way took three rows and roughly a fifth of the viewport height, all of it stolen from
+ * the canvases that are the actual point of the page.
+ */
+
+type Props = HTMLAttributes<'label'> & {
+    label: string
+}
+
+const { class: className, label, ...otherProps } = Astro.props
+---
+
+<label class:list={['flex items-center gap-1.5 whitespace-nowrap', className]} {...otherProps}>
+    <span class="opacity-70">{label}</span>
+    <slot />
+</label>

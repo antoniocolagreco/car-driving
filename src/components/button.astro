@@ -3,14 +3,32 @@ import type { HTMLAttributes } from 'astro/types'
 
 type Props = HTMLAttributes<'button'>
 
-const { class: className, ...otherProps } = Astro.props
+const { class: className, id, title, ...otherProps } = Astro.props
+const tooltipId: string | undefined = title && id ? `${id}-tooltip` : undefined
 ---
 
-<button
-    class:list={['', className]}
-    class="bg-rose-600 hover:bg-rose-700 text-stone-50 px-3 py-2 rounded font-semibold text-sm flex gap-2 items-center justify-between"
-    {...otherProps}
->
-    <slot name="icon" />
-    <span class="grow text-center"> <slot /></span>
-</button>
+<span class="group relative inline-flex">
+    <button
+        id={id}
+        aria-describedby={tooltipId}
+        class:list={[
+            'bg-rose-600 hover:bg-rose-700 focus-visible:outline-2 focus-visible:outline-rose-400 text-stone-50 px-2 py-1 rounded-sm font-semibold text-xs flex gap-1.5 items-center justify-center transition-colors disabled:opacity-50 disabled:pointer-events-none',
+            className,
+        ]}
+        {...otherProps}
+    >
+        <slot name="icon" />
+        <slot />
+    </button>
+    {
+        title && (
+            <span
+                id={tooltipId}
+                role="tooltip"
+                class="pointer-events-none invisible absolute top-full left-0 z-50 mt-2 w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-sm bg-neutral-950 px-2 py-1.5 text-left text-[11px] leading-snug font-normal whitespace-normal text-white opacity-0 shadow-lg ring-1 ring-white/20 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+            >
+                {title}
+            </span>
+        )
+    }
+</span>

@@ -1,6 +1,6 @@
 ---
 import '@css/global.css'
-import '@fontsource-variable/nunito'
+import '@fontsource-variable/inter'
 import type { HTMLAttributes } from 'astro/types'
 
 import { ClientRouter } from 'astro:transitions'
@@ -23,19 +23,22 @@ const { lang = 'en', title, ...otherProps } = Astro.props
         class="min-h-screen relative bg-stone-50 text-neutral-800 dark:bg-neutral-800 dark:text-stone-50 flex flex-col min-w-0"
     >
         <ClientRouter />
-        <header>
-            <div class="bg-rose-600">
-                <div class="mx-auto max-w-screen-lg w-full flex justify-between py-2 text-stone-50">
-                    <NavLink href={`${import.meta.env.BASE_URL}/`}
-                        ><h1 class="text-2xl font-bold mx-1">Car Driving</h1></NavLink
-                    >
-                    <NavLink href={`${import.meta.env.BASE_URL}/trigonometry`}
-                        ><h1 class="text-2xl font-bold mx-1">Trigonometry</h1></NavLink
-                    >
-                </div>
-            </div>
+        <!--
+            The header is deliberately one thin line and the main area is
+            deliberately full width: this app is two canvases, and every pixel
+            spent on chrome is a pixel taken away from them.
+        -->
+        <header class="bg-rose-600 text-stone-50">
+            <nav class="flex w-full items-baseline justify-between gap-4 px-3 py-1">
+                <NavLink href={`${import.meta.env.BASE_URL}/`}
+                    ><h1 class="text-base font-bold">Car Driving</h1></NavLink
+                >
+                <NavLink href={`${import.meta.env.BASE_URL}/trigonometry`} class="text-sm"
+                    >Trigonometry</NavLink
+                >
+            </nav>
         </header>
-        <main class="mx-auto max-w-screen-lg w-full grow overflow-hidden" transition:name="main">
+        <main class="w-full min-h-0 grow overflow-hidden px-3" transition:name="main">
             <slot />
         </main>
         <slot name="dialog" />

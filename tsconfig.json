@@ -1,16 +1,16 @@
 {
     "extends": "astro/tsconfigs/strict",
     "compilerOptions": {
-        "baseUrl": ".",
         "noUnusedLocals": true,
         "noUnusedParameters": true,
         "paths": {
-            "@components/*": ["src/components/*"],
-            "@pages/*": ["src/pages/*"],
-            "@layouts/*": ["src/layouts/*"],
-            "@libs/*": ["src/libs/*"],
-            "@css/*": ["src/css/*"],
-            "@models/*": ["src/models/*"]
+            "@app": ["./src/app.ts"],
+            "@core/*": ["./src/core/*"],
+            "@render/*": ["./src/render/*"],
+            "@ui/*": ["./src/ui/*"],
+            "@components/*": ["./src/components/*"],
+            "@layouts/*": ["./src/layouts/*"],
+            "@css/*": ["./src/css/*"]
         }
     }
 }

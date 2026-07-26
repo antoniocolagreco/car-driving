@@ -1,10 +1,25 @@
 ---
 import type { HTMLAttributes } from 'astro/types'
 
-type Props = HTMLAttributes<'div'>
-const { class: className, ...rest } = Astro.props
+type Props = HTMLAttributes<'div'> & {
+    label?: string
+}
+const { class: className, title, id, label, ...otherProps } = Astro.props
 ---
 
-<div class:list={['', className]} class="flex flex-col gap-1 p-1 w-30" {...rest}>
+<div
+    title={title}
+    id={id}
+    class:list={[
+        'border border-white/20 p-2 flex flex-col gap-0.5 rounded-md antialiased overflow-y-auto backdrop-blur-xs bg-black/60 text-stone-50 text-[11px] leading-tight shadow-lg',
+        className,
+    ]}
+    {...otherProps}
+>
+    {
+        label && (
+            <div class="text-xs uppercase tracking-wide text-white/60 font-semibold">{label}</div>
+        )
+    }
     <slot />
 </div>

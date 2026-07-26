@@ -1,182 +1,299 @@
-# 🚗 Self-Driving Car Simulation
+# 🚗 Self-Driving Car — a readable genetic algorithm
 
-An advanced neural network-powered car racing simulation built with **Astro**, **TypeScript**, and **HTML5 Canvas**. Watch AI-controlled cars learn to drive, avoid traffic, and evolve through genetic algorithms!
+A population of cars learns to drive a three-lane road by natural selection. The autonomous
+search needs no training data or gradients: every car has a small feed-forward neural
+network, the ones that drive best father the next generation, and after a few dozen
+generations they overtake traffic on their own. Manual driving adds a second learning path:
+real-time backpropagation from the player's controls.
 
-## 🎮 [**Live Demo**](https://antoniocolagreco.github.io/car-driving)
+Built with **Astro**, **TypeScript** and a plain **HTML5 canvas** — no game engine, no ML
+library. The whole thing is meant to be _read_: every non-obvious number is explained
+where it is defined, and the interesting logic is pure functions with unit tests.
 
-![Car Driving Simulation](https://img.shields.io/badge/Status-Live-brightgreen)
+## 🎮 [Live demo](https://antoniocolagreco.github.io/car-driving)
+
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)
 ![Astro](https://img.shields.io/badge/Astro-FF5D01?logo=astro&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?logo=tailwind-css&logoColor=white)
 
-## ✨ Features
+## What you can learn from this repository
 
-### 🧠 **Neural Network & AI**
+- How a **feed-forward network** turns sensor readings into steering and throttle
+  (`src/core/neural-network.ts`)
+- How a **genetic algorithm** improves a policy without gradients, and why elitism and a
+  spread of mutation rates matter (`src/core/population.ts`)
+- Why **reward design** is the hardest part of the whole exercise, and how a badly shaped
+  reward teaches exactly the wrong lesson (`src/core/fitness.ts`)
+- How fixed **eleven-zone perception** and polygon collision work from first principles
+  (`src/core/sensor.ts`, `src/core/geometry.ts`)
 
-- **Feed-forward neural networks** with customizable architecture
-- **Genetic algorithm** evolution with mutation and selection
-- **Real-time learning** and adaptation
-- **Network visualization** showing weights and biases
-- **Backup/restore** system for best-performing networks
-
-### 🚗 **Realistic Car Physics**
-
-- **Analog controls** with smooth acceleration and steering
-- **Realistic brake lights** that activate during braking
-- **Physics-based movement** with proper inertia and steering dynamics
-- **Collision detection** with traffic and road boundaries
-- **Sensor system** with configurable ray casting for obstacle detection
-
-### 📊 **Advanced Scoring System**
-
-- **Multi-factor scoring** based on:
-    - 🏁 **Overtakes**: Points for passing traffic cars
-    - 🚙 **Smart braking**: Rewards for collision avoidance
-    - 🔄 **Intelligent turning**: Points for evasive maneuvers
-    - 📏 **Distance traveled**: Progression rewards
-- **Real-time statistics** and performance tracking
-- **Timeout system** to prevent infinite rounds
-
-### 🎛️ **Interactive Controls**
-
-- **Live configuration** of mutation rates (0-100%)
-- **Population size control** (50-500 cars)
-- **Neural network architecture** customization
-- **Manual network evolution** and restart options
-- **Real-time performance monitoring**
-
-### 🎨 **Visual Features**
-
-- **Smooth 60 FPS** canvas rendering
-- **Dynamic camera** following the leading car
-- **Ghost mode** for inactive cars
-- **Winner highlighting** and game over screens
-- **Responsive design** that works on all screen sizes
-
-## 🛠️ Technology Stack
-
-- **[Astro](https://astro.build/)** - Modern web framework
-- **[TypeScript](https://www.typescriptlang.org/)** - Type-safe JavaScript
-- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first CSS framework
-- **[HTML5 Canvas](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API)** - High-performance graphics
-- **[pnpm](https://pnpm.io/)** - Fast, disk space efficient package manager
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- **Node.js** 20 or higher
-- **pnpm** package manager
-
-### Installation
+## Quick start
 
 ```bash
-# Clone the repository
-git clone https://github.com/antoniocolagreco/car-driving.git
-cd car-driving
-
-# Install dependencies
 pnpm install
-
-# Start development server
-pnpm dev
+pnpm dev        # http://localhost:4321/car-driving
 ```
-
-### Available Scripts
 
 ```bash
-# Development
-pnpm dev          # Start dev server with hot reload
-pnpm start        # Alias for dev
-
-# Building
-pnpm build        # Build for production
-pnpm preview      # Preview production build
-
-# Quality checks
-pnpm typecheck    # Run TypeScript checks
-pnpm lint         # Run ESLint
-pnpm lint:fix     # Fix linting issues
-pnpm validate     # Run both typecheck and lint
-
-# Formatting
-pnpm format       # Format code with Prettier
-pnpm format:check # Check formatting
+pnpm test       # unit tests for the whole simulation core
+pnpm validate   # astro check + typecheck + lint + test
+pnpm build      # production build
 ```
 
-## 🎯 How It Works
+Requires Node 24+ and pnpm.
 
-### 1. **Neural Network Architecture**
+## Architecture
 
-Each car has a neural network that processes:
+The codebase is split by _dependency direction_, which is what keeps it testable:
 
-- **Sensor inputs**: 5 distance sensors detecting obstacles
-- **Speed input**: Current velocity
-- **Outputs**: Acceleration, braking, and steering decisions
-
-### 2. **Genetic Evolution**
-
-- Cars start with random neural networks
-- Best-performing cars are selected based on comprehensive scoring
-- Next generation inherits from winners with mutations
-- Evolution continues until optimal driving behavior emerges
-
-### 3. **Scoring Algorithm**
-
-Cars are evaluated on multiple criteria:
-
-```typescript
-Score = (Overtakes × 40) + (Smart_Braking × 0.5) +
-        (Intelligent_Turning × 1) + (Distance × 0.005)
 ```
-
-### 4. **Collision Avoidance**
-
-- **Ray casting sensors** detect obstacles in multiple directions
-- **Smart braking** when obstacles are detected ahead
-- **Lane changing** behavior to avoid traffic
-- **Timeout system** prevents cars from getting stuck
-
-## 🎮 Controls & Interface
-
-### **Main Controls**
-
-- **🔄 Restart**: Start a new generation
-- **💾 Backup**: Save the current best network
-- **📁 Restore**: Load previously saved network
-- **🗑️ Reset**: Clear saved networks and start fresh
-- **⬆️ Evolve**: Manually promote current best car
-
-### **Configuration Panel**
-
-- **Mutation Rate**: Control genetic diversity (0-100%)
-- **Car Quantity**: Set population size (50-500 cars)
-- **Network Architecture**: Customize hidden layers
-
-### **Information Display**
-
-- **Real-time scoring** breakdown
-- **Network performance** metrics
-- **Population statistics**
-- **FPS counter** and performance data
-
-## 📁 Project Structure
-
-```bash
 src/
-├── components/          # Reusable UI components
-├── constants/           # Application constants and configuration
-├── css/                 # Global styles
-├── layouts/             # Page layouts
-├── libs/                # Utility libraries and algorithms
-├── models/              # Core classes (Car, Neural Network, etc.)
-└── pages/               # Astro pages
+├── core/     pure simulation — no DOM, no canvas, no localStorage, fully unit tested
+├── render/   draws a given state onto a canvas; reads state, mutates nothing
+├── ui/       DOM widgets, HUD, persistence
+├── app.ts    the only module that knows about all three
+└── components/ layouts/ pages/   Astro presentation
 ```
 
-## 🔧 Key Classes
+That rule earns its keep: because `core/` has no browser dependencies, the physics, the
+sensors, the network and the reward system are all directly unit-testable, and the
+simulation could run headless without touching a line of it.
 
-- **`NeuralNetwork`**: Feed-forward network with genetic operations
-- **`RacingCar`**: AI-controlled car with sensors and scoring
-- **`Simulation`**: Main simulation orchestrator
-- **`Renderer`**: Canvas rendering and visual effects
-- **`UIController`**: Interactive controls and real-time updates
+| Module                   | Responsibility                                               |
+| ------------------------ | ------------------------------------------------------------ |
+| `core/geometry.ts`       | Immutable `Vec2`/`Segment`/`Polygon`, intersections          |
+| `core/math.ts`           | `lerp`, `clamp`, `normalize`, `tanh`                         |
+| `core/random.ts`         | Seeded RNG, so a given course is reproducible                |
+| `core/neural-network.ts` | The network as plain data: forward pass, mutation, save/load |
+| `core/sensor.ts`         | Seven fixed perception areas and nearest-obstacle queries    |
+| `core/car.ts`            | Car state and time-based physics, analog throttle and brake  |
+| `core/road.ts`           | Lane geometry and guard rails                                |
+| `core/traffic.ts`        | The course, as data: patterns grouped by difficulty          |
+| `core/fitness.ts`        | **The reward system**                                        |
+| `core/population.ts`     | Generation building, elitism, mutation tiers                 |
+| `core/simulation.ts`     | The step loop and the generation lifecycle                   |
+| `core/config.ts`         | Every tunable number, each with its rationale                |
+
+## How a car drives
+
+Each step, for every living car:
+
+1. **Sense** — eleven fixed areas surround the front and flanks: three 15° triangles per side
+   through ±45°, one wider lateral triangle per side from ±45° through ±90°, plus a
+   car-width front rectangle and one full-length side area projected laterally to the
+   common sensor range on each flank. Each returns `0` clear to `1` touching.
+2. **Think** — those readings plus the car's normalized speed are fed forward through the
+   network. The architecture is always `[12, ...hiddenLayers, 3]` (eleven areas plus speed).
+3. **Act** — the three outputs are `[throttle, brake, steering]`, all analog: throttle and
+   steering in `[-1, 1]`, while brake is always a non-negative pressure in `[0, 1]`.
+4. **Score** — the reward system folds that one observation into the car's running fitness.
+
+Physics runs on a **fixed 60 Hz timestep** with an accumulator, so behaviour is identical
+regardless of display refresh rate, and the speed multiplier in the UI is simply "run N
+steps per rendered frame".
+
+## How a generation evolves
+
+The white champion is the winner of the previous successful race. Every completed race
+elects its best race result as the next champion: most overtakes, then fitness, followed by
+furthest progress and the time needed to reach that overtake total.
+The next generation is built from it even when its fitness is below an older record:
+
+| Share of the population | Mutation rate                   | Purpose                         |
+| ----------------------- | ------------------------------- | ------------------------------- |
+| car 0 (elite)           | none — the champion itself      | a generation can never regress  |
+| 25 %                    | 1 %                             | refine what already works       |
+| 35 %                    | between 1 % and the chosen rate | small variations                |
+| 25 %                    | exactly the chosen rate         | the main search                 |
+| 15 %                    | up to 4× the chosen rate        | explorers that find new tactics |
+
+A single mutation rate is a bad bet: too low and the population never explores, too high
+and it forgets what the champion already knew. Spreading the budget across bands hedges
+both ways in every generation — with the weight on the refining side, because the point
+of a generation is to improve on the champion, not to re-roll it.
+
+Every band is expressed as a multiple of the rate on the slider, and that matters: the
+explorers used to be mutated somewhere between the slider and 100 %, so asking for a 2 %
+mutation still produced 22 near-random cars out of 100. The slider has to mean something.
+
+The next generation is bred from the best few networks (`PARENT_COUNT`), not only from
+the winner: a field that is entirely variations of one network is a hill climber wearing
+a genetic algorithm's clothes, and it stalls as soon as that one network sits in a local
+optimum.
+
+## The reward system
+
+This is where the interesting failure modes live, so it is worth reading
+`src/core/fitness.ts` in full. The guiding rule:
+
+> **Reward outcomes, never actions.**
+
+An earlier version of this project paid a car per frame for having the brake pressed
+near an obstacle, and per frame for steering hard near an obstacle. Both sound like
+"good driving". Evolution found the exploit immediately: the best strategy became
+tucking in behind a slow traffic car and staying there forever, pumping the brake and
+wiggling the wheel, farming reward frames without ever overtaking.
+
+So the current system pays only for results, and charges for bad states:
+
+| Reward                                      | Value      |
+| ------------------------------------------- | ---------- |
+| Overtaking a traffic car                    | +50 each   |
+| Ground gained **on the traffic**            | +0.05 / px |
+| Speed used **while the road ahead is free** | +3.0 / s   |
+| Staying alive                               | +0.5 / s   |
+
+| Penalty                                 | Value                                              |
+| --------------------------------------- | -------------------------------------------------- |
+| Crashing                                | −10 % to −100 % of what you earned, by impact speed |
+| **Unsafe speed for the available path** | −30 / s, graded by closeness                       |
+| Standing still with nothing in the way  | −5 / s                                             |
+| Driving in reverse                      | −0.05 / px                                         |
+| No new overtake within 10 seconds       | Forfeit the entire run score                       |
+
+The hazard judges the resulting state rather than the chosen control. Steering clears it
+only when the swept path really becomes free; braking clears it by reducing the stopping
+distance. An ineffective steering command therefore no longer excuses an unsafe trajectory.
+
+"In the path" is literal: the corridor the car's own body sweeps along its current
+heading, guard rails included. A forward cone — which is what this used to use — calls the
+rail beside an outer lane an obstacle 105 px away at all times, so a car driving perfectly
+straight down that lane reads as permanently about to crash, and every judgement built on
+top inherits the error.
+
+Every coefficient above was set by measuring, not by taste. Four of them were wrong
+in a way you could watch on screen, and each fix is documented where the number lives:
+
+- **Progress is measured against the traffic, not the tarmac.** Traffic rolls
+  forward, so a car that tucks in behind the pack is _carried_ down the road. One
+  measured champion covered 9930 px with two overtakes by braking 98 % of the time
+  and riding the convoy for a full minute. Subtracting how far the course itself
+  moved makes that ride worth exactly what it earned: nothing.
+- **Crashing costs a share of the run, not a flat number.** A flat penalty has to be
+  large to teach anything (at 50, a run holding 300 points of overtakes lost only 50
+  by wrecking, and the champion pressed the brake in **0 %** of its steps) and once it
+  is large it starts erasing results — at a flat 200, a car that overtook someone and
+  then crashed finished on zero, its one achievement deleted. As a fraction it cannot
+  do that, and the cost still grows with how good the run was.
+- **Speed pays only where it is safe, and costs where it is not.** A flat average-speed
+  reward paid for flooring the throttle into the first obstacle; removing it entirely
+  was worse, because the population settled on crawling everywhere, which dodges every
+  speed penalty and never needs the brake. The pair `pace` / `overspeed` is what makes
+  modulation the winning policy, and the overspeed charge deliberately does not look at
+  the brake pedal — only at the excess speed itself, which the network is free to shed
+  however it likes.
+- **There is no penalty for going slowly behind traffic.** There used to be one
+  (−2/s "tailgating") and it punished the exact behaviour the simulation is trying to
+  teach. Loitering is already fatal: the idle timeout kills anyone who stops making
+  progress, so charging for it twice only taught the cars that braking is for losers.
+
+The score floor is zero. A car that crashed away everything it gained has earned
+nothing, not a debt — and a round where **nobody** clears zero has no winner at all,
+so the reigning champion keeps its place rather than being replaced by the least bad
+wreck.
+
+## How the search works
+
+Two details of the genetic algorithm matter as much as the reward, and both were
+measured the same way:
+
+- **`mutationRate` is a probability per parameter, not a blend factor.** The earlier
+  version blended _every_ weight with a fresh random value at `rate`: a 10 % mutation
+  moved all ~200 weights at once, which in weight space is a long jump in a random
+  direction rather than a small step. There was no local search at any rate, and the
+  champion plateaued within three generations. A mutated weight now moves by at most
+  `MUTATION.perturbation`, and the rest are left alone.
+- **The course changes every few generations** (`SIMULATION.generationsPerCourse`).
+  One fixed course makes fitness beautifully comparable and teaches memorisation:
+  measured, the champion stalled at 1935 px for nine generations in a row, hitting the
+  same wall every time. Inside a block the layout is identical, so a champion can only
+  be dethroned by a car that genuinely out-drove it; across blocks it has to re-earn
+  its place on obstacles it has never seen.
+
+## Reading the screen
+
+| What you see          | What it is                                                        |
+| --------------------- | ----------------------------------------------------------------- |
+| **White car**         | The champion: last generation's winner, running its network as-is |
+| Coloured cars         | Its mutated offspring, one colour each                            |
+| **Blue car**          | The player, only while manual driving is enabled                  |
+| **Dark grey car**     | A car eliminated by a crash or timeout                            |
+| Near-black cars       | Traffic: rolling obstacles, not learners, always the same colour  |
+| Red rear lights       | The brake, which is analog pressure — bright means hard braking   |
+| Yellow areas, red dots | The followed car's eleven perception areas and closest contacts   |
+
+A round ends when every car is out. A car is out when it crashes, when it fails to
+cover `SIMULATION.idleProgressThreshold` px within `idleTimeoutSeconds` (a minimum
+average speed, not merely "some movement" — see the comment on those two values), or
+when it goes 10 seconds without a new overtake. Missing that deadline eliminates the car
+and makes it ineligible as winner or parent, while leaving its score visible as telemetry.
+The final `maxRoundSeconds` ceiling costs nothing and only exists because the road past the
+last traffic row is empty and infinite.
+
+## Controls
+
+| Button             | Effect                                                           |
+| ------------------ | ---------------------------------------------------------------- |
+| **Backup**         | Save the followed car's network to a slot you can return to      |
+| **Restore**        | Load that slot and use it as the champion                        |
+| **Reset**          | Forget the champion and start from random networks               |
+| **Restart**        | New generation from the current champion                         |
+| **Evolve**         | Promote the current best car immediately                         |
+| **Manual driving** | Start a fresh manual round, paused until the first driving input |
+
+| Setting          | Effect                                                             |
+| ---------------- | ------------------------------------------------------------------ |
+| Number of cars   | Population size; applies on release, starting a new generation     |
+| Mutation         | Base mutation rate; applies to the **next** generation             |
+| Hidden layers    | Comma-separated neuron counts, default `16,12,8`; press Enter      |
+
+Press **M** to toggle manual driving without leaving the keyboard controls.
+
+## Driving it yourself
+
+Your car is **always in the race**, alongside the white champion. While its own network is
+driving, it has a normal random colour and the same paint priority as every other evolved
+car. Switch **Manual driving** on (or press **M**) and it becomes blue, moves to the top paint
+layer, and a fresh round is prepared with the world frozen. The round begins on the first
+arrow, `WASD` or `Space` input. Switch manual driving off at any point and the same car
+continues from the same position under its trained neural network; disabling it does not
+restart the round.
+
+It is not a toy feature, and it is not just a way to measure the course: **the car you
+drive learns from you.** The first driving command starts a recording, then every state and
+action — including deliberate coasting — is retained for the rest of the run. Realtime
+training always includes the current observation plus seven older examples selected in a
+deterministic rotation, so the UI stays responsive while the network rehearses its past.
+
+If the player wins, the green five-second celebration also becomes a consolidation phase.
+Each epoch accumulates gradients over **every recorded frame at unchanged weights**, then
+applies their exact average only after the full dataset has been processed. Sixty complete
+epochs run before persistence; no experience is sampled away or omitted. Your car starts as
+a copy of the current champion, so this process corrects what the population already knows
+rather than teaching it from scratch.
+
+And your car competes. It is scored like every other, so **if a round you drove is won by
+your car, the network you taught becomes the champion — the whole parent pool, not one seat
+in it** — and every car in the next generation is a variation of your driving. Show it one
+winning lap and evolution carries on from there.
+
+When a car passes **every** traffic car, the course is solved rather than merely survived.
+The winning scene freezes under a green victory banner for five seconds; only then is the
+field retired without a crash penalty and the round closes.
+
+That makes the project two learning methods side by side, and the contrast is the lesson:
+evolution searches blindly and needs a whole population and a whole generation to find out
+whether a change helped; a gradient step knows exactly which way every weight should move,
+because when a human drives there is an answer to compare against. The same network,
+`Layer` for `Layer`, is improved by both.
+
+Changing the hidden layers changes the network's shape, so a champion
+saved under a different architecture can no longer be used and is discarded rather than
+loaded into a mismatched body.
+
+## Tech stack
+
+[Astro 7](https://astro.build/) · [TypeScript](https://www.typescriptlang.org/) ·
+[Tailwind CSS 4](https://tailwindcss.com/) ·
+[Canvas 2D](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) ·
+[Vitest](https://vitest.dev/) · [pnpm](https://pnpm.io/)

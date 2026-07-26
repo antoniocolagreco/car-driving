@@ -1,9 +1,11 @@
-import tailwind from '@astrojs/tailwind'
+import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'astro/config'
 
 // https://astro.build/config
 const config = defineConfig({
-    integrations: [tailwind()],
+    vite: {
+        plugins: [tailwindcss()],
+    },
     base: '/car-driving',
     site: 'https://antoniocolagreco.github.io',
 })

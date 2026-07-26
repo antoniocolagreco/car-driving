@@ -1,25 +1,51 @@
 ---
+import { ELEMENT_IDS } from '@ui/dom'
 import type { HTMLAttributes } from 'astro/types'
-import { HTML_IDS } from 'src/constants'
 
-type Props = HTMLAttributes<'div'> & {
-    label?: string
-}
-const { class: className, title, id, label, ...otherProps } = Astro.props
+/**
+ * The per-term fitness breakdown, kept in its own component so the reward
+ * system (`@core/fitness`) is legible at a glance: rewards in green, penalties
+ * in red, the total emphasised and set apart by a divider.
+ */
+
+type Props = HTMLAttributes<'div'>
+const { class: className, ...otherProps } = Astro.props
+
+const rewards = [
+    { id: ELEMENT_IDS.hud.breakdown.overtakes, label: 'Overtakes' },
+    { id: ELEMENT_IDS.hud.breakdown.progress, label: 'Progress' },
+    { id: ELEMENT_IDS.hud.breakdown.pace, label: 'Pace' },
+    { id: ELEMENT_IDS.hud.breakdown.survival, label: 'Survival' },
+] as const
+
+const penalties = [
+    { id: ELEMENT_IDS.hud.breakdown.crash, label: 'Crash' },
+    { id: ELEMENT_IDS.hud.breakdown.stall, label: 'Stall' },
+    { id: ELEMENT_IDS.hud.breakdown.hazard, label: 'Ignored hazard' },
+    { id: ELEMENT_IDS.hud.breakdown.reverse, label: 'Reverse' },
+] as const
 ---
 
-<div
-    title={title}
-    class:list={[
-        'border border-white/50 p-2 flex flex-col gap-1 rounded antialiased grow overflow-hidden backdrop-blur-sm bg-black/30 text-sm',
-        className,
-    ]}
-    {...otherProps}
->
-    <div class="text-xs">Score</div>
-    <div id={HTML_IDS.info.score.overtakesScore} class="text-xs font-semibold"></div>
-    <div id={HTML_IDS.info.score.breakingsScore} class="text-xs font-semibold"></div>
-    <div id={HTML_IDS.info.score.turningsScore} class="text-xs font-semibold"></div>
-    <div id={HTML_IDS.info.score.distanceScore} class="text-xs font-semibold"></div>
-    <div id={HTML_IDS.info.score.totalScore} class="text-xs font-bold"></div>
+<div class:list={['flex flex-col gap-0.5', className]} {...otherProps}>
+    <div class="text-xs uppercase tracking-wide text-white/60 font-semibold">Fitness breakdown</div>
+    {
+        rewards.map(({ id, label }) => (
+            <div class="flex items-baseline justify-between gap-2">
+                <span class="text-white/70">{label}</span>
+                <span id={id} class="font-semibold tabular-nums text-green-400">
+                    –
+                </span>
+            </div>
+        ))
+    }
+    {
+        penalties.map(({ id, label }) => (
+            <div class="flex items-baseline justify-between gap-2">
+                <span class="text-white/70">{label}</span>
+                <span id={id} class="font-semibold tabular-nums text-red-400">
+                    –
+                </span>
+            </div>
+        ))
+    }
 </div>

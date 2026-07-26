@@ -7,8 +7,7 @@ const { class: className, ...otherProps } = Astro.props
 ---
 
 <a
-    class:list={['', className]}
-    class="text text-white hover:text-white/70 font-semibold capitalize"
+    class:list={['text-white hover:text-white/70 font-semibold capitalize', className]}
     {...otherProps}
 >
     <slot />

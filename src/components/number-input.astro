@@ -1,0 +1,26 @@
+---
+import type { HTMLAttributes } from 'astro/types'
+
+/**
+ * The typed half of a numeric setting: the value the slider beside it shows, but
+ * editable. Sliders are good for sweeping a range and hopeless for entering "37", so
+ * every numeric setting offers both, wired to the same value in `ui/controls.ts`.
+ *
+ * `min`/`max`/`step` come from the caller (ultimately from `@core/config`), so the
+ * field cannot offer a value the simulation would refuse.
+ */
+
+type Props = HTMLAttributes<'input'>
+
+const { class: className, ...otherProps } = Astro.props
+---
+
+<input
+    type="number"
+    inputmode="numeric"
+    class:list={[
+        'w-14 rounded-sm px-1 py-0.5 text-right font-semibold tabular-nums text-stone-800 focus-visible:outline-2 focus-visible:outline-rose-400',
+        className,
+    ]}
+    {...otherProps}
+/>
