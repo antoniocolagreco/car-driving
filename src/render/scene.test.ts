@@ -13,7 +13,7 @@ vi.mock('./car', () => renderMocks)
 vi.mock('./camera', () => ({ cameraTranslation: () => ({ x: 0, y: 0 }) }))
 vi.mock('./world', () => ({ drawGround: vi.fn(), drawRoad: vi.fn() }))
 
-import { drawScene } from './scene'
+import { drawScene, drawVictory } from './scene'
 
 const { drawCar, drawSensors } = renderMocks
 
@@ -77,6 +77,38 @@ describe('drawScene traffic visibility', () => {
             winner: undefined,
         })
         expect(drawCar).toHaveBeenCalledWith(layer.context, trafficCar)
+    })
+})
+
+describe('drawVictory', () => {
+    it('draws animated firework trails behind the victory text', () => {
+        const victoryContext = {
+            save: vi.fn(),
+            restore: vi.fn(),
+            beginPath: vi.fn(),
+            moveTo: vi.fn(),
+            lineTo: vi.fn(),
+            stroke: vi.fn(),
+            strokeText: vi.fn(),
+            fillText: vi.fn(),
+        } as unknown as CanvasRenderingContext2D
+        const victoryLayer: CanvasLayer = {
+            context: victoryContext,
+            width: 800,
+            height: 600,
+        } as CanvasLayer
+        const victoryState: SimulationState = {
+            ...state,
+            courseCleared: true,
+            victorySeconds: 0.8,
+        }
+
+        drawVictory(victoryLayer, victoryState)
+
+        expect(victoryContext.beginPath).toHaveBeenCalled()
+        expect(victoryContext.lineTo).toHaveBeenCalled()
+        expect(victoryContext.stroke).toHaveBeenCalled()
+        expect(victoryContext.fillText).toHaveBeenCalledWith('VICTORY!', 400, 260)
     })
 })
 
@@ -166,10 +198,7 @@ describe('drawScene racing-car paint order', () => {
 
         drawScene(layer, deduplicatedState, { trafficVisible: false })
 
-        expect(drawCar.mock.calls.map(([_, car]) => car)).toEqual([
-            championWinner.car,
-            player.car,
-        ])
+        expect(drawCar.mock.calls.map(([_, car]) => car)).toEqual([championWinner.car, player.car])
     })
 
     it('uses no display offset when highlighted cars share the starting point', () => {

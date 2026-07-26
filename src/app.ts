@@ -18,6 +18,7 @@ import {
     saveChampion,
     saveSettings,
 } from '@ui/persistence'
+import victoryAudioUrl from '../audio/win.mp3?url'
 
 /**
  * The only module allowed to know about `core/`, `render/` and `ui/` at once.
@@ -51,6 +52,45 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
     // A paint-only preference: changing it must never alter or restart the simulation.
     let trafficVisible: boolean = true
     let radarVisible: boolean = true
+    const victoryAudio: HTMLAudioElement = new Audio(victoryAudioUrl)
+    victoryAudio.preload = 'auto'
+    victoryAudio.volume = 1
+    victoryAudio.load()
+    let victoryWasActive: boolean = false
+    let victoryAudioUnlocked: boolean = false
+    const abortController: AbortController = new AbortController()
+
+    // Safari and other browsers require an audio element to begin playback from a
+    // user gesture at least once. Prime this exact element silently on the first
+    // interaction, then reuse it at full volume when the course is cleared.
+    const unlockVictoryAudio = (): void => {
+        if (victoryAudioUnlocked) {
+            return
+        }
+
+        victoryAudio.muted = true
+        victoryAudio.currentTime = 0
+        void victoryAudio
+            .play()
+            .then(() => {
+                victoryAudio.pause()
+                victoryAudio.currentTime = 0
+                victoryAudio.muted = false
+                victoryAudioUnlocked = true
+            })
+            .catch(() => {
+                victoryAudio.muted = false
+            })
+    }
+
+    document.addEventListener('pointerdown', unlockVictoryAudio, {
+        capture: true,
+        signal: abortController.signal,
+    })
+    document.addEventListener('keydown', unlockVictoryAudio, {
+        capture: true,
+        signal: abortController.signal,
+    })
 
     const onGenerationEnd = (champion: Network | undefined): void => {
         if (champion) {
@@ -114,14 +154,24 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             accumulator.seconds = 0
         }
 
+        const victoryIsActive: boolean = simulation.state.courseCleared
+        if (victoryIsActive && !victoryWasActive) {
+            victoryAudio.muted = false
+            victoryAudio.currentTime = 0
+            // Audio is celebratory only: a remaining browser-policy rejection must not
+            // interrupt the simulation, but is reported instead of being hidden.
+            void victoryAudio.play().catch((error: unknown) => {
+                console.warn('Victory audio playback was blocked by the browser', error)
+            })
+        }
+        victoryWasActive = victoryIsActive
+
         drawScene(simulationLayer, simulation.state, { trafficVisible, radarVisible })
         drawNetworkThrottled(performance.now())
         hud.update(simulation.state, fps)
     }
 
     const frameLoop = createFrameLoop(onFrame)
-
-    const abortController = new AbortController()
 
     // One live `Controls` record the keyboard writes into for the whole session. The
     // first real driving intent releases a newly armed manual round; key repeat does not.
@@ -206,6 +256,8 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         destroy(): void {
             abortController.abort()
             frameLoop.destroy()
+            victoryAudio.pause()
+            victoryAudio.currentTime = 0
             simulationLayer.destroy()
             networkLayer.destroy()
         },

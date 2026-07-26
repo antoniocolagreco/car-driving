@@ -122,14 +122,12 @@ describe('createPopulation', () => {
         }
     })
 
-    it('starts every car in the same lane', () => {
+    it('distributes cars across every lane in round-robin order', () => {
         const road = createRoad()
-        const expectedPosition = lanePosition(road, Math.floor(road.laneCount / 2))
-
         const cars = createPopulation(road, baseOptions)
 
-        for (const racingCar of cars) {
-            expect(racingCar.car.position).toEqual(expectedPosition)
+        for (const [index, racingCar] of cars.entries()) {
+            expect(racingCar.car.position).toEqual(lanePosition(road, index % road.laneCount))
         }
     })
 

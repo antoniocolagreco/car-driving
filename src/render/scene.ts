@@ -48,9 +48,7 @@ export const drawScene = (
         ? state.cars.find((racingCar) => racingCar.network === state.champion)
         : undefined
     const currentWinner: RacingCar | undefined = state.bestCar
-    const manualPlayerCar: RacingCar | undefined = state.manualDriving
-        ? state.playerCar
-        : undefined
+    const manualPlayerCar: RacingCar | undefined = state.manualDriving ? state.playerCar : undefined
 
     // Perception belongs below every car body, so it never paints sensor colour across
     // either the followed racer or the traffic obstacles.
@@ -75,8 +73,7 @@ export const drawScene = (
         })
     }
 
-    // 2. Previous champion. No display offset: every car starts from the exact same
-    // physical and visual point.
+    // 2. Previous champion, painted at its real world position with no display offset.
     if (championCar && championCar !== currentWinner && championCar !== manualPlayerCar) {
         drawCar(ctx, championCar.car, { winner: championCar.winner })
     }
@@ -111,7 +108,84 @@ export const drawScene = (
     }
 }
 
-/** Draws the five-second green celebration without stopping the simulation underneath. */
+type FireworkBurst = {
+    readonly xRatio: number
+    readonly yRatio: number
+    readonly delaySeconds: number
+    readonly phase: number
+    readonly color: string
+}
+
+const FIREWORK_BURSTS: readonly FireworkBurst[] = [
+    { xRatio: 0.18, yRatio: 0.25, delaySeconds: 0, phase: 0, color: '#f97316' },
+    { xRatio: 0.82, yRatio: 0.2, delaySeconds: 0.35, phase: 0.12, color: '#22d3ee' },
+    { xRatio: 0.5, yRatio: 0.34, delaySeconds: 0.7, phase: 0.24, color: '#e879f9' },
+    { xRatio: 0.3, yRatio: 0.5, delaySeconds: 1.05, phase: 0.36, color: '#4ade80' },
+    { xRatio: 0.7, yRatio: 0.46, delaySeconds: 1.4, phase: 0.48, color: '#fde047' },
+] as const
+
+const FIREWORK_CYCLE_SECONDS = 2
+const FIREWORK_EXPLOSION_SECONDS = 1.6
+const FIREWORK_PARTICLES = 20
+
+/** Deterministic screen-space fireworks: smooth animation without mutable particle state. */
+const drawFireworks = (
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    elapsedSeconds: number,
+): void => {
+    const scale: number = Math.min(width, height)
+
+    ctx.save()
+    ctx.globalCompositeOperation = 'lighter'
+    ctx.lineCap = 'round'
+
+    for (const burst of FIREWORK_BURSTS) {
+        const sinceFirstLaunch: number = elapsedSeconds - burst.delaySeconds
+        if (sinceFirstLaunch < 0) {
+            continue
+        }
+
+        const age: number = sinceFirstLaunch % FIREWORK_CYCLE_SECONDS
+        const centerX: number = width * burst.xRatio
+        const centerY: number = height * burst.yRatio
+        ctx.strokeStyle = burst.color
+        ctx.shadowColor = burst.color
+        ctx.shadowBlur = 8
+
+        const explosionProgress: number = age / FIREWORK_EXPLOSION_SECONDS
+        if (explosionProgress >= 1) {
+            continue
+        }
+
+        const fade: number = (1 - explosionProgress) ** 1.4
+        const radius: number = scale * (0.05 + explosionProgress * 0.24)
+        const gravity: number = scale * 0.08 * explosionProgress ** 2
+        ctx.globalAlpha = fade
+        ctx.lineWidth = Math.max(1, 2.5 * fade)
+
+        for (let particle = 0; particle < FIREWORK_PARTICLES; particle++) {
+            const angle: number = (Math.PI * 2 * particle) / FIREWORK_PARTICLES + burst.phase
+            const lengthVariation: number = 0.72 + ((particle * 7) % 5) * 0.07
+            const distance: number = radius * lengthVariation
+            const tipX: number = centerX + Math.cos(angle) * distance
+            const tipY: number = centerY + Math.sin(angle) * distance + gravity
+            const tailDistance: number = Math.max(0, distance - scale * 0.025)
+            const tailX: number = centerX + Math.cos(angle) * tailDistance
+            const tailY: number = centerY + Math.sin(angle) * tailDistance + gravity * 0.8
+
+            ctx.beginPath()
+            ctx.moveTo(tailX, tailY)
+            ctx.lineTo(tipX, tipY)
+            ctx.stroke()
+        }
+    }
+
+    ctx.restore()
+}
+
+/** Draws fireworks and the green banner over the live five-second victory parade. */
 export const drawVictory = (layer: CanvasLayer, state: SimulationState): void => {
     const ctx = layer.context
     const centerX = layer.width / 2
@@ -120,6 +194,8 @@ export const drawVictory = (layer: CanvasLayer, state: SimulationState): void =>
         0,
         Math.ceil(SIMULATION.victoryCelebrationSeconds - state.victorySeconds),
     )
+
+    drawFireworks(ctx, layer.width, layer.height, state.victorySeconds)
 
     ctx.save()
     ctx.font = 'bold 36px monospace'

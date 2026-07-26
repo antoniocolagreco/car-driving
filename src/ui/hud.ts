@@ -4,8 +4,7 @@ import { ELEMENT_IDS, findElement } from './dom'
 
 /**
  * The didactic centrepiece: shows which car the camera follows, how the
- * generation is going and, most importantly, the full fitness breakdown so the
- * reward system (`@core/fitness`) is actually visible while it runs.
+ * generation is going and the sparse overtake reward while it runs.
  *
  * Every element reference is resolved ONCE, in `createHud`, and every update
  * writes `textContent` only (never `innerHTML`) — the original HUD re-ran
@@ -24,13 +23,7 @@ const UPDATE_INTERVAL_MS = 100
 
 type BreakdownElements = {
     overtakes: HTMLElement
-    progress: HTMLElement
-    pace: HTMLElement
-    survival: HTMLElement
     crash: HTMLElement
-    stall: HTMLElement
-    hazard: HTMLElement
-    reverse: HTMLElement
 }
 
 type HudElements = {
@@ -62,13 +55,7 @@ const resolveElements = (): HudElements | undefined => {
     const headingDeviation = findElement(ids.headingDeviation)
     const fps = findElement(ids.fps)
     const overtakes = findElement(ids.breakdown.overtakes)
-    const progress = findElement(ids.breakdown.progress)
-    const pace = findElement(ids.breakdown.pace)
-    const survival = findElement(ids.breakdown.survival)
     const crash = findElement(ids.breakdown.crash)
-    const stall = findElement(ids.breakdown.stall)
-    const hazard = findElement(ids.breakdown.hazard)
-    const reverse = findElement(ids.breakdown.reverse)
 
     if (
         !networkId ||
@@ -82,13 +69,7 @@ const resolveElements = (): HudElements | undefined => {
         !headingDeviation ||
         !fps ||
         !overtakes ||
-        !progress ||
-        !pace ||
-        !survival ||
-        !crash ||
-        !stall ||
-        !hazard ||
-        !reverse
+        !crash
     ) {
         return undefined
     }
@@ -104,16 +85,7 @@ const resolveElements = (): HudElements | undefined => {
         speed,
         headingDeviation,
         fps,
-        breakdown: {
-            overtakes,
-            progress,
-            pace,
-            survival,
-            crash,
-            stall,
-            hazard,
-            reverse,
-        },
+        breakdown: { overtakes, crash },
         statusRegion: findElement(ELEMENT_IDS.statusRegion),
     }
 }
@@ -205,13 +177,7 @@ export const createHud = (): Hud => {
         setText(elements.fps, formatNumber(fps, 0))
 
         setText(elements.breakdown.overtakes, formatNumber(breakdown?.overtakes))
-        setText(elements.breakdown.progress, formatNumber(breakdown?.progress))
-        setText(elements.breakdown.pace, formatNumber(breakdown?.pace))
-        setText(elements.breakdown.survival, formatNumber(breakdown?.survival))
         setText(elements.breakdown.crash, formatNumber(breakdown?.crash))
-        setText(elements.breakdown.stall, formatNumber(breakdown?.stall))
-        setText(elements.breakdown.hazard, formatNumber(breakdown?.hazard))
-        setText(elements.breakdown.reverse, formatNumber(breakdown?.reverse))
     }
 
     return { update }

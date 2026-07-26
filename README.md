@@ -89,7 +89,8 @@ Each step, for every living car:
    network. The architecture is always `[12, ...hiddenLayers, 3]` (eleven areas plus speed).
 3. **Act** — the three outputs are `[throttle, brake, steering]`, all analog: throttle and
    steering in `[-1, 1]`, while brake is always a non-negative pressure in `[0, 1]`.
-4. **Score** — the reward system folds that one observation into the car's running fitness.
+4. **Score** — every new overtake adds 50 points; collisions and timeouts can remove a
+   fraction of those points.
 
 Physics runs on a **fixed 60 Hz timestep** with an accumulator, so behaviour is identical
 regardless of display refresh rate: a slow frame simply runs the steps it owes, back to
@@ -100,8 +101,8 @@ fast-forward a whole round in one frame.
 ## How a generation evolves
 
 The white champion is the winner of the previous successful race. Every completed race
-elects its best race result as the next champion: most overtakes, then fitness, followed by
-furthest progress and the time needed to reach that overtake total.
+elects its best eligible result as the next champion: most overtakes, then residual fitness
+after any crash/timeout malus, followed by the time needed to reach that overtake total.
 The next generation is built from it even when its fitness is below an older record:
 
 | Share of the population | Mutation rate                   | Purpose                         |
@@ -120,6 +121,10 @@ of a generation is to improve on the champion, not to re-roll it.
 Every band is expressed as a multiple of the rate on the slider, and that matters: the
 explorers used to be mutated somewhere between the slider and 100 %, so asking for a 2 %
 mutation still produced 22 near-random cars out of 100. The slider has to mean something.
+
+All competitors share one start line but are distributed across the available lanes in a
+stable round-robin order (`0, 1, 2, 0, ...`). The player car continues that same sequence
+after the generated population instead of being forced into a privileged lane.
 
 The next generation is bred from the best few networks (`PARENT_COUNT`), not only from
 the winner: a field that is entirely variations of one network is a hill climber wearing
@@ -145,66 +150,32 @@ near an obstacle, and per frame for steering hard near an obstacle. Both sound l
 tucking in behind a slow traffic car and staying there forever, pumping the brake and
 wiggling the wheel, farming reward frames without ever overtaking.
 
-So the current system pays only for results, and charges for bad states:
+The current experiment deliberately uses a sparse objective. Overtaking is the **only
+reward**; there are no points for progress, speed, survival, braking, steering or simply
+remaining alive:
 
-| Reward                                      | Value      |
-| ------------------------------------------- | ---------- |
-| Overtaking a traffic car                    | +50 each   |
-| Ground gained **on the traffic**            | +0.05 / px |
-| Speed used **while the road ahead is free** | +3.0 / s   |
-| Staying alive                               | +0.5 / s   |
+| Event                          | Fitness effect                  |
+| ------------------------------ | ------------------------------- |
+| Overtaking one traffic car     | +50 points                      |
+| Low-speed collision            | −50 % of earned overtake points |
+| Maximum-speed collision        | −90 % of earned overtake points |
+| Idle or overtake death timeout | −90 % of earned overtake points |
 
-| Penalty                                 | Value                                               |
-| --------------------------------------- | --------------------------------------------------- |
-| Crashing                                | −10 % to −100 % of what you earned, by impact speed |
-| **Unsafe speed for the available path** | −30 / s, graded by closeness                        |
-| Standing still with nothing in the way  | −5 / s                                              |
-| Driving in reverse                      | −0.05 / px                                          |
-| No new overtake within 10 seconds       | Eliminated; the run can no longer win or breed      |
+Collision loss is interpolated linearly from 50 % to 90 % using
+`abs(impactSpeed) / maxSpeed`. That gives braking a useful evolutionary gradient: shedding
+speed before an unavoidable impact always preserves more of an otherwise identical result.
+A timeout uses the maximum 90 % fraction. Penalties never stack beyond 90 %, even if a
+collision and timeout happen in the same simulation step.
 
-The hazard judges the resulting state rather than the chosen control. Steering clears it
-only when the swept path really becomes free; braking clears it by reducing the stopping
-distance. An ineffective steering command therefore no longer excuses an unsafe trajectory.
+The number of overtakes remains the primary race result, so ten overtakes always outrank
+nine. At an equal overtake count, residual fitness decides; only then does the earlier
+overtake time break the tie. Cars with zero overtakes are not eligible. An overtake timeout
+also makes a result ineligible for winning or breeding, independently of the residual score
+kept as telemetry.
 
-"In the path" is literal: the corridor the car's own body sweeps along its current
-heading, guard rails included. A forward cone — which is what this used to use — calls the
-rail beside an outer lane an obstacle 105 px away at all times, so a car driving perfectly
-straight down that lane reads as permanently about to crash, and every judgement built on
-top inherits the error.
-
-Every coefficient above was set by measuring, not by taste. Four of them were wrong
-in a way you could watch on screen, and each fix is documented where the number lives:
-
-- **Progress is measured against the traffic, not the tarmac.** Traffic rolls
-  forward, so a car that tucks in behind the pack is _carried_ down the road. One
-  measured champion covered 9930 px with two overtakes by braking 98 % of the time
-  and riding the convoy for a full minute. Subtracting how far the course itself
-  moved makes that ride worth exactly what it earned: nothing.
-- **Crashing costs a share of the run, not a flat number.** A flat penalty has to be
-  large to teach anything (at 50, a run holding 300 points of overtakes lost only 50
-  by wrecking, and the champion pressed the brake in **0 %** of its steps) and once it
-  is large it starts erasing results — at a flat 200, a car that overtook someone and
-  then crashed finished on zero, its one achievement deleted. As a fraction it cannot
-  do that, and the cost still grows with how good the run was.
-- **Speed pays only where it is safe, and costs where it is not.** A flat average-speed
-  reward paid for flooring the throttle into the first obstacle; removing it entirely
-  was worse, because the population settled on crawling everywhere, which dodges every
-  speed penalty and never needs the brake. The pair `REWARD.pace` / `PENALTY.hazard` is
-  what makes modulation the winning policy, and the hazard charge deliberately does not
-  look at the brake pedal — only at the excess speed itself, which the network is free to
-  shed however it likes.
-- **There is no penalty for going slowly behind traffic.** There used to be one
-  (−2/s "tailgating") and it punished the exact behaviour the simulation is trying to
-  teach. Loitering is already fatal: the idle timeout kills anyone who stops making
-  progress, so charging for it twice only taught the cars that braking is for losers.
-
-The score floor is zero: a car that crashed away everything it gained has earned nothing,
-not a debt. Zero is a legitimate result though, so **being eligible to win is a separate
-question from scoring well**. A run counts if it moved forward — or overtook somebody — and
-was not eliminated by the overtake deadline. Requiring a positive score instead would let a
-barely-moving early wreck outrank a car that drove half the course and then paid all of it
-back in hazard and crash penalties. When nobody moved forward at all there is no winner,
-and the reigning champion keeps its place.
+Progress still exists internally, but only to drive the idle death timeout. It contributes
+no fitness. This distinction keeps the anti-stall and anti-loitering safety valves without
+quietly reintroducing progress as a second evolutionary objective.
 
 ## How the search works
 
@@ -230,19 +201,21 @@ The page is two canvases: the race on the left, the followed car's network on th
 redrawn eight times a second with every connection's opacity showing how much it actually
 contributed to the last decision. The overlay panel lists the live telemetry and, below the
 divider, the **full fitness breakdown** term by term — rewards green, penalties red — so the
-reward system is readable while it runs instead of only in the source.
+reward system is readable while it runs instead of only in the source. The current sparse
+breakdown contains only `Overtakes` and `Crash / timeout`.
 
-| What you see           | What it is                                                        |
-| ---------------------- | ----------------------------------------------------------------- |
-| **White car**          | The champion: last generation's winner, running its network as-is |
-| Coloured cars          | Its mutated offspring, one colour each                            |
-| **Blue car**           | The player's car, only while manual driving is on                 |
-| **Dark grey car**      | A car eliminated by a crash or a timeout                          |
-| Near-black cars        | Traffic: rolling obstacles, not learners, always the same colour  |
-| `WINNER` badge         | Whoever currently holds the best race result of the round         |
-| Red rear lights        | The brake, which is analog pressure — bright means hard braking   |
-| Yellow areas, red dots | The followed car's eleven perception areas and closest contacts   |
-| Green `VICTORY!`       | Somebody just passed every traffic car; the course is solved      |
+| What you see      | What it is                                                         |
+| ----------------- | ------------------------------------------------------------------ |
+| **White car**     | The champion: last generation's winner, running its network as-is  |
+| Coloured cars     | Its mutated offspring, one colour each                             |
+| **Blue car**      | The player's car, only while manual driving is on                  |
+| **Dark grey car** | A car eliminated by a crash or a timeout                           |
+| Near-black cars   | Traffic: rolling obstacles, not learners, always the same colour   |
+| `WINNER` badge    | Whoever currently holds the best race result of the round          |
+| Red rear lights   | The brake, which is analog pressure — bright means hard braking    |
+| Yellow polygon    | Closed outline of the followed car's current free-space readings   |
+| Red / green dots  | Collision contacts / clear outer-edge samples for each sensor zone |
+| Green `VICTORY!`  | Somebody just passed every traffic car; the course is solved       |
 
 The camera follows the leader, or the player's car while a human is driving it, or the
 winner once nobody is left racing.
@@ -250,15 +223,18 @@ winner once nobody is left racing.
 A round ends when every car is out. A car is out when it crashes, when it fails to
 cover `SIMULATION.idleProgressThreshold` px within `idleTimeoutSeconds` (a minimum
 average speed, not merely "some movement" — see the comment on those two values), or
-when it goes 10 seconds without a new overtake. Missing that deadline eliminates the car
-and makes it ineligible as winner or parent, while leaving its score visible as telemetry.
+when it goes 12 seconds without a new overtake. Either death timeout applies the same 90 %
+malus as a maximum-speed collision. Missing the overtake deadline also makes the car
+ineligible as winner or parent, while leaving its residual score visible as telemetry.
 The final `maxRoundSeconds` ceiling costs nothing and only exists because the road past the
 last traffic row is empty and infinite.
 
-Clearing the course is the one ending that does not wait for an empty field: the round
-freezes into a five-second victory banner instead, and only then retires everyone —
-deliberately without a crash penalty, so the winner cannot lose what it just achieved by
-drifting into a rail during its own celebration.
+Clearing the course is the one ending that does not wait for an empty field. A five-second
+victory banner, animated fireworks and a one-shot victory sound appear while the simulation,
+traffic and competitors keep moving. The camera stays on the winner, which continues under
+its network (or the player's controls) and is protected from collision and timeout retirement
+during the parade. When the round closes, the other competitors are retired while the winner
+remains alive and keeps driving until the next generation replaces the field.
 
 ## Controls
 
@@ -271,11 +247,12 @@ drifting into a rail during its own celebration.
 | **Evolve**         | Promote the current best car immediately                                 |
 | **Manual driving** | Start a fresh manual round, paused until the first driving input         |
 | **Traffic**        | Show or hide the obstacle cars — paint only, the simulation is untouched |
+| **Radar**          | Show or hide the radar polygon — sensing remains active                  |
 
-Both switches say which state they are in and change colour with it, because what they
+These controls say which state they are in and change colour with it, because what they
 toggle is otherwise invisible: manual driving does nothing until a key is pressed, and
 hiding the traffic changes nothing but the picture. The cars still sense and hit the cars
-you cannot see.
+you cannot see. Hiding the radar likewise changes only rendering, never neural inputs.
 
 | Setting        | Effect                                                                       |
 | -------------- | ---------------------------------------------------------------------------- |

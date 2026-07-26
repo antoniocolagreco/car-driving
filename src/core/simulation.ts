@@ -17,13 +17,14 @@ import {
     feedForward,
     trainBatch,
 } from './neural-network'
-import { castSensors, frontDistance } from './sensor'
+import { castSensors } from './sensor'
 import {
     type FitnessSample,
     hasMissedOvertakeDeadline,
     isStuck,
-    recordOvertakeTimeout,
     recordCrash,
+    recordOvertakeTimeout,
+    recordTimeout,
     selectBest,
     selectParents,
     updateStats,
@@ -214,8 +215,6 @@ export const createSimulation = (
     let realtimeReplayCursor = 0
     /** Full-dataset training accumulated at unchanged weights, one exact epoch at a time. */
     let consolidation: ConsolidationState | undefined
-    /** Where the traffic reference car sat when the round started; see `trafficDrift` in `step`. */
-    let trafficStartY = 0
     const trafficSeed = options?.trafficSeed
     const onGenerationEnd = options?.onGenerationEnd
     const road = createRoad()
@@ -289,7 +288,6 @@ export const createSimulation = (
             SIMULATION.trafficRows,
             trafficSeed ?? Math.floor((state.generation - 1) / SIMULATION.generationsPerCourse),
         )
-        trafficStartY = state.traffic[0]?.position.y ?? 0
         state.aliveCars = state.cars
         state.activeCar = state.cars[0]
         state.bestCar = undefined
@@ -418,9 +416,10 @@ export const createSimulation = (
 
         state.elapsedSeconds += dt
 
-        // Victory is a frozen celebration, not five extra seconds in which the winner
-        // can crash and lose what it has already achieved. When it expires, retire the
-        // field without recording crashes and close the generation.
+        // Victory is a live five-second parade. The simulation keeps stepping below,
+        // while the winner is protected from collision/timeout retirement and remains
+        // the camera target. When the parade expires, retire only the other cars: the
+        // winner keeps driving, alive, until the next generation replaces the field.
         if (state.courseCleared && !state.gameOver) {
             state.victorySeconds += dt
             if (
@@ -440,17 +439,19 @@ export const createSimulation = (
             }
             if (state.victorySeconds >= SIMULATION.victoryCelebrationSeconds) {
                 for (const racingCar of state.aliveCars) {
-                    crash(racingCar.car)
+                    if (racingCar !== state.courseWinner) {
+                        crash(racingCar.car)
+                    }
                 }
-                state.aliveCars = []
+                state.aliveCars = state.courseWinner ? [state.courseWinner] : []
                 state.bestCar = state.courseWinner
                 state.activeCar = state.courseWinner
                 for (const racingCar of state.cars) {
                     racingCar.winner = racingCar === state.courseWinner
                 }
                 finishGeneration()
+                return
             }
-            return
         }
 
         // 1. Build the full obstacle list once for this step: every traffic car's
@@ -471,18 +472,13 @@ export const createSimulation = (
             .map((trafficCar) => trafficCar.position.y)
             .sort((a, b) => a - b)
 
-        // How far the whole course has rolled forward since the round began. Every
-        // traffic car starts at rest and accelerates identically, so one of them is
-        // a faithful reference for all. Subtracted from each car's own advance below,
-        // so nobody is paid for ground the traffic covered on their behalf.
-        const trafficDrift =
-            state.traffic.length > 0 ? trafficStartY - state.traffic[0].position.y : 0
-
         // 2. Drive every living car through exactly one physics step. Sensors
         // are cast once per car here and reused for both driving and scoring
         // — never cast a second time, which is what the old scoring code did.
         for (const racingCar of state.aliveCars) {
             const { car, network, stats } = racingCar
+            const isCelebratingWinner: boolean =
+                state.courseCleared && racingCar === state.courseWinner
 
             const nearbyObstacles = obstacles.filter((segment) =>
                 isWithinRange(segment, car.position),
@@ -506,7 +502,7 @@ export const createSimulation = (
                 if (hasDrivingIntent) {
                     playerWasDriven = true
                 }
-                if (playerWasDriven) {
+                if (playerWasDriven && !state.courseCleared) {
                     // Once the demonstration begins, keep every frame — including deliberate
                     // coasting — and rehearse old observations in a rotating realtime batch.
                     const experience: TrainingExample = {
@@ -533,36 +529,25 @@ export const createSimulation = (
 
             const sample: FitnessSample = {
                 position: car.position,
-                speed: car.speed,
-                speedRatio: car.speed / car.spec.maxSpeed,
-                // Reuse exactly the front observation that drove this decision; no
-                // second collision query may disagree with the network's perception.
-                pathDistance: frontDistance(sensorState),
-                // How far this car would need to shed its current speed, from the
-                // physics in `stepCar`: v² / 2a with `a = brakePower` per step.
-                stoppingDistance: car.speed ** 2 / (2 * car.spec.brakePower),
                 overtakes: countGreaterThan(trafficYsAscending, car.position.y),
-                trafficDrift,
             }
             updateStats(stats, sample, dt)
 
-            if (collided) {
-                // `updateStats` must observe impact speed before `crash` resets it.
+            if (collided && !isCelebratingWinner) {
                 recordCrash(stats, Math.abs(car.speed) / car.spec.maxSpeed)
                 crash(car)
             }
 
-            // Retired for making no progress, which is not a crash: it costs nothing
-            // beyond the `stall` it has been paying all along, and marking it as a
-            // wreck would charge it twice for the same failure.
-            if (isStuck(stats)) {
+            // Retire cars that fail the independent minimum-progress timeout.
+            if (!isCelebratingWinner && isStuck(stats)) {
+                recordTimeout(stats)
                 crash(car)
             }
 
             // A car must keep overtaking, not merely moving. Missing the deadline eliminates
-            // it and marks the result ineligible, so it cannot hold the generation open or
-            // reproduce. Its score remains visible as telemetry rather than being zeroed.
-            if (hasMissedOvertakeDeadline(stats)) {
+            // it, applies the maximum failure malus and marks the result ineligible, so it
+            // cannot reproduce. The residual score remains visible as telemetry.
+            if (!isCelebratingWinner && hasMissedOvertakeDeadline(stats)) {
                 recordOvertakeTimeout(stats)
                 crash(car)
             }
@@ -578,9 +563,8 @@ export const createSimulation = (
         // timeout above only catches cars that stop making progress; a car that
         // keeps driving down the empty road past the last traffic row makes
         // progress forever, so without this the generation would never end.
-        // Retiring is not crashing: `recordCrash` is deliberately NOT called, so
-        // surviving to the ceiling costs nothing.
-        if (state.elapsedSeconds >= SIMULATION.maxRoundSeconds) {
+        // Reaching the ceiling is retirement, not an additional scoring event.
+        if (!state.courseCleared && state.elapsedSeconds >= SIMULATION.maxRoundSeconds) {
             for (const racingCar of state.aliveCars) {
                 crash(racingCar.car)
             }
@@ -590,9 +574,9 @@ export const createSimulation = (
         state.aliveCars = state.cars.filter((racingCar) => !racingCar.car.crashed)
 
         // 6. Find the best car across the WHOLE population, crashed cars
-        // included — a car that crashed after real progress can still be the
-        // winner — and flag it for the renderer/HUD.
-        state.bestCar = selectBest(state.cars)
+        // included — an eligible car keeps the overtakes earned before impact — and
+        // flag it for the renderer/HUD.
+        state.bestCar = state.courseCleared ? state.courseWinner : selectBest(state.cars)
         for (const racingCar of state.cars) {
             racingCar.winner = racingCar === state.bestCar
         }
@@ -604,16 +588,18 @@ export const createSimulation = (
         // Watch the player's car while a human is driving it; otherwise follow the leader.
         const humanCar = manualControls ? state.playerCar : undefined
         state.activeCar =
-            humanCar && !humanCar.car.crashed
-                ? humanCar
-                : state.aliveCars.length > 0
-                  ? leader(state.aliveCars)
-                  : state.bestCar
+            state.courseCleared && state.courseWinner
+                ? state.courseWinner
+                : humanCar && !humanCar.car.crashed
+                  ? humanCar
+                  : state.aliveCars.length > 0
+                    ? leader(state.aliveCars)
+                    : state.bestCar
 
         // Driving decisions intentionally use the observation from the beginning of the
         // step. Rendering that same polygon after the car has moved leaves it one frame
         // behind (up to 10 px at top speed), so refresh only the followed car against the
-        // final car/traffic poses. This changes no controls, score or network input.
+        // final car/traffic poses. This changes no controls, fitness or network input.
         if (state.activeCar) {
             const followedCar: RacingCar = state.activeCar
             const renderObstacles: Segment[] = currentObstacleSegments()
@@ -689,8 +675,7 @@ export const createSimulation = (
     const startManualDriving = (controls: Controls): void => {
         manualControls = controls
         restart()
-        // Keep the player in exactly the same physical and visual starting context as
-        // every other racer, so its demonstrated network learns from identical readings.
+        // Keep the camera on the player at its assigned lane on the shared start line.
         if (state.playerCar) {
             state.activeCar = state.playerCar
         }

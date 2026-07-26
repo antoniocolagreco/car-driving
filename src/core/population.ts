@@ -98,6 +98,10 @@ export const mutationRateForIndex = (
  */
 const CHAMPION_COLOR = '#ffffff'
 
+/** Assigns competitors to lane centres in a stable round-robin order. */
+const raceStartPosition = (road: Road, competitorIndex: number): Vec2 =>
+    lanePosition(road, competitorIndex % road.laneCount)
+
 /**
  * Display colour used only while the human holds the wheel. The player's stored body
  * colour remains random, so under neural-network control it looks like an ordinary
@@ -194,7 +198,9 @@ export const createPlayerCar = (road: Road, options: PopulationOptions): RacingC
     const architecture = architectureFor(options)
     const parents = usableParents(options, architecture)
     return createRacingCar(
-        lanePosition(road, Math.floor(road.laneCount / 2)),
+        // The player is appended after the generated population, so continue the
+        // same lane rotation instead of favouring a fixed lane.
+        raceStartPosition(road, options.quantity),
         parents.length > 0 ? mutate(parents[0], 0) : createNetwork(architecture),
         randomColor(),
         true,
@@ -202,8 +208,8 @@ export const createPlayerCar = (road: Road, options: PopulationOptions): RacingC
 }
 
 /**
- * Builds one generation's population. Every car starts at the same position,
- * the road's centre lane (see `lanePosition`). A parent trained for a different
+ * Builds one generation's population. Cars share the same start line but rotate
+ * through every available lane (`0, 1, 2, 0, ...`). A parent trained for a different
  * fixed sensor layout or hidden-layer shape than requested here is unusable — its
  * `architecture` does not match `[12, ...hiddenLayers, 3]` and it could
  * not even `feedForward` — so it is dropped, and if that leaves no parents at all
@@ -211,7 +217,6 @@ export const createPlayerCar = (road: Road, options: PopulationOptions): RacingC
  */
 export const createPopulation = (road: Road, options: PopulationOptions): RacingCar[] => {
     const architecture = architectureFor(options)
-    const position = lanePosition(road, Math.floor(road.laneCount / 2))
     const parents = usableParents(options, architecture)
 
     const cars: RacingCar[] = []
@@ -224,7 +229,13 @@ export const createPopulation = (road: Road, options: PopulationOptions): Racing
             parents,
         )
         const isChampion = parents.length > 0 && index === 0
-        cars.push(createRacingCar(position, network, isChampion ? CHAMPION_COLOR : randomColor()))
+        cars.push(
+            createRacingCar(
+                raceStartPosition(road, index),
+                network,
+                isChampion ? CHAMPION_COLOR : randomColor(),
+            ),
+        )
     }
     return cars
 }

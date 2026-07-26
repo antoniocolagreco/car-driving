@@ -44,13 +44,7 @@ export const ELEMENT_IDS = {
         fps: 'hud-fps',
         breakdown: {
             overtakes: 'hud-breakdown-overtakes',
-            progress: 'hud-breakdown-progress',
-            pace: 'hud-breakdown-pace',
-            survival: 'hud-breakdown-survival',
             crash: 'hud-breakdown-crash',
-            stall: 'hud-breakdown-stall',
-            hazard: 'hud-breakdown-hazard',
-            reverse: 'hud-breakdown-reverse',
         },
     },
 } as const
