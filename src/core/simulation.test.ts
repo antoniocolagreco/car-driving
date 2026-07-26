@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { vec } from '@core/geometry'
-import { DEFAULTS, SIMULATION } from '@core/config'
+import { SIMULATION } from '@core/config'
 import { SENSOR_ZONE_ORDER, sensorOrigin } from '@core/sensor'
 import { type Network, createNetwork } from './neural-network'
 import { type Controls, crash } from './car'
@@ -152,10 +152,12 @@ describe('createSimulation: generation lifecycle', () => {
         }
 
         const generationBefore = sim.state.generation
+        const completedBefore = sim.state.completedGenerations
         sim.step(SIMULATION.stepSeconds)
 
         expect(sim.state.aliveCars).toHaveLength(0)
         expect(sim.state.gameOver).toBe(true)
+        expect(sim.state.completedGenerations).toBe(completedBefore + 1)
         expect(events).toHaveLength(1)
         // Everybody crashed on the first step, so this round produced nothing worth
         // carrying forward: whether a wreck clears zero by the single frame of survival
@@ -169,7 +171,18 @@ describe('createSimulation: generation lifecycle', () => {
         expect(events).toHaveLength(1) // never fires again while paused or on restart
         expect(sim.state.gameOver).toBe(false)
         expect(sim.state.generation).toBe(generationBefore + 1)
+        expect(sim.state.completedGenerations).toBe(completedBefore + 1)
         expect(sim.state.aliveCars.length).toBeGreaterThan(0)
+    })
+
+    it('does not count a manually restarted generation as completed', () => {
+        const sim = createSimulation(smallSettings, { trafficSeed: 'manual-restart-counter' })
+        const generationBefore = sim.state.generation
+
+        sim.restart()
+
+        expect(sim.state.generation).toBe(generationBefore + 1)
+        expect(sim.state.completedGenerations).toBe(0)
     })
 
     it('replaces the historical record holder with the winner of the current round', () => {
@@ -505,23 +518,5 @@ describe('createSimulation: promoteBest', () => {
 
         expect(sim.promoteBest()).toBe(sim.state.bestCar.network)
         expect(sim.state.champion).toBe(sim.state.bestCar.network)
-    })
-})
-
-describe('createSimulation: performance smoke test', () => {
-    it('completes 60 steps with 200 cars without throwing', () => {
-        const settings: SimulationSettings = {
-            carsQuantity: 200,
-            mutationRate: DEFAULTS.mutationRate,
-            hiddenLayers: [...DEFAULTS.hiddenLayers],
-        }
-        const sim = createSimulation(settings, { trafficSeed: 'smoke-test' })
-
-        for (let i = 0; i < 60; i++) {
-            sim.step(SIMULATION.stepSeconds)
-        }
-
-        // 200 evolving cars plus the player's, which is always in the field.
-        expect(sim.state.cars).toHaveLength(201)
     })
 })

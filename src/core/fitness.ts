@@ -2,11 +2,10 @@
  * The reward system: turns raw driving observations into a single fitness number
  * that decides which network survives into the next generation.
  *
- * The rule that shapes every term below: reward outcomes, never actions. The old
- * scoring system (`src/libs/score.ts` and `CarStats` in `src/models`) paid a car
- * per frame for having the brake pressed near an obstacle, and per frame for
- * steering hard near an obstacle. That rewards the *act* of braking and steering,
- * not what they achieve, and evolution found the exploit immediately: the
+ * The rule that shapes every term below: reward outcomes, never actions. The original
+ * scoring system paid a car per frame for having the brake pressed near an obstacle,
+ * and per frame for steering hard near one. That rewards the *act* of braking and
+ * steering, not what they achieve, and evolution found the exploit immediately: the
  * highest-scoring behaviour was to tuck in behind a slow traffic car and stay
  * there forever, pumping the brake and wiggling the wheel, farming reward frames
  * without ever overtaking. A car that never reaches the finish line was
@@ -31,7 +30,7 @@
  * That means the reward system can be built, tested and reasoned about without a
  * car, a road or a canvas anywhere in sight.
  *
- * Mutability rule (see CONTRACTS.md): `CarStats` is a mutable record, stepped in
+ * Mutability rule: `CarStats` is a mutable record, stepped in
  * place once per simulation step by `updateStats`. `FitnessBreakdown` returned by
  * `computeFitness` is a fresh value each time — it is cheap and it is exactly the
  * kind of value the HUD wants to diff against the previous frame.
@@ -313,10 +312,9 @@ export const computeFitness = (stats: CarStats): FitnessBreakdown => {
  * crash penalties; excluding that car would let a barely-moving early wreck beat a model
  * that travelled much further. When nobody moved forward, there is still no winner.
  *
- * This is NOT the old capability gate. `getBestCar` in the pre-refactor
- * `src/libs/simulation.ts` required a car to have accelerated AND turned left AND
- * turned right AND braked AND overtaken someone before it could win; in early
- * generations nobody satisfied all five, so no champion was ever saved and the
+ * This is NOT the original capability gate, which required a car to have accelerated AND
+ * turned left AND turned right AND braked AND overtaken someone before it could win; in
+ * early generations nobody satisfied all five, so no champion was ever saved and the
  * simulation sat on "NO WINNER" forever. The condition here is on the outcome, not
  * on a checklist of actions: moving forward counts unless the overtake timeout excludes it.
  */

@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-    clamp,
-    lerp,
-    normalize,
-    normalizeWithThreshold,
-    toHexDualColorRange,
-    weightedAverage,
-} from './math'
+import { clamp, lerp, normalize, normalizeWithThreshold, toHexDualColorRange } from './math'
 
 describe('clamp', () => {
     it('leaves a value inside the range untouched', () => {
@@ -63,17 +56,6 @@ describe('normalizeWithThreshold', () => {
     it('maps a positive value between the threshold and fromMax into [0, toMax]', () => {
         // Halfway between threshold=0 and fromMax=10 should land halfway between 0 and toMax=1.
         expect(normalizeWithThreshold(5, -5, 10, -1, 1, 0)).toBeCloseTo(0.5)
-    })
-})
-
-describe('weightedAverage', () => {
-    it('weighs values equally when weights are equal', () => {
-        expect(weightedAverage({ value: 0, weight: 1 }, { value: 10, weight: 1 })).toBe(5)
-    })
-
-    it('pulls the result toward the heavier weight', () => {
-        const result = weightedAverage({ value: 0, weight: 3 }, { value: 10, weight: 1 })
-        expect(result).toBeCloseTo(2.5)
     })
 })
 

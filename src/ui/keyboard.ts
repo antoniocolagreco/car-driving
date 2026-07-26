@@ -17,7 +17,7 @@ export type ManualControlHandlers = {
  * read every step, exactly as it reads a network's outputs.
  *
  * Arrows or WASD steer and accelerate, Space brakes. The object returned is MUTATED in
- * place as keys go down and up — `simulation.setManualControls` keeps a reference to it
+ * place as keys go down and up — `simulation.startManualDriving` keeps a reference to it
  * and copies it per step, so there is nothing to poll and no event plumbing in `core/`.
  *
  * Keys are tracked as a set of held codes rather than by writing the controls directly

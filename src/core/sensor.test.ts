@@ -98,24 +98,26 @@ describe('castSensors', () => {
     })
 
     it('projects full-flank side areas out to the common sensor range', () => {
+        const halfWidth = RACING_CAR.width / 2
+        const halfHeight = RACING_CAR.height / 2
         const sensor = castSensors(origin, 0, [
-            { a: vec(-30, -30), b: vec(-30, 30) },
-            { a: vec(35, -30), b: vec(35, 30) },
+            { a: vec(-halfWidth - 10, -30), b: vec(-halfWidth - 10, 30) },
+            { a: vec(halfWidth + 15, -30), b: vec(halfWidth + 15, 30) },
         ])
         const leftSide = sensor.zones.find((zone) => zone.id === SENSOR_ZONE.LEFT_SIDE)
         const rightSide = sensor.zones.find((zone) => zone.id === SENSOR_ZONE.RIGHT_SIDE)
 
         const expectedLeft: readonly Vec2[] = [
-            vec(-20, -35),
-            vec(-20, 35),
-            vec(-20 - SENSOR.range, 35),
-            vec(-20 - SENSOR.range, -35),
+            vec(-halfWidth, -halfHeight),
+            vec(-halfWidth, halfHeight),
+            vec(-halfWidth - SENSOR.range, halfHeight),
+            vec(-halfWidth - SENSOR.range, -halfHeight),
         ]
         const expectedRight: readonly Vec2[] = [
-            vec(20, -35),
-            vec(20, 35),
-            vec(20 + SENSOR.range, 35),
-            vec(20 + SENSOR.range, -35),
+            vec(halfWidth, -halfHeight),
+            vec(halfWidth, halfHeight),
+            vec(halfWidth + SENSOR.range, halfHeight),
+            vec(halfWidth + SENSOR.range, -halfHeight),
         ]
         expectedLeft.forEach((point, index) => {
             expect(leftSide?.area[index].x).toBeCloseTo(point.x)
@@ -132,27 +134,32 @@ describe('castSensors', () => {
     })
 
     it('front sees an obstacle between former ray lines across the whole car width', () => {
-        const obstacle: Segment = { a: vec(19, -170), b: vec(19, -120) }
+        const insideX = RACING_CAR.width / 2 - 1
+        const expectedDistance = 120 - RACING_CAR.height / 2
+        const obstacle: Segment = { a: vec(insideX, -170), b: vec(insideX, -120) }
         const sensor = castSensors(origin, 0, [obstacle])
         const front = sensor.zones.find((zone) => zone.id === SENSOR_ZONE.FRONT)
 
-        expect(front?.distance).toBeCloseTo(85)
-        expect(front?.closestHit?.point.x).toBe(19)
-        expect(front?.reading).toBeCloseTo(1 - 85 / SENSOR.range)
+        expect(front?.distance).toBeCloseTo(expectedDistance)
+        expect(front?.closestHit?.point.x).toBe(insideX)
+        expect(front?.reading).toBeCloseTo(1 - expectedDistance / SENSOR.range)
     })
 
     it('front ignores a segment just outside its car-width rectangle', () => {
-        const obstacle: Segment = { a: vec(20.01, -170), b: vec(20.01, -120) }
+        const outsideX = RACING_CAR.width / 2 + 0.01
+        const obstacle: Segment = { a: vec(outsideX, -170), b: vec(outsideX, -120) }
         const sensor = castSensors(origin, 0, [obstacle])
 
         expect(frontDistance(sensor)).toBe(Infinity)
     })
 
     it('front detects contacts exactly on both width boundaries', () => {
-        for (const x of [-20, 20]) {
+        const halfWidth = RACING_CAR.width / 2
+        const expectedDistance = 120 - RACING_CAR.height / 2
+        for (const x of [-halfWidth, halfWidth]) {
             const obstacle: Segment = { a: vec(x, -170), b: vec(x, -120) }
             const sensor = castSensors(origin, 0, [obstacle])
-            expect(frontDistance(sensor)).toBeCloseTo(85)
+            expect(frontDistance(sensor)).toBeCloseTo(expectedDistance)
         }
     })
 
@@ -193,7 +200,7 @@ describe('castSensors', () => {
         const obstacle: Segment = { a: vec(-170, -10), b: vec(-120, 10) }
         const sensor = castSensors(origin, Math.PI / 2, [obstacle])
 
-        expect(frontDistance(sensor)).toBeCloseTo(85)
+        expect(frontDistance(sensor)).toBeCloseTo(120 - RACING_CAR.height / 2)
     })
 
     it('is deterministic for equal world inputs', () => {

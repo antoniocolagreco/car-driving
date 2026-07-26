@@ -41,7 +41,7 @@ export const SIMULATION = {
 	/** Forward progress, in pixels, that counts as "still making progress" and resets the idle timer. */
 	idleProgressThreshold: 200,
 	/** Maximum seconds allowed between overtakes before the car is eliminated and excluded. */
-	overtakeTimeoutSeconds: 10,
+	overtakeTimeoutSeconds: 12,
 	/** Vertical position of the followed car on screen, as a fraction of canvas height. */
 	cameraHeightRatio: 0.7,
 	/**
@@ -71,8 +71,8 @@ export const RACING_CAR = {
 	acceleration: 0.05,
 	maxReverse: 1,
 	brakePower: 0.2,
-	width: 40,
-	height: 70,
+	width: 42,
+	height: 96,
 } as const;
 
 /**
@@ -90,8 +90,8 @@ export const TRAFFIC_CAR = {
 	acceleration: 0.02,
 	maxReverse: 1,
 	brakePower: 0.05,
-	width: 40,
-	height: 70,
+	width: 42,
+	height: 96,
 } as const;
 
 const SENSOR_RANGE = 700;
@@ -109,17 +109,7 @@ export const SENSOR = {
 } as const;
 
 /**
- * How many of a generation's best cars get to breed the next one.
- *
- * One is the obvious choice and it is a trap: a population where every car is a
- * variation of a single network is a hill climber wearing a genetic algorithm's
- * clothes, and it stalls the moment that one network sits in a local optimum —
- * measured, the champion plateaued at 6 overtakes for a dozen generations at a time.
- * Breeding from the top few keeps genuinely different strategies alive in parallel,
- * and elitism still guarantees the very best network survives untouched.
- */
-/**
- * How fast the network learns from a human driving it (`trainStep` in
+ * How fast the network learns from a human driving it (`trainBatch` in
  * `neural-network.ts`). Small on purpose: one step runs 60 times a second, so a single
  * second of driving is 60 corrections, and a rate large enough to feel immediate would
  * make the network chase the last frame instead of the shape of the driving.
@@ -138,6 +128,16 @@ export const MANUAL_TRAINING = {
 	consolidationLearningRate: 0.05,
 } as const;
 
+/**
+ * How many of a generation's best cars get to breed the next one.
+ *
+ * One is the obvious choice and it is a trap: a population where every car is a
+ * variation of a single network is a hill climber wearing a genetic algorithm's
+ * clothes, and it stalls the moment that one network sits in a local optimum —
+ * measured, the champion plateaued at 6 overtakes for a dozen generations at a time.
+ * Breeding from the top few keeps genuinely different strategies alive in parallel,
+ * and elitism still guarantees the very best network survives untouched.
+ */
 export const PARENT_COUNT = 4;
 
 export const MUTATION = {

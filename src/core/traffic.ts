@@ -13,8 +13,7 @@ import { type Road, lanePosition } from './road'
 
 /**
  * Deterministic traffic generation. The obstacle course a car has to drive
- * through is built from a fixed catalogue of row layouts ("patterns") instead
- * of the old file's 12 near-identical functions plus a 12-case switch: the
+ * through is built from a fixed catalogue of row layouts ("patterns"): the
  * course is data, and reading `TRAFFIC_PATTERNS` shows the whole design at a
  * glance instead of requiring a trip through a dozen tiny functions.
  */
@@ -57,9 +56,8 @@ export const TRAFFIC_PATTERNS: readonly TrafficPattern[] = [
             { lane: 2, offset: 0 },
         ],
     },
-    // FIX: the old `doubleMiddle` was byte-for-byte identical to `bothSides`
-    // (lanes 0 and 2, no offset) — a dead duplicate, not a distinct pattern.
-    // Staggering the second car makes it an actually different obstacle to solve.
+    // The second car is staggered on purpose: without the offset this row would be
+    // `bothSides` again (lanes 0 and 2, level) rather than a distinct obstacle.
     {
         name: 'doubleMiddle',
         difficulty: 'medium',
@@ -68,9 +66,8 @@ export const TRAFFIC_PATTERNS: readonly TrafficPattern[] = [
             { lane: 2, offset: -80 },
         ],
     },
-    // FIX: the old `doubleBothSides` placed two cars at the exact same lane 0
-    // position and two more at the exact same lane 2 position, i.e. two pairs of
-    // cars spawning on top of each other. Stagger each pair instead.
+    // Two cars per outer lane, each pair staggered: without the offsets the two cars
+    // of a pair would spawn on top of each other.
     {
         name: 'doubleBothSides',
         difficulty: 'medium',

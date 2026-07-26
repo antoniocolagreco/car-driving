@@ -1,9 +1,6 @@
 /**
  * Single source of truth for every DOM element id the UI touches, plus a small
  * helper to look one up without repeating a null-check at every call site.
- *
- * Replaces the old `HTML_IDS` constant from the pre-refactor legacy tree
- * (libs, models and the shared constants module), now deleted entirely.
  */
 
 export const ELEMENT_IDS = {
@@ -34,6 +31,7 @@ export const ELEMENT_IDS = {
     hud: {
         networkId: 'hud-network-id',
         generation: 'hud-generation',
+        completedGenerations: 'hud-completed-generations',
         aliveCars: 'hud-alive-cars',
         bestFitness: 'hud-best-fitness',
         currentFitness: 'hud-current-fitness',

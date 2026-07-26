@@ -3,10 +3,10 @@ import { clamp, normalizeWithThreshold } from '@core/math'
 import { RACING_CAR, SIMULATION, TRAFFIC_CAR } from '@core/config'
 
 /**
- * Car state and physics. A `Car` is a mutable record (see the mutability rule in
- * CONTRACTS.md): its fields are reassigned in place every step rather than
- * reallocating the whole object, because hundreds of them get stepped 60 times a
- * second. `Vec2` fields are still replaced wholesale, never mutated in place.
+ * Car state and physics. A `Car` is a mutable record: its fields are reassigned in
+ * place every step rather than reallocating the whole object, because hundreds of
+ * them get stepped 60 times a second. `Vec2` fields are still replaced wholesale,
+ * never mutated in place.
  */
 
 /** Driving inputs for one step, either from a human or from a network's outputs. */
@@ -100,7 +100,7 @@ const headingDeviationDegrees = (heading: number): number => {
  * Advances the car by one physics step of `dt` seconds. Mutates `car` in place.
  *
  * The tuning constants in `CarSpec`/config were authored assuming a fixed 60 Hz
- * step (`SIMULATION.stepSeconds`), the way the old per-frame `vehicle.ts` ran. To
+ * step (`SIMULATION.stepSeconds`), the way the original per-frame code ran. To
  * keep that same feel at any `dt`, every increment below is scaled by
  * `dt / SIMULATION.stepSeconds` — equivalently `dt * 60` — so one step at half the
  * rate applies exactly twice the change of one step at the full rate.

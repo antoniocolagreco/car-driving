@@ -7,7 +7,6 @@ import {
     mutate,
     serializeNetwork,
     trainBatch,
-    trainStep,
 } from './neural-network'
 
 const ARCHITECTURE = [8, 6, 4, 3] as const
@@ -142,72 +141,6 @@ describe('feedForward', () => {
     })
 })
 
-describe('trainStep', () => {
-    // The whole point of supervised learning, in one assertion: shown the same inputs and
-    // told what the answer should have been, the network's answer moves towards it.
-    it('moves the outputs towards the targets', () => {
-        const network = createNetwork([3, 4, 3])
-        const inputs = [0.4, -0.7, 0.2]
-        const targets = [1, 0, 0.5]
-
-        const errorNow = (): number => {
-            const outputs = feedForward(network, inputs)
-            return targets.reduce((sum, target, index) => sum + (target - outputs[index]) ** 2, 0)
-        }
-
-        const before = errorNow()
-        for (let step = 0; step < 200; step++) {
-            trainStep(network, inputs, targets, 0.05)
-        }
-
-        expect(errorNow()).toBeLessThan(before)
-    })
-
-    it('can learn braking from an initially negative internal activation', () => {
-        const network = createNetwork([2, 3])
-        const outputLayer = network.layers[0]
-        outputLayer.weights = outputLayer.weights.map((row) => row.map(() => 0))
-        outputLayer.biases = [0, -1, 0]
-
-        expect(feedForward(network, [0, 0])[1]).toBe(0)
-        for (let step = 0; step < 40; step++) {
-            trainStep(network, [0, 0], [0, 1, 0], 0.1)
-        }
-
-        expect(feedForward(network, [0, 0])[1]).toBeGreaterThan(0.5)
-    })
-
-    it('keeps every weight and bias inside [-1, 1], the range mutation works in', () => {
-        const network = createNetwork([2, 3, 3])
-
-        for (let step = 0; step < 500; step++) {
-            trainStep(network, [1, 1], [1, 0, 1], 0.5)
-        }
-
-        for (const layer of network.layers) {
-            for (const row of layer.weights) {
-                for (const weight of row) {
-                    expect(Math.abs(weight)).toBeLessThanOrEqual(1)
-                }
-            }
-            for (const bias of layer.biases) {
-                expect(Math.abs(bias)).toBeLessThanOrEqual(1)
-            }
-        }
-    })
-
-    it('leaves the network alone when it already answers correctly', () => {
-        const network = createNetwork([2, 2, 2])
-        const inputs = [0.3, -0.2]
-        const outputs = [...feedForward(network, inputs)]
-        const weightsBefore = JSON.stringify(network.layers.map((layer) => layer.weights))
-
-        trainStep(network, inputs, outputs, 0.1)
-
-        expect(JSON.stringify(network.layers.map((layer) => layer.weights))).toBe(weightsBefore)
-    })
-})
-
 describe('trainBatch', () => {
     const examples: readonly TrainingExample[] = [
         { inputs: [0.8, -0.2, 0.1], targets: [1, 0, -1] },
@@ -239,6 +172,39 @@ describe('trainBatch', () => {
         }
 
         expect(totalError(network, examples)).toBeLessThan(before)
+    })
+
+    it('can learn braking from an initially negative internal activation', () => {
+        const network = createNetwork([2, 3])
+        const outputLayer = network.layers[0]
+        outputLayer.weights = outputLayer.weights.map((row) => row.map(() => 0))
+        outputLayer.biases = [0, -1, 0]
+
+        expect(feedForward(network, [0, 0])[1]).toBe(0)
+        for (let step = 0; step < 40; step++) {
+            trainBatch(network, [{ inputs: [0, 0], targets: [0, 1, 0] }], 0.1)
+        }
+
+        expect(feedForward(network, [0, 0])[1]).toBeGreaterThan(0.5)
+    })
+
+    it('keeps every weight and bias inside [-1, 1], the range mutation works in', () => {
+        const network = createNetwork([2, 3, 3])
+
+        for (let step = 0; step < 500; step++) {
+            trainBatch(network, [{ inputs: [1, 1], targets: [1, 0, 1] }], 0.5)
+        }
+
+        for (const layer of network.layers) {
+            for (const row of layer.weights) {
+                for (const weight of row) {
+                    expect(Math.abs(weight)).toBeLessThanOrEqual(1)
+                }
+            }
+            for (const bias of layer.biases) {
+                expect(Math.abs(bias)).toBeLessThanOrEqual(1)
+            }
+        }
     })
 
     it('produces the same update regardless of example order', () => {

@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { polygonsIntersect } from '@core/geometry'
 import { SIMULATION } from '@core/config'
-import { carShape } from './car'
 import { type Road, createRoad, lanePosition } from './road'
 import { type TrafficPattern, TRAFFIC_PATTERNS, generateTraffic } from './traffic'
 
@@ -104,9 +102,16 @@ describe('generateTraffic', () => {
         const road = createRoad()
         const traffic = generateTraffic(road, 20, 'overlap-seed')
 
+        // Traffic never steers, so every body stays axis-aligned: two of them are clear
+        // of each other exactly when they are a full car apart on one of the two axes.
         for (let i = 0; i < traffic.length; i++) {
             for (let j = i + 1; j < traffic.length; j++) {
-                expect(polygonsIntersect(carShape(traffic[i]), carShape(traffic[j]))).toBe(false)
+                const a = traffic[i]
+                const b = traffic[j]
+                const apart =
+                    Math.abs(a.position.x - b.position.x) >= a.spec.size.width ||
+                    Math.abs(a.position.y - b.position.y) >= a.spec.size.height
+                expect(apart).toBe(true)
             }
         }
     })

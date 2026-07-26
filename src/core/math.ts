@@ -12,7 +12,7 @@ export const lerp = (start: number, end: number, t: number): number => start + (
 /**
  * Restricts `value` to the [min, max] range.
  *
- * NOTE: argument order is `(value, min, max)`, unlike the old `libs/utils.ts`
+ * NOTE: argument order is `(value, min, max)`, unlike the original helper
  * clamp which took `(min, max, value)` — that order was a recurring source of
  * bugs at call sites, so it was deliberately changed here.
  */
@@ -76,23 +76,6 @@ export const tanh = (sum: number, bias: number): number => {
     const numerator = Math.exp(exponent) - Math.exp(-exponent)
     const denominator = Math.exp(exponent) + Math.exp(-exponent)
     return numerator / denominator
-}
-
-/**
- * Weighted average of a set of (value, weight) pairs. Used to blend a network's
- * current weight/bias with a random value during mutation, and by other
- * averaging needs in the fitness system.
- */
-export const weightedAverage = (...values: { value: number; weight: number }[]): number => {
-    let sumValues = 0
-    let sumWeights = 0
-
-    for (const item of values) {
-        sumValues += item.value * item.weight
-        sumWeights += item.weight
-    }
-
-    return sumValues / sumWeights
 }
 
 /**

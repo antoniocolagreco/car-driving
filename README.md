@@ -26,6 +26,9 @@ where it is defined, and the interesting logic is pure functions with unit tests
   reward teaches exactly the wrong lesson (`src/core/fitness.ts`)
 - How fixed **eleven-zone perception** and polygon collision work from first principles
   (`src/core/sensor.ts`, `src/core/geometry.ts`)
+- How **backpropagation** teaches the very same network by imitation when a human drives
+  it, and why a full-batch average is not the same update as sixty single frames
+  (`src/core/neural-network.ts`)
 
 ## Quick start
 
@@ -50,7 +53,7 @@ The codebase is split by _dependency direction_, which is what keeps it testable
 src/
 ├── core/     pure simulation — no DOM, no canvas, no localStorage, fully unit tested
 ├── render/   draws a given state onto a canvas; reads state, mutates nothing
-├── ui/       DOM widgets, HUD, persistence
+├── ui/       DOM widgets, HUD, keyboard, persistence
 ├── app.ts    the only module that knows about all three
 └── components/ layouts/ pages/   Astro presentation
 ```
@@ -65,7 +68,7 @@ simulation could run headless without touching a line of it.
 | `core/math.ts`           | `lerp`, `clamp`, `normalize`, `tanh`                         |
 | `core/random.ts`         | Seeded RNG, so a given course is reproducible                |
 | `core/neural-network.ts` | The network as plain data: forward pass, mutation, save/load |
-| `core/sensor.ts`         | Seven fixed perception areas and nearest-obstacle queries    |
+| `core/sensor.ts`         | Eleven fixed perception areas and nearest-obstacle queries   |
 | `core/car.ts`            | Car state and time-based physics, analog throttle and brake  |
 | `core/road.ts`           | Lane geometry and guard rails                                |
 | `core/traffic.ts`        | The course, as data: patterns grouped by difficulty          |
@@ -89,8 +92,10 @@ Each step, for every living car:
 4. **Score** — the reward system folds that one observation into the car's running fitness.
 
 Physics runs on a **fixed 60 Hz timestep** with an accumulator, so behaviour is identical
-regardless of display refresh rate, and the speed multiplier in the UI is simply "run N
-steps per rendered frame".
+regardless of display refresh rate: a slow frame simply runs the steps it owes, back to
+back. The catch-up is capped at `SIMULATION.maxStepsPerFrame`, and time beyond the cap is
+dropped rather than banked — a tab left in the background must not come back and
+fast-forward a whole round in one frame.
 
 ## How a generation evolves
 
@@ -119,7 +124,13 @@ mutation still produced 22 near-random cars out of 100. The slider has to mean s
 The next generation is bred from the best few networks (`PARENT_COUNT`), not only from
 the winner: a field that is entirely variations of one network is a hill climber wearing
 a genetic algorithm's clothes, and it stalls as soon as that one network sits in a local
-optimum.
+optimum. The refining quarter is the exception — those cars always descend from the
+champion itself, because their job is to improve on the best network there is, and handing
+a quarter of the field to a weaker parent only dilutes the line that is winning. Everybody
+else is spread across the parents round-robin, which is what keeps rival strategies alive.
+
+One thing overrides all of it: a round won by a human demonstration hands the **whole**
+parent pool to the network that was just taught (see below).
 
 ## The reward system
 
@@ -143,13 +154,13 @@ So the current system pays only for results, and charges for bad states:
 | Speed used **while the road ahead is free** | +3.0 / s   |
 | Staying alive                               | +0.5 / s   |
 
-| Penalty                                 | Value                                              |
-| --------------------------------------- | -------------------------------------------------- |
+| Penalty                                 | Value                                               |
+| --------------------------------------- | --------------------------------------------------- |
 | Crashing                                | −10 % to −100 % of what you earned, by impact speed |
-| **Unsafe speed for the available path** | −30 / s, graded by closeness                       |
-| Standing still with nothing in the way  | −5 / s                                             |
-| Driving in reverse                      | −0.05 / px                                         |
-| No new overtake within 10 seconds       | Forfeit the entire run score                       |
+| **Unsafe speed for the available path** | −30 / s, graded by closeness                        |
+| Standing still with nothing in the way  | −5 / s                                              |
+| Driving in reverse                      | −0.05 / px                                          |
+| No new overtake within 10 seconds       | Eliminated; the run can no longer win or breed      |
 
 The hazard judges the resulting state rather than the chosen control. Steering clears it
 only when the swept path really becomes free; braking clears it by reducing the stopping
@@ -178,19 +189,22 @@ in a way you could watch on screen, and each fix is documented where the number 
 - **Speed pays only where it is safe, and costs where it is not.** A flat average-speed
   reward paid for flooring the throttle into the first obstacle; removing it entirely
   was worse, because the population settled on crawling everywhere, which dodges every
-  speed penalty and never needs the brake. The pair `pace` / `overspeed` is what makes
-  modulation the winning policy, and the overspeed charge deliberately does not look at
-  the brake pedal — only at the excess speed itself, which the network is free to shed
-  however it likes.
+  speed penalty and never needs the brake. The pair `REWARD.pace` / `PENALTY.hazard` is
+  what makes modulation the winning policy, and the hazard charge deliberately does not
+  look at the brake pedal — only at the excess speed itself, which the network is free to
+  shed however it likes.
 - **There is no penalty for going slowly behind traffic.** There used to be one
   (−2/s "tailgating") and it punished the exact behaviour the simulation is trying to
   teach. Loitering is already fatal: the idle timeout kills anyone who stops making
   progress, so charging for it twice only taught the cars that braking is for losers.
 
-The score floor is zero. A car that crashed away everything it gained has earned
-nothing, not a debt — and a round where **nobody** clears zero has no winner at all,
-so the reigning champion keeps its place rather than being replaced by the least bad
-wreck.
+The score floor is zero: a car that crashed away everything it gained has earned nothing,
+not a debt. Zero is a legitimate result though, so **being eligible to win is a separate
+question from scoring well**. A run counts if it moved forward — or overtook somebody — and
+was not eliminated by the overtake deadline. Requiring a positive score instead would let a
+barely-moving early wreck outrank a car that drove half the course and then paid all of it
+back in hazard and crash penalties. When nobody moved forward at all there is no winner,
+and the reigning champion keeps its place.
 
 ## How the search works
 
@@ -212,15 +226,26 @@ measured the same way:
 
 ## Reading the screen
 
-| What you see          | What it is                                                        |
-| --------------------- | ----------------------------------------------------------------- |
-| **White car**         | The champion: last generation's winner, running its network as-is |
-| Coloured cars         | Its mutated offspring, one colour each                            |
-| **Blue car**          | The player, only while manual driving is enabled                  |
-| **Dark grey car**     | A car eliminated by a crash or timeout                            |
-| Near-black cars       | Traffic: rolling obstacles, not learners, always the same colour  |
-| Red rear lights       | The brake, which is analog pressure — bright means hard braking   |
+The page is two canvases: the race on the left, the followed car's network on the right,
+redrawn eight times a second with every connection's opacity showing how much it actually
+contributed to the last decision. The overlay panel lists the live telemetry and, below the
+divider, the **full fitness breakdown** term by term — rewards green, penalties red — so the
+reward system is readable while it runs instead of only in the source.
+
+| What you see           | What it is                                                        |
+| ---------------------- | ----------------------------------------------------------------- |
+| **White car**          | The champion: last generation's winner, running its network as-is |
+| Coloured cars          | Its mutated offspring, one colour each                            |
+| **Blue car**           | The player's car, only while manual driving is on                 |
+| **Dark grey car**      | A car eliminated by a crash or a timeout                          |
+| Near-black cars        | Traffic: rolling obstacles, not learners, always the same colour  |
+| `WINNER` badge         | Whoever currently holds the best race result of the round         |
+| Red rear lights        | The brake, which is analog pressure — bright means hard braking   |
 | Yellow areas, red dots | The followed car's eleven perception areas and closest contacts   |
+| Green `VICTORY!`       | Somebody just passed every traffic car; the course is solved      |
+
+The camera follows the leader, or the player's car while a human is driving it, or the
+winner once nobody is left racing.
 
 A round ends when every car is out. A car is out when it crashes, when it fails to
 cover `SIMULATION.idleProgressThreshold` px within `idleTimeoutSeconds` (a minimum
@@ -230,22 +255,38 @@ and makes it ineligible as winner or parent, while leaving its score visible as 
 The final `maxRoundSeconds` ceiling costs nothing and only exists because the road past the
 last traffic row is empty and infinite.
 
+Clearing the course is the one ending that does not wait for an empty field: the round
+freezes into a five-second victory banner instead, and only then retires everyone —
+deliberately without a crash penalty, so the winner cannot lose what it just achieved by
+drifting into a rail during its own celebration.
+
 ## Controls
 
-| Button             | Effect                                                           |
-| ------------------ | ---------------------------------------------------------------- |
-| **Backup**         | Save the followed car's network to a slot you can return to      |
-| **Restore**        | Load that slot and use it as the champion                        |
-| **Reset**          | Forget the champion and start from random networks               |
-| **Restart**        | New generation from the current champion                         |
-| **Evolve**         | Promote the current best car immediately                         |
-| **Manual driving** | Start a fresh manual round, paused until the first driving input |
+| Button             | Effect                                                                   |
+| ------------------ | ------------------------------------------------------------------------ |
+| **Backup**         | Save the followed car's network to a slot you can return to              |
+| **Restore**        | Load that slot and use it as the champion                                |
+| **Reset**          | Forget the champion and start from random networks                       |
+| **Restart**        | New generation from the current champion                                 |
+| **Evolve**         | Promote the current best car immediately                                 |
+| **Manual driving** | Start a fresh manual round, paused until the first driving input         |
+| **Traffic**        | Show or hide the obstacle cars — paint only, the simulation is untouched |
 
-| Setting          | Effect                                                             |
-| ---------------- | ------------------------------------------------------------------ |
-| Number of cars   | Population size; applies on release, starting a new generation     |
-| Mutation         | Base mutation rate; applies to the **next** generation             |
-| Hidden layers    | Comma-separated neuron counts, default `16,12,8`; press Enter      |
+Both switches say which state they are in and change colour with it, because what they
+toggle is otherwise invisible: manual driving does nothing until a key is pressed, and
+hiding the traffic changes nothing but the picture. The cars still sense and hit the cars
+you cannot see.
+
+| Setting        | Effect                                                                       |
+| -------------- | ---------------------------------------------------------------------------- |
+| Number of cars | 10 to 100, default 80. Applies when the drag ends, starting a new generation |
+| Mutation       | Base rate in percent, default 10 %. Applies to the **next** generation only  |
+| Hidden layers  | Comma-separated neuron counts, default `16, 12, 8`; press Enter to apply     |
+
+Every numeric setting is offered twice, as a slider to sweep and a field to type into,
+clamped to the same limits. The mutation rate is the one setting that deliberately never
+restarts the round: it belongs to the next generation, and interrupting the round you are
+watching to change it would throw the round away.
 
 Press **M** to toggle manual driving without leaving the keyboard controls.
 
@@ -258,6 +299,11 @@ layer, and a fresh round is prepared with the world frozen. The round begins on 
 arrow, `WASD` or `Space` input. Switch manual driving off at any point and the same car
 continues from the same position under its trained neural network; disabling it does not
 restart the round.
+
+`↑`/`W` accelerate, `↓`/`S` reverse, `←→`/`AD` steer, `Space` brakes — held as intents, so
+releasing one key while another is still down does the right thing instead of zeroing the
+input, and losing window focus releases everything rather than leaving the car pinned at
+full throttle.
 
 It is not a toy feature, and it is not just a way to measure the course: **the car you
 drive learns from you.** The first driving command starts a recording, then every state and
@@ -276,10 +322,6 @@ And your car competes. It is scored like every other, so **if a round you drove 
 your car, the network you taught becomes the champion — the whole parent pool, not one seat
 in it** — and every car in the next generation is a variation of your driving. Show it one
 winning lap and evolution carries on from there.
-
-When a car passes **every** traffic car, the course is solved rather than merely survived.
-The winning scene freezes under a green victory banner for five seconds; only then is the
-field retired without a crash penalty and the round closes.
 
 That makes the project two learning methods side by side, and the contrast is the lesson:
 evolution searches blindly and needs a whole population and a whole generation to find out

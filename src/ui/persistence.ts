@@ -4,13 +4,12 @@ import { type Network, deserializeNetwork, serializeNetwork } from '@core/neural
 import type { SimulationSettings } from '@core/simulation'
 
 /**
- * The only module allowed to touch `localStorage` (see the layering rule in
- * CONTRACTS-2.md: `core/` never does, `app.ts` is the only caller of this file).
+ * The only module allowed to touch `localStorage`: `core/` never does, and `app.ts` is
+ * the only caller of this file.
  *
  * Every key is suffixed `-v2` except neural-network saves, which use `-v6` so neither
- * an old sensor shape nor the old bipolar brake output is loaded. The module was
- * ported from `src/libs/persistence.ts`, but `deserializeNetwork`'s
- * `undefined` return (version/shape mismatch) is now surfaced as "nothing saved",
+ * an old sensor shape nor the old bipolar brake output is loaded. `deserializeNetwork`'s
+ * `undefined` return (version/shape mismatch) is surfaced as "nothing saved",
  * never logged as an error, and every loaded setting is clamped through the
  * limits in `@core/config` instead of trusted as-is.
  */

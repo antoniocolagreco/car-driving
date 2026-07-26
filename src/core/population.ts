@@ -188,7 +188,7 @@ export const isCompatibleNetwork = (network: Network, hiddenLayers: readonly num
  *
  * Starting from the champion rather than from noise is what makes driving worth doing:
  * your inputs teach corrections on top of what the population already knows, instead of
- * having to demonstrate the whole task from scratch (see `trainStep`).
+ * having to demonstrate the whole task from scratch (see `trainBatch`).
  */
 export const createPlayerCar = (road: Road, options: PopulationOptions): RacingCar => {
     const architecture = architectureFor(options)
@@ -224,13 +224,7 @@ export const createPopulation = (road: Road, options: PopulationOptions): Racing
             parents,
         )
         const isChampion = parents.length > 0 && index === 0
-        cars.push(
-            createRacingCar(
-                position,
-                network,
-                isChampion ? CHAMPION_COLOR : randomColor(),
-            ),
-        )
+        cars.push(createRacingCar(position, network, isChampion ? CHAMPION_COLOR : randomColor()))
     }
     return cars
 }

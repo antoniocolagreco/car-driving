@@ -180,11 +180,7 @@ export const feedForward = (network: Network, inputs: readonly number[]): readon
         if (index === network.layers.length - 1 && layer.outputs.length > BRAKE_OUTPUT_INDEX) {
             // Brake pressure is unipolar. Rectify it at the network boundary so neither
             // physics, rendering nor training ever observes a nonsensical negative brake.
-            layer.outputs[BRAKE_OUTPUT_INDEX] = clamp(
-                layer.outputs[BRAKE_OUTPUT_INDEX],
-                0,
-                1,
-            )
+            layer.outputs[BRAKE_OUTPUT_INDEX] = clamp(layer.outputs[BRAKE_OUTPUT_INDEX], 0, 1)
             current = layer.outputs
         }
     }
@@ -380,16 +376,6 @@ export const trainBatch = (
         accumulateNetworkGradients(network, example, gradients)
     }
     applyAverageGradients(network, gradients, rate)
-}
-
-/** Backwards-compatible one-example training, implemented as a batch of one. */
-export const trainStep = (
-    network: Network,
-    inputs: readonly number[],
-    targets: readonly number[],
-    rate: number,
-): void => {
-    trainBatch(network, [{ inputs, targets }], rate)
 }
 
 /** Converts a network into a JSON-safe plain object, for localStorage persistence. */

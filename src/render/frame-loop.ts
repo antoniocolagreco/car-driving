@@ -6,8 +6,8 @@
  * it reports the real delta between frames and lets the caller (`app.ts`)
  * decide how many physics steps that delta is worth. It also never throttles
  * itself by returning early without calling `requestAnimationFrame` again for
- * a "skipped" frame, unlike the old `FrameLoop`, which busy-waited until its
- * target interval had passed.
+ * a "skipped" frame, the way the original loop did while it waited for its
+ * target interval to pass.
  */
 
 /** Safety valve: a backgrounded tab resuming after minutes away must not report a multi-second delta. */

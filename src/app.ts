@@ -20,8 +20,8 @@ import {
 } from '@ui/persistence'
 
 /**
- * The only module allowed to know about `core/`, `render/` and `ui/` at once
- * (see the layering rule in CONTRACTS-2.md). It owns the two canvases, the
+ * The only module allowed to know about `core/`, `render/` and `ui/` at once.
+ * It owns the two canvases, the
  * fixed-timestep loop that drives the core simulation, the HUD, the control
  * panel and the localStorage wiring — `core/` never touches localStorage
  * directly, it only reports a champion out through `onGenerationEnd`.

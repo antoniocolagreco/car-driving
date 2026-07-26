@@ -1,5 +1,12 @@
 import { type Segment, type Vec2, polygonSegments, segmentIntersection } from '@core/geometry'
-import { LEARNING_RATE, MANUAL_TRAINING, PARENT_COUNT, RACING_CAR, SENSOR, SIMULATION } from '@core/config'
+import {
+    LEARNING_RATE,
+    MANUAL_TRAINING,
+    PARENT_COUNT,
+    RACING_CAR,
+    SENSOR,
+    SIMULATION,
+} from '@core/config'
 import {
     type Network,
     type NetworkGradients,
@@ -46,7 +53,7 @@ import {
  * read to understand the whole simulation, so `step` below is written to be read
  * top to bottom as the numbered sequence it implements, not as clever code.
  *
- * Mutability rule (see CONTRACTS.md): `SimulationState` is one long-lived mutable
+ * Mutability rule: `SimulationState` is one long-lived mutable
  * record, stepped in place 60 times a second; only its `readonly` fields (`road`)
  * never change after creation.
  */
@@ -71,6 +78,8 @@ export type SimulationState = {
     playerCar?: RacingCar
     /** 1-based generation counter for the UI. */
     generation: number
+    /** Generations that reached their natural end during this simulation session. */
+    completedGenerations: number
     /** The best network so far: `parents[0]`, and the one the UI persists. */
     champion?: Network
     /** The networks the next generation is bred from, best first. */
@@ -222,6 +231,7 @@ export const createSimulation = (
         bestCar: undefined,
         playerCar: undefined,
         generation: 0,
+        completedGenerations: 0,
         champion: undefined,
         parents: [],
         gameOver: false,
@@ -270,7 +280,7 @@ export const createSimulation = (
 
         // The player's car is always in the field: one more competitor, drawn, colliding,
         // scored and able to win the championship. Whether a keyboard or its own network
-        // holds the wheel is decided moment to moment by `setManualControls`.
+        // holds the wheel is decided by `startManualDriving` / `stopManualDriving`.
         state.playerCar = createPlayerCar(road, options)
         state.cars.push(state.playerCar)
         playerWasDriven = false
@@ -399,6 +409,7 @@ export const createSimulation = (
                 playerWasDriven && winner === state.playerCar ? [winner.network] : rankedNetworks
             state.champion = state.parents[0]
         }
+        state.completedGenerations += 1
         onGenerationEnd?.(state.champion)
         state.gameOver = true
         state.gameOverSeconds = 0
@@ -481,11 +492,7 @@ export const createSimulation = (
                 isWithinRange(segment, car.position),
             )
 
-            const sensorState = castSensors(
-                car.position,
-                car.heading,
-                nearbyObstacles,
-            )
+            const sensorState = castSensors(car.position, car.heading, nearbyObstacles)
             racingCar.sensorState = sensorState
 
             const inputs = networkInputs(car, sensorState.readings)

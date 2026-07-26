@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carPolygon, distance, polygonsIntersect, segmentIntersection, vec } from './geometry'
+import { carPolygon, distance, segmentIntersection, vec } from './geometry'
 
 describe('segmentIntersection', () => {
     it('returns the crossing point for two segments that cross', () => {
@@ -46,35 +46,6 @@ describe('segmentIntersection', () => {
         expect(hit).not.toBeNull()
         expect(hit?.point).toEqual(vec(10, 0))
         expect(hit?.offset).toBeCloseTo(1)
-    })
-})
-
-describe('polygonsIntersect', () => {
-    it('returns true for overlapping rectangles', () => {
-        const a = [vec(0, 0), vec(10, 0), vec(10, 10), vec(0, 10)]
-        const b = [vec(5, 5), vec(15, 5), vec(15, 15), vec(5, 15)]
-
-        expect(polygonsIntersect(a, b)).toBe(true)
-    })
-
-    it('returns false for disjoint rectangles', () => {
-        const a = [vec(0, 0), vec(10, 0), vec(10, 10), vec(0, 10)]
-        const b = [vec(100, 100), vec(110, 100), vec(110, 110), vec(100, 110)]
-
-        expect(polygonsIntersect(a, b)).toBe(false)
-    })
-
-    it('returns false when one polygon is fully inside another (known edge-crossing limitation)', () => {
-        // No edge of the inner square crosses an edge of the outer square, so the
-        // edge-crossing algorithm reports no intersection even though the shapes
-        // clearly overlap. This is a known limitation, not a bug to fix: cars are
-        // convex and similar in size to the obstacles they can hit, so a real
-        // collision on the road always crosses an edge — full containment between
-        // two car-sized shapes cannot happen in this simulation.
-        const outer = [vec(0, 0), vec(20, 0), vec(20, 20), vec(0, 20)]
-        const inner = [vec(5, 5), vec(15, 5), vec(15, 15), vec(5, 15)]
-
-        expect(polygonsIntersect(outer, inner)).toBe(false)
     })
 })
 

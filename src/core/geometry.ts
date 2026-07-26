@@ -104,10 +104,7 @@ const signedDoubleArea = (polygon: Polygon): number => {
  * The result deliberately includes zero-length contacts. Sensor areas must report
  * a bumper grazing their boundary, not only crossings through their edges.
  */
-export const clipSegmentToConvexPolygon = (
-    segment: Segment,
-    polygon: Polygon,
-): Segment | null => {
+export const clipSegmentToConvexPolygon = (segment: Segment, polygon: Polygon): Segment | null => {
     if (polygon.length < 3) {
         return null
     }
@@ -152,29 +149,6 @@ export const clipSegmentToConvexPolygon = (
         a: vec(segment.a.x + direction.x * startOffset, segment.a.y + direction.y * startOffset),
         b: vec(segment.a.x + direction.x * endOffset, segment.a.y + direction.y * endOffset),
     }
-}
-
-/**
- * Checks whether two polygons overlap, by testing every edge of one against every
- * edge of the other for a crossing.
- *
- * Known limitation: this only detects edges that actually cross, so a polygon
- * fully contained inside another (no edge crossings at all) is reported as NOT
- * intersecting. That is harmless here because cars are convex and similar in
- * size to the obstacles they can hit, so a real collision always crosses an edge;
- * full containment cannot happen between two car-sized shapes on the road.
- */
-export const polygonsIntersect = (a: Polygon, b: Polygon): boolean => {
-    const edgesOfA = polygonSegments(a)
-    const edgesOfB = polygonSegments(b)
-    for (const edgeOfA of edgesOfA) {
-        for (const edgeOfB of edgesOfB) {
-            if (segmentIntersection(edgeOfA, edgeOfB)) {
-                return true
-            }
-        }
-    }
-    return false
 }
 
 /**
