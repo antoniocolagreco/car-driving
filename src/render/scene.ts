@@ -50,6 +50,15 @@ export const drawScene = (
     const currentWinner: RacingCar | undefined = state.bestCar
     const manualPlayerCar: RacingCar | undefined = state.manualDriving ? state.playerCar : undefined
 
+    // Membership is by network identity rather than by car: the same weights are entered
+    // as one competitor, and it is the network that holds the record or the archive seat.
+    const veteranIds = new Set<string>(state.veterans.map((network) => network.id))
+    const championId: string | undefined = state.champion?.id
+    const marksFor = (racingCar: RacingCar): { champion: boolean; veteran: boolean } => ({
+        champion: championId !== undefined && racingCar.network.id === championId,
+        veteran: veteranIds.has(racingCar.network.id),
+    })
+
     // Perception belongs below every car body, so it never paints sensor colour across
     // either the followed racer or the traffic obstacles.
     if (radarMode !== 'off' && state.activeCar) {
@@ -70,17 +79,24 @@ export const drawScene = (
         drawCar(ctx, racingCar.car, {
             ghost: racingCar !== state.activeCar,
             winner: racingCar.winner,
+            ...marksFor(racingCar),
         })
     }
 
     // 2. Previous winner, painted at its real world position with no display offset.
     if (previousWinner && previousWinner !== currentWinner && previousWinner !== manualPlayerCar) {
-        drawCar(ctx, previousWinner.car, { winner: previousWinner.winner })
+        drawCar(ctx, previousWinner.car, {
+            winner: previousWinner.winner,
+            ...marksFor(previousWinner),
+        })
     }
 
     // 3. Current winner.
     if (currentWinner && currentWinner !== manualPlayerCar) {
-        drawCar(ctx, currentWinner.car, { winner: currentWinner.winner })
+        drawCar(ctx, currentWinner.car, {
+            winner: currentWinner.winner,
+            ...marksFor(currentWinner),
+        })
     }
 
     // 4. Only a manually driven player gets the dedicated blue, topmost layer.
@@ -88,6 +104,7 @@ export const drawScene = (
         drawCar(ctx, manualPlayerCar.car, {
             color: PLAYER_COLOR,
             winner: manualPlayerCar.winner,
+            ...marksFor(manualPlayerCar),
         })
     }
 

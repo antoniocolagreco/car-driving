@@ -146,3 +146,102 @@ describe('createPopulation', () => {
         expect(cars[0].network.architecture).toEqual(architecture)
     })
 })
+
+describe('createPopulation with an archive', () => {
+    const baseOptions = {
+        quantity: 20,
+        hiddenLayers: [4],
+        mutationRate: 0.1,
+    }
+    const architecture = [SENSOR_ZONE_ORDER.length + 1, ...baseOptions.hiddenLayers, 3]
+
+    it('enters the champion and every veteran unmutated', () => {
+        const road = createRoad()
+        const champion = createNetwork(architecture)
+        const veterans = [createNetwork(architecture), createNetwork(architecture)]
+
+        const cars = createPopulation(road, { ...baseOptions, champion, veterans })
+        const entered = cars.map((racingCar) => racingCar.network)
+
+        // Not clones: the identical object, so the race it runs is written into the
+        // history the archive ranks it on.
+        for (const network of [champion, ...veterans]) {
+            expect(entered).toContain(network)
+        }
+    })
+
+    it('keeps the grid at `quantity` when veterans join it', () => {
+        const road = createRoad()
+
+        const cars = createPopulation(road, {
+            ...baseOptions,
+            champion: createNetwork(architecture),
+            veterans: [createNetwork(architecture), createNetwork(architecture)],
+        })
+
+        expect(cars).toHaveLength(baseOptions.quantity)
+    })
+
+    it('keeps the elite as car 0 rather than surrendering the slot to a veteran', () => {
+        const road = createRoad()
+        const winner = createNetwork(architecture)
+
+        const cars = createPopulation(road, {
+            ...baseOptions,
+            parents: [winner],
+            veterans: [createNetwork(architecture)],
+        })
+
+        expect(cars[0].network).toBe(winner)
+    })
+
+    // The overlap is the normal case rather than an edge one: the champion is usually in
+    // the archive, and the elite is usually the network just admitted to it. Two cars
+    // sharing one network would put two results from a single race into one history.
+    it('enters a network once even when it is the elite, the champion and a veteran at once', () => {
+        const road = createRoad()
+        const network = createNetwork(architecture)
+
+        const cars = createPopulation(road, {
+            ...baseOptions,
+            parents: [network],
+            champion: network,
+            veterans: [network],
+        })
+
+        expect(cars.filter((racingCar) => racingCar.network === network)).toHaveLength(1)
+    })
+
+    it('leaves at least half the grid to offspring, however many veterans are offered', () => {
+        const road = createRoad()
+        const veterans = Array.from({ length: baseOptions.quantity }, () =>
+            createNetwork(architecture),
+        )
+
+        const cars = createPopulation(road, { ...baseOptions, veterans })
+        const entered = new Set(veterans)
+
+        expect(
+            cars.filter((racingCar) => entered.has(racingCar.network)).length,
+        ).toBeLessThanOrEqual(baseOptions.quantity / 2)
+    })
+
+    it('drops a veteran whose architecture does not match the requested one', () => {
+        const road = createRoad()
+        const mismatched = createNetwork([99, 4, 3])
+
+        const cars = createPopulation(road, { ...baseOptions, veterans: [mismatched] })
+
+        expect(cars.map((racingCar) => racingCar.network)).not.toContain(mismatched)
+    })
+
+    it('paints every car in its own network colour', () => {
+        const road = createRoad()
+
+        const cars = createPopulation(road, baseOptions)
+
+        for (const racingCar of cars) {
+            expect(racingCar.car.color).toBe(racingCar.network.color)
+        }
+    })
+})

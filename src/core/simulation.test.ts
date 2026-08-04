@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { vec } from '@core/geometry'
-import { SIMULATION } from '@core/config'
+import { SIMULATION, VETERANS } from '@core/config'
 import { SENSOR_ZONE_ORDER, sensorOrigin } from '@core/sensor'
 import { type Network, createNetwork } from './neural-network'
 import { type Controls, crash } from './car'
@@ -604,5 +604,78 @@ describe('createSimulation: promoteBest', () => {
 
         expect(sim.promoteBest()).toBe(sim.state.bestCar.network)
         expect(sim.state.winner).toBe(sim.state.bestCar.network)
+    })
+})
+
+describe('createSimulation: the veterans archive', () => {
+    it('writes the round into the history of every network that drove it, winners and wrecks alike', () => {
+        const sim = createSimulation(smallSettings, { trafficSeed: 'history-all' })
+        const networks = sim.state.cars.map((racingCar) => racingCar.network)
+
+        finishRoundWithOvertakes(sim, [7, 0, 3, 0])
+
+        // Losers included on purpose: a median taken only from good races would describe
+        // a network's best days rather than a typical course.
+        for (const network of networks) {
+            expect(network.history).toHaveLength(1)
+        }
+        expect(networks[0].history[0].overtakes).toBe(7)
+        expect(networks[1].history[0].overtakes).toBe(0)
+    })
+
+    it('admits the round best to the archive, already carrying the race that earned it', () => {
+        const sim = createSimulation(smallSettings, { trafficSeed: 'archive-admission' })
+        const best = sim.state.cars[0].network
+
+        finishRoundWithOvertakes(sim, [9, 1, 0, 0])
+
+        expect(sim.state.veterans).toContain(best)
+        expect(best.history).toHaveLength(1)
+    })
+
+    it('reports the archive out so it can be persisted', () => {
+        const rosters: number[] = []
+        const sim = createSimulation(smallSettings, {
+            trafficSeed: 'archive-reported',
+            onVeteransChanged: (roster) => rosters.push(roster.length),
+        })
+
+        finishRoundWithOvertakes(sim, [5, 0, 0, 0])
+
+        expect(rosters).toHaveLength(1)
+        expect(rosters[0]).toBeGreaterThan(0)
+    })
+
+    // The point of the whole mechanism: a network with a good record survives a round it
+    // scored nothing in, where `selectParents` would drop it from the parent pool the
+    // moment it drew a course it cannot drive. Tested against a FULL archive, so members
+    // really are competing for the seats.
+    it('keeps a veteran with a strong record through a round it scored nothing in', () => {
+        const veteran = straightThrottleNetwork()
+        veteran.history = [{ overtakes: 30 }, { overtakes: 28 }, { overtakes: 32 }]
+        const crowd = Array.from({ length: VETERANS.rosterSize - 1 }, () => {
+            const filler = straightThrottleNetwork()
+            filler.history = [{ overtakes: 5 }, { overtakes: 5 }, { overtakes: 5 }]
+            return filler
+        })
+        const sim = createSimulation(smallSettings, {
+            trafficSeed: 'archive-survives',
+            veterans: [veteran, ...crowd],
+        })
+
+        finishRoundWithOvertakes(sim, [0, 0, 0, 0])
+
+        expect(sim.state.veterans).toContain(veteran)
+        expect(sim.state.veterans).toHaveLength(VETERANS.rosterSize)
+    })
+
+    it('puts the champion on the grid every round without breeding from it', () => {
+        const champion = straightThrottleNetwork()
+        const sim = createSimulation(smallSettings, {
+            trafficSeed: 'champion-races',
+            champion,
+        })
+
+        expect(sim.state.cars.map((racingCar) => racingCar.network)).toContain(champion)
     })
 })

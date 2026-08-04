@@ -1,6 +1,6 @@
 import { clamp, tanh } from '@core/math'
-import { randomId, randomSymmetric } from '@core/random'
-import { MUTATION } from '@core/config'
+import { randomColor, randomId, randomSymmetric } from '@core/random'
+import { MUTATION, VETERANS } from '@core/config'
 
 /**
  * The feed-forward neural network that drives a car, plus the genetic operators
@@ -47,6 +47,21 @@ export type Layer = {
     outputs: number[]
 }
 
+/**
+ * One finished race, as remembered by the network that drove it.
+ *
+ * `overtakes` is the RAW count, with no bonuses added. `BRAKE_DISCOVERY_BONUS` is an
+ * ignition for one generation's ranking, not an achievement: letting it into a
+ * permanent record would leave a network that brakes and drives badly carrying a
+ * free +10 for the rest of its life.
+ */
+export type RaceRecord = {
+    /** Traffic cars this network passed in that race. */
+    readonly overtakes: number
+    /** Race seconds to the finish, present only when the course was actually cleared. */
+    readonly seconds?: number
+}
+
 /** A full network: one `Layer` per transition between consecutive architecture sizes. */
 export type Network = {
     id: string
@@ -55,6 +70,29 @@ export type Network = {
     layers: Layer[]
     /** Which generation of the population this network belongs to. */
     generation: number
+    /**
+     * Body colour, drawn for every car this network drives and fixed for its whole life.
+     * Colours used to be redrawn at random every generation, which made it impossible to
+     * follow anything across a run; tied to the network, a veteran keeps its colour from
+     * the race it was admitted on to the race it is dropped.
+     */
+    color: string
+    /**
+     * Every race this exact network has run, oldest first, capped at `VETERANS.historyLimit`.
+     *
+     * A mutated child is a different network with a different `id` and an empty history:
+     * the point of the record is to describe one fixed set of weights across many courses,
+     * and weights that changed have not driven any of those races.
+     */
+    history: RaceRecord[]
+}
+
+/** Appends one finished race to `network`, dropping the oldest once the cap is reached. */
+export const recordRace = (network: Network, record: RaceRecord): void => {
+    network.history.push(record)
+    if (network.history.length > VETERANS.historyLimit) {
+        network.history.splice(0, network.history.length - VETERANS.historyLimit)
+    }
 }
 
 /** One supervised observation: network inputs paired with the controls chosen by a human. */
@@ -74,8 +112,24 @@ export type NetworkGradients = {
     examples: number
 }
 
-const NETWORK_FORMAT_VERSION = 8
+const NETWORK_FORMAT_VERSION = 9
 const BRAKE_OUTPUT_INDEX = 1
+
+/**
+ * Decimals kept per stored weight and bias.
+ *
+ * The archive holds a hundred networks, each around 540 parameters, and localStorage
+ * gives roughly 5 MB in total: written at full float precision that is megabytes of
+ * digits nobody reads. Two decimals cuts a stored network to a few kilobytes.
+ *
+ * The cost is real and worth knowing: parameters live in [-1, 1], so this quantises
+ * them to 201 steps, and a reloaded network is a very slightly different driver from
+ * the one that was saved. Raise this number if a restored champion ever stops matching
+ * the run that earned it.
+ */
+const STORED_DECIMALS = 2
+
+const rounded = (value: number): number => Number(value.toFixed(STORED_DECIMALS))
 
 /** JSON-safe shape of a `Network`, used for localStorage persistence. */
 export type SerializedNetwork = {
@@ -83,6 +137,8 @@ export type SerializedNetwork = {
     id: string
     architecture: number[]
     generation: number
+    color: string
+    history: RaceRecord[]
     layers: { weights: number[][]; biases: number[] }[]
 }
 
@@ -126,6 +182,8 @@ export const createNetwork = (architecture: readonly number[]): Network => {
         architecture,
         layers,
         generation: 0,
+        color: randomColor(),
+        history: [],
     }
 }
 
@@ -217,11 +275,17 @@ const mutateLayer = (layer: Layer, rate: number): Layer => {
 export const mutate = (network: Network, rate: number): Network => {
     const clampedRate = clamp(rate, 0, 1)
 
+    // A new identity in every sense: new id, new colour, and no history at all. The
+    // parent's record describes weights this network does not have, and inheriting it
+    // would credit a child with races it never drove. An exact clone (rate 0) is treated
+    // the same way on purpose, because it goes on to be scored as its own competitor.
     return {
         id: randomId(),
         architecture: network.architecture,
         layers: network.layers.map((layer) => mutateLayer(layer, clampedRate)),
         generation: 0,
+        color: randomColor(),
+        history: [],
     }
 }
 
@@ -371,9 +435,15 @@ export const serializeNetwork = (network: Network): SerializedNetwork => ({
     id: network.id,
     architecture: [...network.architecture],
     generation: network.generation,
+    color: network.color,
+    history: network.history.map((record) =>
+        record.seconds === undefined
+            ? { overtakes: record.overtakes }
+            : { overtakes: record.overtakes, seconds: rounded(record.seconds) },
+    ),
     layers: network.layers.map((layer) => ({
-        weights: layer.weights.map((row) => [...row]),
-        biases: [...layer.biases],
+        weights: layer.weights.map((row) => row.map(rounded)),
+        biases: layer.biases.map(rounded),
     })),
 })
 
@@ -382,6 +452,35 @@ const isNumberArray = (value: unknown): value is number[] =>
 
 const isNumberMatrix = (value: unknown): value is number[][] =>
     Array.isArray(value) && value.every((row) => isNumberArray(row))
+
+/**
+ * Reads back a stored history, keeping only the entries that are actually usable.
+ *
+ * Lenient where the rest of this parser is strict, and on purpose: a malformed race
+ * record costs one data point out of a hundred, while rejecting the whole network over
+ * it would throw away weights that took hours to evolve.
+ */
+const deserializeHistory = (value: unknown): RaceRecord[] => {
+    if (!Array.isArray(value)) {
+        return []
+    }
+    const history: RaceRecord[] = []
+    for (const entry of value) {
+        if (typeof entry !== 'object' || entry === null) {
+            continue
+        }
+        const { overtakes, seconds } = entry as { overtakes?: unknown; seconds?: unknown }
+        if (typeof overtakes !== 'number' || !Number.isFinite(overtakes)) {
+            continue
+        }
+        history.push(
+            typeof seconds === 'number' && Number.isFinite(seconds)
+                ? { overtakes, seconds }
+                : { overtakes },
+        )
+    }
+    return history.slice(-VETERANS.historyLimit)
+}
 
 /**
  * Parses a network back from a value read from localStorage. Returns `undefined`
@@ -453,5 +552,8 @@ export const deserializeNetwork = (data: unknown): Network | undefined => {
         architecture,
         layers,
         generation: payload.generation,
+        // A network saved before colours existed still drives; it just needs one.
+        color: typeof payload.color === 'string' ? payload.color : randomColor(),
+        history: deserializeHistory(payload.history),
     }
 }

@@ -1,4 +1,4 @@
-import { type Polygon, type Vec2, vec } from '@core/geometry'
+import { type Polygon, type Vec2, carPolygon, vec } from '@core/geometry'
 import { type Car, carShape } from '@core/car'
 import { clamp } from '@core/math'
 import { type SensorState, type SensorZone } from '@core/sensor'
@@ -17,6 +17,10 @@ export type CarStyle = {
     readonly winner?: boolean
     /** Display-only body colour, used to identify the player while it is driven manually. */
     readonly color?: string
+    /** Paints the record holder's gold stripe down the middle of the car. */
+    readonly champion?: boolean
+    /** Paints the silver stripe of a car whose network is in the veterans archive. */
+    readonly veteran?: boolean
 }
 
 /** Body alpha applied when `style.ghost` is set. */
@@ -29,6 +33,27 @@ const GHOST_ALPHA = 0.5
  * driving. Darker than the road's gray on purpose, so a wreck reads on tarmac.
  */
 const CRASHED_COLOR = '#5f5f5f'
+
+/**
+ * Racing stripes running the length of the car, marking what the network driving it is
+ * rather than how it is doing right now.
+ *
+ * Gold for the record holder, silver for a member of the veterans archive. A car is
+ * routinely both — the champion is normally in the archive as well — so the two are
+ * drawn together rather than one replacing the other: the gold stripe down the centre
+ * with a silver filet on each side of it.
+ *
+ * These are the only permanent markings on a body. The round's winner has its badge and
+ * nothing else, because winning a round is a fact about one race, and the body colour
+ * now belongs to the network's identity.
+ */
+const CHAMPION_BAND_COLOR = '#facc15'
+const CHAMPION_BAND_WIDTH = 8
+const VETERAN_BAND_COLOR = '#c0c0c0'
+const VETERAN_BAND_WIDTH = 6
+/** Width of each side stripe when a veteran is also the champion, and its offset from the centre. */
+const VETERAN_FILET_WIDTH = 3
+const VETERAN_FILET_OFFSET = 7
 
 /** Rear lights sit this far forward of the car's rear edge, in px. */
 const REAR_LIGHT_INSET = 5
@@ -137,18 +162,8 @@ const drawLightPair = (
     drawLight(ctx, right, car.heading, length, thickness, color, alpha)
 }
 
-/**
- * Draws one car: its body (in its own `car.color`, a display override, or
- * `CRASHED_COLOR` once it has crashed), its rear lights while alive (dim base lights,
- * bright red brake lights while braking) and, when `style.winner` is set, a "WINNER"
- * badge above it.
- */
-export const drawCar = (ctx: CanvasRenderingContext2D, car: Car, style?: CarStyle): void => {
-    const polygon = carShape(car)
-
-    ctx.save()
-    ctx.globalAlpha = style?.ghost ? GHOST_ALPHA : 1
-    ctx.fillStyle = car.crashed ? CRASHED_COLOR : (style?.color ?? car.color)
+/** Fills `polygon` with the context's current style. */
+const fillPolygon = (ctx: CanvasRenderingContext2D, polygon: Polygon): void => {
     ctx.beginPath()
     ctx.moveTo(polygon[0].x, polygon[0].y)
     for (let index = 1; index < polygon.length; index++) {
@@ -156,6 +171,56 @@ export const drawCar = (ctx: CanvasRenderingContext2D, car: Car, style?: CarStyl
     }
     ctx.closePath()
     ctx.fill()
+}
+
+/**
+ * Paints one stripe along the car, `offset` px to the right of its centre line.
+ *
+ * The stripe is the car's own shape rebuilt at a narrower width, so it stays glued to
+ * the body through any heading, and it runs the full length flush with both ends.
+ */
+const drawBand = (
+    ctx: CanvasRenderingContext2D,
+    car: Car,
+    width: number,
+    offset: number,
+    color: string,
+): void => {
+    // At heading 0 the car faces up the screen, so its right-hand side is +x; the
+    // lateral axis is the heading turned a quarter turn.
+    const center: Vec2 = vec(
+        car.position.x + Math.cos(car.heading) * offset,
+        car.position.y - Math.sin(car.heading) * offset,
+    )
+    ctx.fillStyle = color
+    fillPolygon(ctx, carPolygon(center, { width, height: car.spec.size.height }, car.heading))
+}
+
+/**
+ * Draws one car: its body (in its own `car.color`, a display override, or
+ * `CRASHED_COLOR` once it has crashed), its champion/veteran stripes, its rear lights
+ * while alive (dim base lights, bright red brake lights while braking) and, when
+ * `style.winner` is set, a "WINNER" badge above it.
+ */
+export const drawCar = (ctx: CanvasRenderingContext2D, car: Car, style?: CarStyle): void => {
+    const polygon = carShape(car)
+
+    ctx.save()
+    ctx.globalAlpha = style?.ghost ? GHOST_ALPHA : 1
+    ctx.fillStyle = car.crashed ? CRASHED_COLOR : (style?.color ?? car.color)
+    fillPolygon(ctx, polygon)
+
+    // Painted on wrecks too: which of the marked cars died, and where, is exactly what
+    // there is to read on a finished round.
+    if (style?.champion) {
+        drawBand(ctx, car, CHAMPION_BAND_WIDTH, 0, CHAMPION_BAND_COLOR)
+    }
+    if (style?.veteran && style?.champion) {
+        drawBand(ctx, car, VETERAN_FILET_WIDTH, -VETERAN_FILET_OFFSET, VETERAN_BAND_COLOR)
+        drawBand(ctx, car, VETERAN_FILET_WIDTH, VETERAN_FILET_OFFSET, VETERAN_BAND_COLOR)
+    } else if (style?.veteran) {
+        drawBand(ctx, car, VETERAN_BAND_WIDTH, 0, VETERAN_BAND_COLOR)
+    }
     ctx.restore()
 
     // A retired/crashed car is electrically dead: both its running lights and brake

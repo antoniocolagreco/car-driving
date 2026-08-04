@@ -20,8 +20,9 @@ const { drawCar, drawSensors } = renderMocks
 const trafficCar: Car = { position: { x: 0, y: 100 } } as Car
 const activeCar: RacingCar = {
     car: { position: { x: 0, y: 200 } } as Car,
+    network: { id: 'active' },
     sensorState: {},
-} as RacingCar
+} as unknown as RacingCar
 
 const layer: CanvasLayer = {
     context: {
@@ -39,6 +40,8 @@ const state: SimulationState = {
     cars: [activeCar],
     activeCar,
     winner: undefined,
+    veterans: [],
+    champion: undefined,
     courseCleared: false,
     gameOver: false,
     bestCar: undefined,
@@ -64,6 +67,8 @@ describe('drawScene traffic visibility', () => {
         expect(drawCar).toHaveBeenCalledWith(layer.context, activeCar.car, {
             ghost: false,
             winner: undefined,
+            champion: false,
+            veteran: false,
         })
         expect(drawSensors).toHaveBeenCalledWith(layer.context, activeCar.sensorState, 'hull')
     })
@@ -81,6 +86,8 @@ describe('drawScene traffic visibility', () => {
         expect(drawCar).toHaveBeenCalledWith(layer.context, activeCar.car, {
             ghost: false,
             winner: undefined,
+            champion: false,
+            veteran: false,
         })
         expect(drawCar).toHaveBeenCalledWith(layer.context, trafficCar)
     })
@@ -244,10 +251,14 @@ describe('drawScene racing-car paint order', () => {
         expect(drawCar).toHaveBeenNthCalledWith(1, layer.context, random.car, {
             ghost: false,
             winner: false,
+            champion: false,
+            veteran: false,
         })
         expect(drawCar).toHaveBeenNthCalledWith(2, layer.context, player.car, {
             ghost: true,
             winner: false,
+            champion: false,
+            veteran: false,
         })
     })
 })

@@ -18,12 +18,15 @@ import { type ManualControlInput, createManualControls } from '@ui/keyboard'
 import {
     type ChampionRecord,
     clearChampion,
+    clearVeterans,
     clearWinner,
     loadChampion,
     loadSettings,
+    loadVeterans,
     loadWinner,
     saveChampion,
     saveSettings,
+    saveVeterans,
     saveWinner,
 } from '@ui/persistence'
 import { createSimulateModal } from '@ui/simulate-modal'
@@ -206,8 +209,28 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             overtakes: result.overtakes,
         }
         saveChampion(champion)
+        simulation.setChampion(champion.network)
         hud.showChampion(champion)
         controlPanel.setChampionAvailable(true)
+    }
+
+    /**
+     * The archive is written on every generation, because that is when it changes and
+     * losing a session's worth of it to a closed tab would defeat the point of keeping
+     * a long-term memory at all.
+     */
+    const onVeteransChanged = (roster: readonly Network[]): void => {
+        saveVeterans(roster)
+    }
+
+    /** Members whose architecture no longer matches the settings could not race anyway. */
+    const usableVeterans = (roster: readonly Network[]): Network[] =>
+        roster.filter((network) => isCompatibleNetwork(network, settings.hiddenLayers))
+
+    const storedVeterans = loadVeterans()
+    const veterans = usableVeterans(storedVeterans)
+    if (veterans.length !== storedVeterans.length) {
+        saveVeterans(veterans)
     }
 
     // `simulation` is reassigned wholesale (never mutated) on 'reset', the one
@@ -225,8 +248,11 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
     }
     let simulation: Simulation = createSimulation(settings, {
         winner,
+        veterans,
+        champion: champion?.network,
         onGenerationEnd,
         onCourseFinished,
+        onVeteransChanged,
     })
 
     const simulationLayer = createCanvasLayer(container, 'Simulation')
@@ -332,13 +358,19 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
                         break
                     }
                     case 'reset': {
-                        // Only the Winner is forgotten. The record holder survives a reset
-                        // by design, so the fresh population still has a time to beat, and
-                        // `onCourseFinished` has to be rewired or it would stop watching.
+                        // The Winner and the whole archive are forgotten: "start from
+                        // random networks" means nothing evolved survives, and a hundred
+                        // remembered veterans on the grid would be the opposite of that.
+                        // The record holder does survive by design, so the fresh
+                        // population still has a time to beat, and both callbacks have to
+                        // be rewired or they would stop watching.
                         clearWinner()
+                        clearVeterans()
                         simulation = createSimulation(settings, {
+                            champion: champion?.network,
                             onGenerationEnd,
                             onCourseFinished,
+                            onVeteransChanged,
                         })
                         break
                     }

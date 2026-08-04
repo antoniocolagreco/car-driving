@@ -58,6 +58,6 @@ describe('persistence storage keys', () => {
             'winner-network',
         ])
         const winnerPayload: unknown = JSON.parse(values.get('winner-network') ?? '{}')
-        expect((winnerPayload as { version?: unknown }).version).toBe(8)
+        expect((winnerPayload as { version?: unknown }).version).toBe(9)
     })
 })

@@ -220,6 +220,55 @@ export const MUTATION_DISTRIBUTION = {
 	high: 0.15,
 } as const;
 
+/**
+ * The veterans archive: a long-term memory of networks, kept across generations and
+ * across runs, so a good one can no longer be deleted by a single unlucky course.
+ *
+ * The problem it solves, measured: the network that first cleared a course, run alone
+ * on 40 unseen courses, cleared 9 of them and scored anywhere from 12 to 40. A round's
+ * score therefore describes the course at least as much as the driver, and selection
+ * (which keeps only the round's best) throws away the best network ever found the first
+ * time it draws a bad layout.
+ *
+ * The archive answers that with a statistic a single race cannot distort: each network
+ * keeps the MEDIAN of its own raw overtakes across every race it has run. The median
+ * ignores both the lucky 40 and the catastrophic 0, and answers "what does this network
+ * do on a typical course", which is the actual question.
+ *
+ * Two rules keep the median honest, and without them the whole thing is theatre:
+ *
+ * A median over one race IS that race's score. A newcomer that scored 40 on an easy
+ * course would otherwise outrank a veteran sitting at 25 over fifty races, and the
+ * archive would fill with lucky first outings. So under `provisionalRaces` a network is
+ * on probation: it cannot be dropped, and it is put on the track ahead of everybody
+ * else, precisely so it stops being provisional.
+ *
+ * And a member that never races keeps whatever median it entered with, while the ones
+ * that do race have theirs corrected by hard courses. Probation-first ordering is what
+ * stops the top of the archive from silently filling with entries that were never
+ * retested.
+ */
+export const VETERANS = {
+	/** How many networks the archive holds. */
+	rosterSize: 100,
+	/**
+	 * How many of a finished race's best networks are admitted.
+	 *
+	 * Deliberately small. The top ten of a round are ten mutated children of the same
+	 * winner, so admitting ten per race would leave the archive holding a hundred
+	 * variations of one lineage within ten races, which is the opposite of what an
+	 * archive is for. Three per race fills the same hundred slots across thirty-odd
+	 * races, drawn from thirty-odd different winners.
+	 */
+	admittedPerRace: 3,
+	/** Races a network must have run before its median is trusted and it can be dropped. */
+	provisionalRaces: 3,
+	/** Share of the population handed to archive members, racing unmutated. */
+	racingShare: 0.1,
+	/** Races remembered per network; the oldest is dropped past this. */
+	historyLimit: 100,
+} as const;
+
 /** Defaults for the settings the user can change, before anything is stored. */
 export const DEFAULTS = {
 	/**

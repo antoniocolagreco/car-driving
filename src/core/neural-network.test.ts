@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { VETERANS } from '@core/config'
 import {
     type TrainingExample,
     createNetwork,
     deserializeNetwork,
     feedForward,
     mutate,
+    recordRace,
     serializeNetwork,
     trainBatch,
 } from './neural-network'
@@ -303,22 +305,61 @@ describe('serializeNetwork / deserializeNetwork', () => {
         expect(deserializeNetwork(saved)).toBeDefined()
     })
 
-    it('round-trips every weight', () => {
+    // Storage keeps two decimals per parameter, so a round trip is quantised rather than
+    // exact. What has to survive is the shape and every value to that precision: a
+    // network that came back with a weight in the wrong slot, or off by more than one
+    // step of rounding, is a different driver from the one that was saved.
+    it('round-trips every weight to the stored precision', () => {
         const network = createNetwork(ARCHITECTURE)
         const restored = deserializeNetwork(serializeNetwork(network))
 
         expect(restored?.layers.map((layer) => layer.weights)).toEqual(
-            network.layers.map((layer) => layer.weights),
+            network.layers.map((layer) =>
+                layer.weights.map((row) => row.map((weight) => Number(weight.toFixed(2)))),
+            ),
         )
     })
 
-    it('round-trips every bias', () => {
+    it('round-trips every bias to the stored precision', () => {
         const network = createNetwork(ARCHITECTURE)
         const restored = deserializeNetwork(serializeNetwork(network))
 
         expect(restored?.layers.map((layer) => layer.biases)).toEqual(
-            network.layers.map((layer) => layer.biases),
+            network.layers.map((layer) => layer.biases.map((bias) => Number(bias.toFixed(2)))),
         )
+    })
+
+    it('keeps a network colour and race history across a round trip', () => {
+        const network = createNetwork(ARCHITECTURE)
+        recordRace(network, { overtakes: 12 })
+        recordRace(network, { overtakes: 40, seconds: 31.5 })
+
+        const restored = deserializeNetwork(serializeNetwork(network))
+
+        expect(restored?.color).toBe(network.color)
+        expect(restored?.history).toEqual([{ overtakes: 12 }, { overtakes: 40, seconds: 31.5 }])
+    })
+
+    it('gives a mutated child its own identity, with none of the parent record', () => {
+        const parent = createNetwork(ARCHITECTURE)
+        recordRace(parent, { overtakes: 30 })
+
+        const child = mutate(parent, 0)
+
+        expect(child.id).not.toBe(parent.id)
+        expect(child.history).toEqual([])
+        expect(parent.history).toHaveLength(1)
+    })
+
+    it('keeps only the most recent races once the history cap is reached', () => {
+        const network = createNetwork(ARCHITECTURE)
+        for (let race = 0; race < VETERANS.historyLimit + 5; race++) {
+            recordRace(network, { overtakes: race })
+        }
+
+        expect(network.history).toHaveLength(VETERANS.historyLimit)
+        expect(network.history[0].overtakes).toBe(5)
+        expect(network.history.at(-1)?.overtakes).toBe(VETERANS.historyLimit + 4)
     })
 
     it('rejects a payload from the old seven-zone format', () => {

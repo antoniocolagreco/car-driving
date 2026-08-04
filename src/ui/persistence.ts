@@ -18,6 +18,8 @@ const STORAGE_KEYS = {
     winner: 'winner-network',
     /** The record holder: a network that finished the course, with the run that earned it. */
     champion: 'champion-record',
+    /** The veterans archive, with each member's race history. */
+    veterans: 'veterans-roster',
     carsQuantity: 'cars-quantity',
     mutationRate: 'mutation-rate',
     hiddenLayers: 'hidden-layers',
@@ -136,6 +138,60 @@ export const clearChampion = (): void => {
     for (const key of OBSOLETE_CHAMPION_KEYS) {
         localStorage.removeItem(key)
     }
+}
+
+/**
+ * Loads the veterans archive, or an empty roster when there is none.
+ *
+ * Members that no longer deserialize are dropped individually rather than taking the
+ * archive down with them: a hundred networks accumulated over a long run are worth more
+ * than the tidiness of an all-or-nothing load.
+ */
+export const loadVeterans = (): Network[] => {
+    const raw = localStorage.getItem(STORAGE_KEYS.veterans)
+    if (!raw) {
+        return []
+    }
+    try {
+        const data: unknown = JSON.parse(raw)
+        if (!Array.isArray(data)) {
+            return []
+        }
+        const roster: Network[] = []
+        for (const entry of data) {
+            const network = deserializeNetwork(entry)
+            if (network) {
+                roster.push(network)
+            }
+        }
+        return roster
+    } catch {
+        return []
+    }
+}
+
+/**
+ * Persists the archive.
+ *
+ * A hundred networks at two stored decimals is a few hundred kilobytes, which
+ * localStorage holds comfortably but will not swallow silently if the numbers ever
+ * change: a quota failure leaves the previous save in place and is not worth taking the
+ * simulation down over, so it is swallowed here and the archive lives on in memory.
+ */
+export const saveVeterans = (roster: readonly Network[]): void => {
+    try {
+        localStorage.setItem(
+            STORAGE_KEYS.veterans,
+            JSON.stringify(roster.map((network) => serializeNetwork(network))),
+        )
+    } catch {
+        return
+    }
+}
+
+/** Empties the archive, so a reset starts from no remembered networks at all. */
+export const clearVeterans = (): void => {
+    localStorage.removeItem(STORAGE_KEYS.veterans)
 }
 
 /** Reads a number from `key`, falling back to `fallback` when absent or not finite. */

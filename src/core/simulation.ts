@@ -6,6 +6,7 @@ import {
     RACING_CAR,
     SENSOR_MAX_RANGE,
     SIMULATION,
+    VETERANS,
 } from '@core/config'
 import {
     type Network,
@@ -15,8 +16,10 @@ import {
     applyAverageGradients,
     createNetworkGradients,
     feedForward,
+    recordRace,
     trainBatch,
 } from './neural-network'
+import { rankRoster, selectRacers, updateRoster } from './veterans'
 import { castSensors } from './sensor'
 import {
     type FitnessSample,
@@ -81,6 +84,10 @@ export type SimulationState = {
     winner?: Network
     /** The networks the next generation is bred from, best first. */
     parents: Network[]
+    /** The veterans archive, ordered by `rankRoster`. See `core/veterans.ts`. */
+    veterans: Network[]
+    /** The record holder, entered in every race while it is set. */
+    champion?: Network
     gameOver: boolean
     /** True when a car passed every traffic car: the course is beaten, not merely survived. */
     courseCleared: boolean
@@ -114,6 +121,8 @@ export type Simulation = {
     stopManualDriving(): void
     /** Promotes the current best network immediately. */
     promoteBest(): Network | undefined
+    /** Sets the record holder that races in every round from the next one on. */
+    setChampion(champion: Network | undefined): void
 }
 
 /**
@@ -135,15 +144,19 @@ type ConsolidationState = {
     gradients: NetworkGradients
 }
 
-/** Turns `SimulationSettings` plus an optional winner into `PopulationOptions`. */
+/** Turns `SimulationSettings` plus the networks entered by name into `PopulationOptions`. */
 const toPopulationOptions = (
     settings: SimulationSettings,
     parents: readonly Network[],
+    veterans: readonly Network[],
+    champion: Network | undefined,
 ): PopulationOptions => ({
     quantity: settings.carsQuantity,
     hiddenLayers: settings.hiddenLayers,
     mutationRate: settings.mutationRate,
     parents,
+    veterans,
+    champion,
 })
 
 /**
@@ -211,11 +224,17 @@ export const createSimulation = (
     settings: SimulationSettings,
     options?: {
         readonly winner?: Network
+        /** The stored veterans archive, restored across runs. */
+        readonly veterans?: readonly Network[]
+        /** The stored record holder, entered in every race from the first one on. */
+        readonly champion?: Network
         readonly trafficSeed?: string | number
         /** Fired when a generation ends, with the network worth persisting. */
         readonly onGenerationEnd?: (winner: Network | undefined) => void
         /** Fired when a round ended with the course beaten, once, with the finisher's run. */
         readonly onCourseFinished?: (result: CourseResult) => void
+        /** Fired when a generation ends, with the archive as it now stands. */
+        readonly onVeteransChanged?: (veterans: readonly Network[]) => void
     },
 ): Simulation => {
     let currentSettings = settings
@@ -232,6 +251,7 @@ export const createSimulation = (
     const trafficSeed = options?.trafficSeed
     const onGenerationEnd = options?.onGenerationEnd
     const onCourseFinished = options?.onCourseFinished
+    const onVeteransChanged = options?.onVeteransChanged
     const road = createRoad()
 
     const state: SimulationState = {
@@ -245,6 +265,8 @@ export const createSimulation = (
         generation: 0,
         winner: undefined,
         parents: [],
+        veterans: [...(options?.veterans ?? [])],
+        champion: options?.champion,
         gameOver: false,
         courseCleared: false,
         courseWinner: undefined,
@@ -286,7 +308,16 @@ export const createSimulation = (
 
         state.generation += 1
 
-        const options = toPopulationOptions(currentSettings, parents)
+        // Recomputed every round rather than held: the ordering depends on medians that
+        // the previous round has just moved, and on who is still on probation.
+        const racingVeterans: Network[] = selectRacers(state.veterans, currentSettings.carsQuantity)
+
+        const options = toPopulationOptions(
+            currentSettings,
+            parents,
+            racingVeterans,
+            state.champion,
+        )
         state.cars = createPopulation(road, options)
 
         // The player's car is always in the field: one more competitor, drawn, colliding,
@@ -397,8 +428,43 @@ export const createSimulation = (
         processConsolidation(remainingExamples)
     }
 
+    /**
+     * Writes this round into the history of every network that drove it, then admits
+     * the round's best to the archive and drops whoever no longer fits.
+     *
+     * Every car, not only the good ones. A history made of successes measures nothing:
+     * the median exists to say what a network does on a TYPICAL course, and the courses
+     * it fails are most of what makes a course typical.
+     *
+     * Recording comes before admission so a newly admitted network arrives already
+     * holding the race that earned it, rather than with an empty record and a median of
+     * zero that would place it below everybody on the way in.
+     */
+    const recordRaceResults = (): void => {
+        const clearedBy: Network | undefined = state.courseCleared
+            ? state.courseWinner?.network
+            : undefined
+        for (const racingCar of state.cars) {
+            recordRace(racingCar.network, {
+                overtakes: racingCar.stats.overtakes,
+                seconds:
+                    racingCar.network === clearedBy
+                        ? racingCar.stats.lastOvertakeAtSeconds
+                        : undefined,
+            })
+        }
+
+        const admitted: Network[] = selectParents(state.cars, VETERANS.admittedPerRace).map(
+            (car) => car.network,
+        )
+        state.veterans = rankRoster(updateRoster(state.veterans, admitted))
+        onVeteransChanged?.(state.veterans)
+    }
+
     /** Finalizes parent selection and enters the game-over phase exactly once. */
     const finishGeneration = (): void => {
+        recordRaceResults()
+
         const roundWinner: RacingCar | undefined = state.bestCar
         if (roundWinner) {
             if (playerWasDriven && roundWinner === state.playerCar) {
@@ -406,9 +472,10 @@ export const createSimulation = (
             }
             roundWinner.network.generation += 1
 
-            // Whoever wins the round becomes the white Winner of the next one. Nothing
-            // protects an incumbent: on a new course a lower-scoring winner still takes
-            // the seat, because scores from different layouts are not comparable anyway.
+            // Whoever wins the round takes the seat for the next one. Nothing protects an
+            // incumbent here, because scores from different layouts are not comparable
+            // anyway; what stops a good network from being lost to one bad draw is the
+            // archive, which keeps it racing on its median rather than on this round.
             const rankedNetworks: Network[] = selectParents(state.cars, PARENT_COUNT).map(
                 (car) => car.network,
             )
@@ -735,8 +802,18 @@ export const createSimulation = (
         state.waitingForManualInput = false
     }
 
+    /**
+     * Takes effect from the next round, not this one. The record is set by a car that is
+     * currently on the track, and adding its network to the grid it is already racing on
+     * would put the same weights in two bodies at once.
+     */
+    const setChampion = (champion: Network | undefined): void => {
+        state.champion = champion
+    }
+
     return {
         state,
+        setChampion,
         step,
         restart,
         updateSettings,

@@ -1,6 +1,5 @@
 import type { Vec2 } from '@core/geometry'
 import { clamp } from '@core/math'
-import { randomColor } from '@core/random'
 import { MUTATION, MUTATION_DISTRIBUTION } from '@core/config'
 import { type Network, createNetwork, mutate } from './neural-network'
 import { SENSOR_ZONE_ORDER, type SensorState, castSensors } from './sensor'
@@ -36,6 +35,14 @@ export type PopulationOptions = {
      * generation, when there is nothing to breed from and every car starts random.
      */
     readonly parents?: readonly Network[]
+    /**
+     * Archive members that race this generation unmutated, best first. They are not
+     * bred from here: they are competitors, entered to have their medians retested on
+     * a course they have not seen.
+     */
+    readonly veterans?: readonly Network[]
+    /** The record holder, entered in every race it can drive, unmutated. */
+    readonly champion?: Network
 }
 
 /** Two architectures match when they have the same length and the same neuron counts, in order. */
@@ -91,14 +98,6 @@ export const mutationRateForIndex = (
 }
 
 /**
- * The winner — car 0, the previous generation's winner, running its network
- * unmutated — is always white, while its mutated offspring get random colours.
- * Without it the crowd is a wall of indistinguishable colours and the one car
- * that matters, the one every other car is a variation of, cannot be picked out.
- */
-const WINNER_COLOR = '#ffffff'
-
-/**
  * Every competitor starts from the middle lane, on the same spot.
  *
  * They used to be spread across the lanes round-robin, `0, 1, 2, 0, ...`, which
@@ -118,20 +117,24 @@ const WINNER_COLOR = '#ffffff'
 const raceStartPosition = (road: Road): Vec2 => lanePosition(road, Math.floor(road.laneCount / 2))
 
 /**
- * Display colour used only while the human holds the wheel. The player's stored body
- * colour remains random, so under neural-network control it looks like an ordinary
- * evolved competitor; white remains reserved for the winner.
+ * Display colour used only while the human holds the wheel. Under neural-network
+ * control the player's car wears its network's own colour, like every other competitor.
  */
 export const PLAYER_COLOR = '#38bdf8'
 
-/** Builds a `RacingCar` at `position`, with a fresh body, stats and an empty (not-yet-cast) sensor state. */
-const createRacingCar = (
-    position: Vec2,
-    network: Network,
-    color: string,
-    player = false,
-): RacingCar => {
-    const car = createCar(position, RACING_CAR_SPEC, color)
+/**
+ * Builds a `RacingCar` at `position`, with a fresh body, stats and an empty
+ * (not-yet-cast) sensor state.
+ *
+ * The body wears `network.color`, which belongs to the network and never changes. The
+ * round's winner used to be painted white instead, to make the one car every other car
+ * descends from findable in the crowd; the WINNER badge above it already says that, and
+ * the colour channel is worth more spent on identity — a veteran keeps the same colour
+ * from the race it was admitted on to the race it is dropped, so it can be followed by
+ * eye across a run.
+ */
+const createRacingCar = (position: Vec2, network: Network, player = false): RacingCar => {
+    const car = createCar(position, RACING_CAR_SPEC, network.color)
     return {
         car,
         player,
@@ -215,40 +218,80 @@ export const createPlayerCar = (road: Road, options: PopulationOptions): RacingC
     return createRacingCar(
         raceStartPosition(road),
         parents.length > 0 ? mutate(parents[0], 0) : createNetwork(architecture),
-        randomColor(),
         true,
     )
 }
 
 /**
- * Builds one generation's population. Cars share the same start line but rotate
- * through every available lane (`0, 1, 2, 0, ...`). A parent trained for a different
- * fixed sensor layout or hidden-layer shape than requested here is unusable — its
- * `architecture` does not match `[12, ...hiddenLayers, 3]` and it could
- * not even `feedForward` — so it is dropped, and if that leaves no parents at all
- * every car starts fresh instead of crashing or silently producing garbage.
+ * The networks entered unmutated, in addition to the elite: the record holder first,
+ * then the archive members due to race.
+ *
+ * They are entered rather than bred from. Their job in the field is to be measured
+ * again on a course they have not driven, which is the only thing that keeps a median
+ * honest, and mutating them would measure something else.
+ *
+ * Deduplicated by `id`, because the overlap is the normal case and not an edge one: the
+ * champion is usually in the archive too, and the elite is usually the network that was
+ * just admitted to it. Racing the same weights twice would waste a slot and, worse, put
+ * two identical results into one network's history from a single race.
+ */
+const fixedEntrants = (
+    options: PopulationOptions,
+    architecture: readonly number[],
+    elite: Network | undefined,
+): Network[] => {
+    const entrants: Network[] = []
+    const seen = new Set<string>(elite ? [elite.id] : [])
+    const candidates: readonly Network[] = [
+        ...(options.champion ? [options.champion] : []),
+        ...(options.veterans ?? []),
+    ]
+    for (const network of candidates) {
+        if (seen.has(network.id) || !sameArchitecture(network.architecture, architecture)) {
+            continue
+        }
+        seen.add(network.id)
+        entrants.push(network)
+    }
+    // Half the grid is the hard limit. Below it the veterans are a control group racing
+    // against the current line; at it they would BE the field, and a generation that is
+    // all memory and no offspring cannot improve on anything.
+    return entrants.slice(0, Math.floor(options.quantity / 2))
+}
+
+/**
+ * Builds one generation's population, from the same start line for everybody.
+ *
+ * The grid is offspring plus a tail of unmutated entrants: the record holder and the
+ * archive members due a retest. Offspring are generated first and counted among
+ * themselves, so `mutationRateForIndex`'s bands stay shares of the breeding field
+ * rather than shares of a grid the veterans have already taken a slice out of, and car
+ * 0 remains the elite.
+ *
+ * A parent trained for a different fixed sensor layout or hidden-layer shape than
+ * requested here is unusable — its `architecture` does not match `[12, ...hiddenLayers, 3]`
+ * and it could not even `feedForward` — so it is dropped, and if that leaves no parents
+ * at all every car starts fresh instead of crashing or silently producing garbage.
  */
 export const createPopulation = (road: Road, options: PopulationOptions): RacingCar[] => {
     const architecture = architectureFor(options)
     const parents = usableParents(options, architecture)
+    const entrants = fixedEntrants(options, architecture, parents[0])
+    const offspringCount = Math.max(1, options.quantity - entrants.length)
 
     const cars: RacingCar[] = []
-    for (let index = 0; index < options.quantity; index++) {
+    for (let index = 0; index < offspringCount; index++) {
         const network = networkForIndex(
             index,
-            options.quantity,
+            offspringCount,
             options.mutationRate,
             architecture,
             parents,
         )
-        const isWinner = parents.length > 0 && index === 0
-        cars.push(
-            createRacingCar(
-                raceStartPosition(road),
-                network,
-                isWinner ? WINNER_COLOR : randomColor(),
-            ),
-        )
+        cars.push(createRacingCar(raceStartPosition(road), network))
+    }
+    for (const network of entrants) {
+        cars.push(createRacingCar(raceStartPosition(road), network))
     }
     return cars
 }
