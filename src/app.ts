@@ -1,22 +1,30 @@
 import { SIMULATION } from '@core/config'
 import { type Network } from '@core/neural-network'
 import { isCompatibleNetwork } from '@core/population'
-import { type Simulation, type SimulationSettings, createSimulation } from '@core/simulation'
+import {
+    type CourseResult,
+    type Simulation,
+    type SimulationSettings,
+    createSimulation,
+} from '@core/simulation'
 import { createCanvasLayer } from '@render/canvas'
+import { type RadarMode } from '@render/car'
 import { createFrameLoop } from '@render/frame-loop'
 import { drawNetwork } from '@render/network'
 import { drawScene } from '@render/scene'
-import { createControlPanel } from '@ui/controls'
+import { type ControlPanel, createControlPanel } from '@ui/controls'
 import { createHud } from '@ui/hud'
 import { type ManualControlInput, createManualControls } from '@ui/keyboard'
 import {
+    type ChampionRecord,
     clearChampion,
-    loadBackup,
+    clearWinner,
     loadChampion,
     loadSettings,
-    saveBackup,
+    loadWinner,
     saveChampion,
     saveSettings,
+    saveWinner,
 } from '@ui/persistence'
 import victoryAudioUrl from '../audio/win.mp3?url'
 
@@ -24,8 +32,9 @@ import victoryAudioUrl from '../audio/win.mp3?url'
  * The only module allowed to know about `core/`, `render/` and `ui/` at once.
  * It owns the two canvases, the
  * fixed-timestep loop that drives the core simulation, the HUD, the control
- * panel and the localStorage wiring — `core/` never touches localStorage
- * directly, it only reports a champion out through `onGenerationEnd`.
+ * panel and the localStorage wiring. `core/` never touches localStorage directly: it
+ * reports a winner out through `onGenerationEnd` and a finished course through
+ * `onCourseFinished`, and this module decides what is worth keeping.
  */
 
 export type SimulationApp = {
@@ -51,7 +60,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
     let lastNetworkDrawMs = 0
     // A paint-only preference: changing it must never alter or restart the simulation.
     let trafficVisible: boolean = true
-    let radarVisible: boolean = true
+    let radarMode: RadarMode = 'hull'
     const victoryAudio: HTMLAudioElement = new Audio(victoryAudioUrl)
     victoryAudio.preload = 'auto'
     victoryAudio.volume = 1
@@ -92,28 +101,56 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         signal: abortController.signal,
     })
 
-    const onGenerationEnd = (champion: Network | undefined): void => {
-        if (champion) {
-            saveChampion(champion)
+    const onGenerationEnd = (winner: Network | undefined): void => {
+        if (winner) {
+            saveWinner(winner)
         }
     }
 
-    // `simulation` is reassigned wholesale (never mutated) on 'reset', the one
-    // action that needs to drop the current champion entirely: `restart()`
-    // always keeps the in-memory champion unless a new one is given, so
-    // "start from random networks" can only be achieved by building a fresh
-    // `Simulation` with no champion at all.
-    const loadedChampion = loadChampion()
-    const champion =
-        loadedChampion && isCompatibleNetwork(loadedChampion, settings.hiddenLayers)
-            ? loadedChampion
-            : undefined
-    if (loadedChampion && !champion) {
+    /**
+     * The record holder. Loaded once, replaced only by a strictly faster finish, and
+     * dropped when its architecture stops matching the settings, because a record nobody
+     * can load or race against is not a record.
+     */
+    let champion: ChampionRecord | undefined = loadChampion()
+    if (champion && !isCompatibleNetwork(champion.network, settings.hiddenLayers)) {
         clearChampion()
+        champion = undefined
+    }
+
+    const onCourseFinished = (result: CourseResult): void => {
+        // Strictly faster: an equal time leaves the incumbent in place, so the record
+        // belongs to whoever set it first. The score is recorded, never compared.
+        if (champion && result.seconds >= champion.seconds) {
+            return
+        }
+        champion = {
+            network: result.network,
+            seconds: result.seconds,
+            overtakes: result.overtakes,
+        }
+        saveChampion(champion)
+        hud.showChampion(champion)
+        controlPanel.setChampionAvailable(true)
+    }
+
+    // `simulation` is reassigned wholesale (never mutated) on 'reset', the one
+    // action that needs to drop the current winner entirely: `restart()`
+    // always keeps the in-memory winner unless a new one is given, so
+    // "start from random networks" can only be achieved by building a fresh
+    // `Simulation` with no winner at all.
+    const loadedWinner = loadWinner()
+    const winner =
+        loadedWinner && isCompatibleNetwork(loadedWinner, settings.hiddenLayers)
+            ? loadedWinner
+            : undefined
+    if (loadedWinner && !winner) {
+        clearWinner()
     }
     let simulation: Simulation = createSimulation(settings, {
-        champion,
+        winner,
         onGenerationEnd,
+        onCourseFinished,
     })
 
     const simulationLayer = createCanvasLayer(container, 'Simulation')
@@ -166,7 +203,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         }
         victoryWasActive = victoryIsActive
 
-        drawScene(simulationLayer, simulation.state, { trafficVisible, radarVisible })
+        drawScene(simulationLayer, simulation.state, { trafficVisible, radarMode })
         drawNetworkThrottled(performance.now())
         hud.update(simulation.state, fps)
     }
@@ -179,13 +216,21 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         onIntentStart: () => simulation.beginManualDriving(),
     })
 
-    createControlPanel(
+    const controlPanel: ControlPanel = createControlPanel(
         settings,
         {
             onSettingsChange: (nextSettings) => {
                 settings = nextSettings
                 saveSettings(settings)
                 simulation.updateSettings(settings)
+                // A different architecture cannot race the stored record, so the record
+                // goes: keeping an unloadable one would leave Restore enabled and inert.
+                if (champion && !isCompatibleNetwork(champion.network, settings.hiddenLayers)) {
+                    clearChampion()
+                    champion = undefined
+                    hud.showChampion(undefined)
+                    controlPanel.setChampionAvailable(false)
+                }
             },
             onAction: (action) => {
                 switch (action) {
@@ -193,30 +238,32 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
                         simulation.restart()
                         break
                     }
-                    case 'backup': {
-                        const network = simulation.state.activeCar?.network
-                        if (network) {
-                            saveBackup(network)
-                        }
-                        break
-                    }
-                    case 'restore': {
-                        const backup = loadBackup()
-                        if (backup && isCompatibleNetwork(backup, settings.hiddenLayers)) {
-                            saveChampion(backup)
-                            simulation.restart(backup)
+                    case 'loadChampion': {
+                        // Re-read from storage rather than reusing the in-memory record:
+                        // whatever goes into the simulation gets trained and counted on,
+                        // and the record must not drift with it.
+                        const record = loadChampion()
+                        if (record && isCompatibleNetwork(record.network, settings.hiddenLayers)) {
+                            saveWinner(record.network)
+                            simulation.restart(record.network)
                         }
                         break
                     }
                     case 'reset': {
-                        clearChampion()
-                        simulation = createSimulation(settings, { onGenerationEnd })
+                        // Only the Winner is forgotten. The record holder survives a reset
+                        // by design, so the fresh population still has a time to beat, and
+                        // `onCourseFinished` has to be rewired or it would stop watching.
+                        clearWinner()
+                        simulation = createSimulation(settings, {
+                            onGenerationEnd,
+                            onCourseFinished,
+                        })
                         break
                     }
                     case 'evolve': {
                         const network = simulation.promoteBest()
                         if (network) {
-                            saveChampion(network)
+                            saveWinner(network)
                             simulation.restart()
                         }
                         break
@@ -239,12 +286,17 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             onTrafficVisibilityToggle: (visible) => {
                 trafficVisible = visible
             },
-            onRadarVisibilityToggle: (visible) => {
-                radarVisible = visible
+            onRadarModeChange: (mode) => {
+                radarMode = mode
             },
         },
         abortController.signal,
     )
+
+    // The panel and the champion panel start empty, so both are filled once here rather
+    // than waiting for the first finish to reveal a record that already exists.
+    hud.showChampion(champion)
+    controlPanel.setChampionAvailable(champion !== undefined)
 
     return {
         start(): void {

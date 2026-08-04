@@ -85,7 +85,7 @@ describe('feedForward', () => {
         expect(outputs).toHaveLength(ARCHITECTURE[ARCHITECTURE.length - 1])
     })
 
-    it('never exposes a negative brake pressure', () => {
+    it('keeps the raw brake activation available for the control threshold', () => {
         const network = createNetwork([2, 3])
         const outputLayer = network.layers[0]
         outputLayer.weights = outputLayer.weights.map((row) => row.map(() => 0))
@@ -93,7 +93,7 @@ describe('feedForward', () => {
 
         const outputs = feedForward(network, [0, 0])
 
-        expect(outputs[1]).toBe(0)
+        expect(outputs[1]).toBeLessThan(0)
     })
 
     it('keeps every output within [-1, 1]', () => {
@@ -180,7 +180,7 @@ describe('trainBatch', () => {
         outputLayer.weights = outputLayer.weights.map((row) => row.map(() => 0))
         outputLayer.biases = [0, -1, 0]
 
-        expect(feedForward(network, [0, 0])[1]).toBe(0)
+        expect(feedForward(network, [0, 0])[1]).toBeLessThan(0)
         for (let step = 0; step < 40; step++) {
             trainBatch(network, [{ inputs: [0, 0], targets: [0, 1, 0] }], 0.1)
         }
@@ -285,14 +285,22 @@ describe('mutate', () => {
 })
 
 describe('serializeNetwork / deserializeNetwork', () => {
-    it('round-trips id, architecture, generation and bestFitness', () => {
-        const network = { ...createNetwork(ARCHITECTURE), generation: 7, bestFitness: 42.5 }
+    it('round-trips id, architecture and generation', () => {
+        const network = { ...createNetwork(ARCHITECTURE), generation: 7 }
         const restored = deserializeNetwork(serializeNetwork(network))
 
         expect(restored?.id).toBe(network.id)
         expect(restored?.architecture).toEqual(network.architecture)
         expect(restored?.generation).toBe(network.generation)
-        expect(restored?.bestFitness).toBe(network.bestFitness)
+    })
+
+    it('still loads a network saved before the score field was dropped', () => {
+        const saved = {
+            ...serializeNetwork(createNetwork(ARCHITECTURE)),
+            bestFitness: 42.5,
+        }
+
+        expect(deserializeNetwork(saved)).toBeDefined()
     })
 
     it('round-trips every weight', () => {
@@ -316,6 +324,13 @@ describe('serializeNetwork / deserializeNetwork', () => {
     it('rejects a payload from the old seven-zone format', () => {
         const network = createNetwork(ARCHITECTURE)
         const payload = { ...serializeNetwork(network), version: 3 }
+        expect(deserializeNetwork(payload)).toBeUndefined()
+    })
+
+    it('rejects a v7 payload from the removed temporal-input format', () => {
+        const network = createNetwork(ARCHITECTURE)
+        const payload = { ...serializeNetwork(network), version: 7 }
+
         expect(deserializeNetwork(payload)).toBeUndefined()
     })
 

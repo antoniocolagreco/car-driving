@@ -11,7 +11,7 @@ import { type Road, lanePosition } from './road'
 /**
  * Generation and selection: turns a `Road` plus a set of options into a fresh
  * population of `RacingCar`s, ready for `simulation.ts` to step. This is where
- * the previous generation's champion is either cloned-with-mutation into the
+ * the previous generation's winner is either cloned-with-mutation into the
  * next generation or discarded, but never both — see `createPopulation`.
  */
 
@@ -83,7 +83,7 @@ export const mutationRateForIndex = (
 
     // The explorers: between the base rate and a multiple of it, NOT between the base
     // rate and full randomness. Tying the ceiling to the rate is what makes the slider
-    // mean something — at 2 % the whole field still drives like the champion, at 50 %
+    // mean something — at 2 % the whole field still drives like the winner, at 50 %
     // even the refiners are taking real risks. If there is no room above the rate
     // (already at the maximum), fall back to it.
     const ceiling = Math.min(MUTATION.maxRate, rate * MUTATION.explorerFactor)
@@ -91,21 +91,36 @@ export const mutationRateForIndex = (
 }
 
 /**
- * The champion — car 0, the previous generation's winner, running its network
+ * The winner — car 0, the previous generation's winner, running its network
  * unmutated — is always white, while its mutated offspring get random colours.
  * Without it the crowd is a wall of indistinguishable colours and the one car
  * that matters, the one every other car is a variation of, cannot be picked out.
  */
-const CHAMPION_COLOR = '#ffffff'
+const WINNER_COLOR = '#ffffff'
 
-/** Assigns competitors to lane centres in a stable round-robin order. */
-const raceStartPosition = (road: Road, competitorIndex: number): Vec2 =>
-    lanePosition(road, competitorIndex % road.laneCount)
+/**
+ * Every competitor starts from the middle lane, on the same spot.
+ *
+ * They used to be spread across the lanes round-robin, `0, 1, 2, 0, ...`, which
+ * quietly made the start lane part of the score. These networks drive a learned
+ * trajectory rather than a lane-aware policy, so the same weights that pass eight
+ * cars from lane 1 drive straight into the right-hand rail from lane 0. Two things
+ * followed. The elite is always car 0 and so always restarted in lane 0, while the
+ * winner it carries had almost never won there: measured over 21 generations it
+ * scored nothing in 9 of them, and every one of those 9 followed a winner that had
+ * come from lane 1 or 2, never from lane 0. And ranking a field whose members ran
+ * from different lanes compares them on different tasks, so the "best" network was
+ * partly whoever drew the lane that suited its trajectory, and its children were
+ * redistributed across all three lanes where two thirds of them started in the wrong
+ * one. One start line for everybody removes that variable: the elite re-runs the race
+ * it actually won, and every score in the generation is earned on the same problem.
+ */
+const raceStartPosition = (road: Road): Vec2 => lanePosition(road, Math.floor(road.laneCount / 2))
 
 /**
  * Display colour used only while the human holds the wheel. The player's stored body
  * colour remains random, so under neural-network control it looks like an ordinary
- * evolved competitor; white remains reserved for the champion.
+ * evolved competitor; white remains reserved for the winner.
  */
 export const PLAYER_COLOR = '#38bdf8'
 
@@ -133,7 +148,7 @@ const createRacingCar = (
  * Picks the network for car `index`.
  *
  * With no parents (the very first generation) every car is fresh and random. With
- * parents, car 0 is `parents[0]` — the champion itself, unmutated: elitism, so a
+ * parents, car 0 is `parents[0]` — the winner itself, unmutated: elitism, so a
  * generation can never lose the best network it has found. Every other car descends
  * from one of the parents, taken round-robin so each of them gets a comparable share
  * of the field, and is mutated exactly once at `mutationRateForIndex`'s tiered rate.
@@ -151,7 +166,7 @@ const networkForIndex = (
     if (index === 0) {
         return parents[0]
     }
-    // The refining band belongs to the champion: those are the cars whose job is to
+    // The refining band belongs to the winner: those are the cars whose job is to
     // improve on the best network we have, and handing a quarter of them to a weaker
     // parent instead just dilutes the line that is actually winning. Everyone else is
     // spread across the parents round-robin, which is what keeps rival strategies alive.
@@ -175,14 +190,14 @@ const usableParents = (
 ): readonly Network[] =>
     (options.parents ?? []).filter((parent) => sameArchitecture(parent.architecture, architecture))
 
-/** True when a network can consume the fixed eleven-zone observation shape. */
+/** True when a network can consume the eleven spatial readings followed by speed. */
 export const isCompatibleNetwork = (network: Network, hiddenLayers: readonly number[]): boolean =>
     sameArchitecture(network.architecture, [SENSOR_ZONE_ORDER.length + 1, ...hiddenLayers, 3])
 
 /**
  * Builds the player's car. It is ALWAYS in the field, one more competitor with the same
  * body, sensors and random base colour as everyone else, and a network that starts as an exact
- * copy of the current champion (or a fresh random one when there is no champion yet).
+ * copy of the current winner (or a fresh random one when there is no winner yet).
  *
  * Always present, because the alternative was worse: adding and removing it when manual
  * driving was switched on and off meant every toggle rebuilt the generation, and a driver
@@ -190,7 +205,7 @@ export const isCompatibleNetwork = (network: Network, hiddenLayers: readonly num
  * on the way out. Here the car simply exists, and the switch only decides who holds its
  * wheel. When nobody does, its network drives it exactly like the others.
  *
- * Starting from the champion rather than from noise is what makes driving worth doing:
+ * Starting from the winner rather than from noise is what makes driving worth doing:
  * your inputs teach corrections on top of what the population already knows, instead of
  * having to demonstrate the whole task from scratch (see `trainBatch`).
  */
@@ -198,9 +213,7 @@ export const createPlayerCar = (road: Road, options: PopulationOptions): RacingC
     const architecture = architectureFor(options)
     const parents = usableParents(options, architecture)
     return createRacingCar(
-        // The player is appended after the generated population, so continue the
-        // same lane rotation instead of favouring a fixed lane.
-        raceStartPosition(road, options.quantity),
+        raceStartPosition(road),
         parents.length > 0 ? mutate(parents[0], 0) : createNetwork(architecture),
         randomColor(),
         true,
@@ -228,12 +241,12 @@ export const createPopulation = (road: Road, options: PopulationOptions): Racing
             architecture,
             parents,
         )
-        const isChampion = parents.length > 0 && index === 0
+        const isWinner = parents.length > 0 && index === 0
         cars.push(
             createRacingCar(
-                raceStartPosition(road, index),
+                raceStartPosition(road),
                 network,
-                isChampion ? CHAMPION_COLOR : randomColor(),
+                isWinner ? WINNER_COLOR : randomColor(),
             ),
         )
     }

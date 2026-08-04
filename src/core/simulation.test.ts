@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { vec } from '@core/geometry'
-import { REWARD, SIMULATION } from '@core/config'
+import { SIMULATION } from '@core/config'
 import { SENSOR_ZONE_ORDER, sensorOrigin } from '@core/sensor'
 import { type Network, createNetwork } from './neural-network'
 import { type Controls, crash } from './car'
 import { lanePosition } from './road'
-import { type SimulationSettings, createSimulation } from './simulation'
+import { type CourseResult, type SimulationSettings, createSimulation } from './simulation'
 
 const smallSettings: SimulationSettings = {
     carsQuantity: 4,
@@ -49,12 +49,6 @@ const finishRoundWithOvertakes = (
         const count: number = overtakes[index] ?? 0
         racingCar.stats.overtakes = count
         racingCar.stats.lastOvertakeAtSeconds = count > 0 ? index + 1 : 0
-        racingCar.stats.fitness = count * REWARD.overtake
-        racingCar.stats.breakdown = {
-            overtakes: racingCar.stats.fitness,
-            crash: 0,
-            total: racingCar.stats.fitness,
-        }
         crash(racingCar.car)
     }
     sim.state.aliveCars = []
@@ -71,20 +65,20 @@ describe('createSimulation: determinism', () => {
         )
     })
 
-    it('retains a compatible restored champion as the elite parent', () => {
-        const champion = createNetwork(smallArchitecture)
-        const sim = createSimulation(smallSettings, { champion })
+    it('retains a compatible restored winner as the elite parent', () => {
+        const winner = createNetwork(smallArchitecture)
+        const sim = createSimulation(smallSettings, { winner })
 
-        expect(sim.state.champion).toBe(champion)
-        expect(sim.state.parents[0]).toBe(champion)
-        expect(sim.state.cars[0].network).toBe(champion)
+        expect(sim.state.winner).toBe(winner)
+        expect(sim.state.parents[0]).toBe(winner)
+        expect(sim.state.cars[0].network).toBe(winner)
     })
 
-    it('drops an incompatible restored champion from state before it can be reused or persisted', () => {
+    it('drops an incompatible restored winner from state before it can be reused or persisted', () => {
         const incompatible = createNetwork([7, 2, 3])
-        const sim = createSimulation(smallSettings, { champion: incompatible })
+        const sim = createSimulation(smallSettings, { winner: incompatible })
 
-        expect(sim.state.champion).toBeUndefined()
+        expect(sim.state.winner).toBeUndefined()
         expect(sim.state.parents).toEqual([])
         expect(sim.state.cars[0].network.architecture).toEqual(smallArchitecture)
     })
@@ -101,15 +95,15 @@ describe('createSimulation: collisions', () => {
 
         expect(target.car.crashed).toBe(true)
         expect(sim.state.aliveCars).not.toContain(target)
-        expect(target.stats.crashed).toBe(true)
-        expect(target.stats.impactSpeedRatio).toBeGreaterThan(0)
+        // The wreck keeps whatever it had earned: crashing costs nothing by itself.
+        expect(target.stats.overtakes).toBe(0)
     })
 })
 
 describe('createSimulation: idle death', () => {
     it('kills a car that makes no progress after SIMULATION.idleTimeoutSeconds', () => {
-        const champion = stationaryNetwork()
-        const sim = createSimulation(smallSettings, { champion, trafficSeed: 'idle-timeout' })
+        const winner = stationaryNetwork()
+        const sim = createSimulation(smallSettings, { winner, trafficSeed: 'idle-timeout' })
         const target = sim.state.cars[0] // elite: exactly the stationary network
         // Traffic can now legitimately enter the full front rectangle before the idle
         // deadline. Remove it here so this test isolates the idle rule itself.
@@ -124,14 +118,13 @@ describe('createSimulation: idle death', () => {
         expect(target.stats.idleSeconds).toBeGreaterThanOrEqual(
             SIMULATION.idleTimeoutSeconds - SIMULATION.stepSeconds,
         )
-        expect(target.stats.timedOut).toBe(true)
     })
 })
 
 describe('createSimulation: overtake death timeout', () => {
     it('eliminates and excludes a moving car without inventing a score', () => {
-        const champion = straightThrottleNetwork()
-        const sim = createSimulation(smallSettings, { champion, trafficSeed: 'overtake-timeout' })
+        const winner = straightThrottleNetwork()
+        const sim = createSimulation(smallSettings, { winner, trafficSeed: 'overtake-timeout' })
         const target = sim.state.cars[0]
         target.stats.secondsSinceLastOvertake =
             SIMULATION.overtakeTimeoutSeconds - SIMULATION.stepSeconds / 2
@@ -140,8 +133,7 @@ describe('createSimulation: overtake death timeout', () => {
 
         expect(target.car.crashed).toBe(true)
         expect(target.stats.overtakeTimedOut).toBe(true)
-        expect(target.stats.timedOut).toBe(true)
-        expect(target.stats.fitness).toBe(0)
+        expect(target.stats.overtakes).toBe(0)
         expect(sim.state.aliveCars).not.toContain(target)
         expect(sim.state.bestCar).not.toBe(target)
     })
@@ -152,7 +144,7 @@ describe('createSimulation: generation lifecycle', () => {
         const events: (Network | undefined)[] = []
         const sim = createSimulation(smallSettings, {
             trafficSeed: 'generation-end',
-            onGenerationEnd: (champion) => events.push(champion),
+            onGenerationEnd: (winner) => events.push(winner),
         })
 
         // Force the whole population onto the left border so it crashes on the
@@ -169,10 +161,9 @@ describe('createSimulation: generation lifecycle', () => {
         expect(events).toHaveLength(1)
         // Everybody crashed on the first step, so this round produced nothing worth
         // carrying forward: whether a wreck clears zero by the single frame of survival
-        // it banked is a crumb either way, and the champion reported out is whatever the
+        // it banked is a crumb either way, and the winner reported out is whatever the
         // simulation started with — never a network talked up by a round nobody drove.
-        expect(sim.state.bestCar?.stats.fitness ?? 0).toBeLessThan(1)
-        expect(events[0]?.bestFitness ?? 0).toBeLessThan(1)
+        expect(sim.state.bestCar?.stats.overtakes ?? 0).toBe(0)
 
         runThroughGameOver(sim)
 
@@ -182,11 +173,10 @@ describe('createSimulation: generation lifecycle', () => {
         expect(sim.state.aliveCars.length).toBeGreaterThan(0)
     })
 
-    it('replaces the historical record holder with the winner of the current round', () => {
-        const champion = straightThrottleNetwork()
-        champion.bestFitness = 1000
+    it('hands the seat to the winner of the current round, whatever came before', () => {
+        const winner = straightThrottleNetwork()
         const sim = createSimulation(smallSettings, {
-            champion,
+            winner,
             trafficSeed: 'record-holder',
         })
         const contender = sim.state.cars[1]
@@ -194,15 +184,14 @@ describe('createSimulation: generation lifecycle', () => {
         finishRoundWithOvertakes(sim, [1, 2, 1, 1, 1])
 
         expect(sim.state.bestCar).toBe(contender)
-        expect(sim.state.champion).toBe(contender.network)
+        expect(sim.state.winner).toBe(contender.network)
         expect(sim.state.parents[0]).toBe(contender.network)
     })
 
-    it('uses the overtake count to choose the champion', () => {
-        const champion = straightThrottleNetwork()
-        champion.bestFitness = 100
+    it('uses the overtake count to choose the winner', () => {
+        const winner = straightThrottleNetwork()
         const sim = createSimulation(smallSettings, {
-            champion,
+            winner,
             trafficSeed: 'new-record',
         })
         const contender = sim.state.cars[1]
@@ -210,9 +199,9 @@ describe('createSimulation: generation lifecycle', () => {
         finishRoundWithOvertakes(sim, [1, 3, 2, 1, 1])
 
         expect(sim.state.bestCar).toBe(contender)
-        expect(sim.state.champion).toBe(contender.network)
+        expect(sim.state.winner).toBe(contender.network)
         expect(sim.state.parents[0]).toBe(contender.network)
-        expect(contender.network.bestFitness).toBe(3 * REWARD.overtake)
+        expect(contender.stats.overtakes).toBe(3)
     })
 
     it('promotes the faster model at the same overtake total', () => {
@@ -232,7 +221,7 @@ describe('createSimulation: generation lifecycle', () => {
         sim.step(SIMULATION.stepSeconds)
 
         expect(sim.state.bestCar).toBe(faster)
-        expect(sim.state.champion).toBe(faster.network)
+        expect(sim.state.winner).toBe(faster.network)
         expect(sim.state.parents[0]).toBe(faster.network)
     })
 
@@ -246,15 +235,15 @@ describe('createSimulation: generation lifecycle', () => {
         sim.step(SIMULATION.stepSeconds)
 
         expect(sim.state.bestCar).toBeUndefined()
-        expect(sim.state.champion).toBeUndefined()
+        expect(sim.state.winner).toBeUndefined()
         expect(sim.state.parents).toEqual([])
     })
 })
 
 describe('createSimulation: clearing the course', () => {
     it('celebrates for five seconds before ending the round and crowning the winner', () => {
-        const champion = straightThrottleNetwork()
-        const sim = createSimulation(smallSettings, { champion, trafficSeed: 'cleared' })
+        const winner = straightThrottleNetwork()
+        const sim = createSimulation(smallSettings, { winner, trafficSeed: 'cleared' })
 
         // One traffic car, already behind the field: the very next step makes whoever is
         // leading a car that has passed everything there is to pass.
@@ -269,13 +258,13 @@ describe('createSimulation: clearing the course', () => {
         expect(sim.state.gameOver).toBe(false)
         expect(sim.state.victorySeconds).toBe(0)
 
-        const winner = sim.state.courseWinner
-        const winningY: number | undefined = winner?.car.position.y
+        const clearer = sim.state.courseWinner
+        const winningY: number | undefined = clearer?.car.position.y
         sim.step(SIMULATION.stepSeconds)
         expect(sim.state.victorySeconds).toBe(SIMULATION.stepSeconds)
-        expect(winner?.car.position.y).toBeLessThan(winningY ?? Infinity)
-        expect(winner?.car.crashed).toBe(false)
-        expect(sim.state.activeCar).toBe(winner)
+        expect(clearer?.car.position.y).toBeLessThan(winningY ?? Infinity)
+        expect(clearer?.car.crashed).toBe(false)
+        expect(sim.state.activeCar).toBe(clearer)
 
         const celebrationSteps = Math.ceil(
             SIMULATION.victoryCelebrationSeconds / SIMULATION.stepSeconds,
@@ -285,21 +274,71 @@ describe('createSimulation: clearing the course', () => {
         }
 
         expect(sim.state.gameOver).toBe(true)
-        expect(winner?.car.crashed).toBe(false)
-        expect(sim.state.aliveCars).toEqual(winner ? [winner] : [])
-        expect(sim.state.bestCar).toBe(winner)
+        expect(clearer?.car.crashed).toBe(false)
+        expect(sim.state.aliveCars).toEqual(clearer ? [clearer] : [])
+        expect(sim.state.bestCar).toBe(clearer)
         // The winner's network is the one the next generation is bred from.
-        expect(sim.state.champion).toBe(winner?.network)
+        expect(sim.state.winner).toBe(clearer?.network)
 
-        // Finishing the race preserves the sole reward exactly.
-        expect(winner?.stats.fitness).toBe(REWARD.overtake)
+        // Finishing the race is worth exactly the traffic it passed: one point, one car.
+        expect(clearer?.stats.overtakes).toBe(1)
+    })
+
+    it('reports the finished course once, with the time to the last traffic car', () => {
+        const finishes: CourseResult[] = []
+        const winner = straightThrottleNetwork()
+        const sim = createSimulation(smallSettings, {
+            winner,
+            trafficSeed: 'reported',
+            onCourseFinished: (result) => finishes.push(result),
+        })
+
+        const single = sim.state.traffic[0]
+        single.position = vec(single.position.x, sim.state.cars[0].car.position.y + 500)
+        sim.state.traffic = [single]
+
+        const steps = Math.ceil(SIMULATION.victoryCelebrationSeconds / SIMULATION.stepSeconds) + 2
+        for (let step = 0; step < steps; step++) {
+            sim.step(SIMULATION.stepSeconds)
+        }
+
+        const clearer = sim.state.courseWinner
+        expect(sim.state.gameOver).toBe(true)
+        expect(finishes).toHaveLength(1)
+        expect(finishes[0].network).toBe(clearer?.network)
+        expect(finishes[0].overtakes).toBe(clearer?.stats.overtakes)
+        // The finish line is the last overtake, not the end of the victory parade: the
+        // clearer keeps driving for five more seconds and its time must not grow with it.
+        expect(finishes[0].seconds).toBe(clearer?.stats.lastOvertakeAtSeconds)
+        expect(finishes[0].seconds).toBeLessThan(SIMULATION.victoryCelebrationSeconds)
+    })
+
+    it('reports nothing when the round ends without the course being beaten', () => {
+        const finishes: CourseResult[] = []
+        const sim = createSimulation(smallSettings, {
+            winner: stationaryNetwork(),
+            trafficSeed: 'unfinished',
+            onCourseFinished: (result) => finishes.push(result),
+        })
+
+        // Nobody moves, so the idle timeout ends the round with the course untouched.
+        const steps = Math.ceil(
+            (SIMULATION.idleTimeoutSeconds + SIMULATION.gameOverSeconds + 1) /
+                SIMULATION.stepSeconds,
+        )
+        for (let step = 0; step < steps; step++) {
+            sim.step(SIMULATION.stepSeconds)
+        }
+
+        expect(sim.state.courseCleared).toBe(false)
+        expect(finishes).toEqual([])
     })
 })
 
 describe('createSimulation: the player car', () => {
     it('refreshes the followed radar at the car pose after movement', () => {
-        const champion = straightThrottleNetwork()
-        const sim = createSimulation(smallSettings, { champion, trafficSeed: 'radar-alignment' })
+        const winner = straightThrottleNetwork()
+        const sim = createSimulation(smallSettings, { winner, trafficSeed: 'radar-alignment' })
 
         sim.step(SIMULATION.stepSeconds)
 
@@ -313,6 +352,61 @@ describe('createSimulation: the player car', () => {
         )
     })
 
+    it('senses the obstacles ahead while the manual round is still frozen', () => {
+        const sim = createSimulation(smallSettings, { trafficSeed: 'radar-before-start' })
+        sim.startManualDriving({ throttle: 0, brake: 0, steering: 0 })
+
+        // Park a traffic car right in front of the player, well inside the front area.
+        const player = sim.state.playerCar
+        if (!player) {
+            throw new Error('Expected a player car')
+        }
+        sim.state.activeCar = player
+        sim.state.traffic = [sim.state.traffic[0]]
+        sim.state.traffic[0].position = vec(player.car.position.x, player.car.position.y - 200)
+
+        expect(sim.state.waitingForManualInput).toBe(true)
+        sim.step(SIMULATION.stepSeconds)
+
+        // The round has not started, but the radar is already on screen: it has to show
+        // the car parked ahead rather than the clear road the car was built with.
+        expect(player.sensorState.readings.some((reading) => reading > 0)).toBe(true)
+    })
+
+    it('leaves the radar where it was last valid instead of casting it from inside a wall', () => {
+        // Full throttle into a hard left turn: it drives itself into the guard rail.
+        const winner = constantOutputNetwork([10, -10, -10])
+        const sim = createSimulation(smallSettings, { winner, trafficSeed: 'radar-after-crash' })
+        const target = sim.state.cars[0]
+        sim.state.traffic = []
+        // Wreck the rest of the field and give the target a result, so it stays the
+        // followed car after its own impact instead of handing the camera to a survivor.
+        for (const racingCar of sim.state.cars) {
+            if (racingCar !== target) {
+                crash(racingCar.car)
+            }
+        }
+        target.stats.overtakes = 1
+
+        for (let step = 0; step < 600 && !target.car.crashed; step++) {
+            sim.step(SIMULATION.stepSeconds)
+        }
+        expect(sim.state.activeCar).toBe(target)
+
+        expect(target.car.crashed).toBe(true)
+        const atImpact = target.sensorState
+
+        // A collision is only detected once the bodies overlap, so the wreck is partly
+        // through the barrier. Re-casting from there puts the origin outside the road and
+        // draws the whole radar beyond the rail, so it must stay exactly as it was.
+        sim.step(SIMULATION.stepSeconds)
+        sim.step(SIMULATION.stepSeconds)
+
+        expect(target.sensorState).toBe(atImpact)
+        expect(atImpact.origin.x).toBeGreaterThanOrEqual(sim.state.road.left)
+        expect(atImpact.origin.x).toBeLessThanOrEqual(sim.state.road.left + sim.state.road.width)
+    })
+
     it('is always in the field, driven by its own network until a human takes over', () => {
         const sim = createSimulation(smallSettings, { trafficSeed: 'player' })
 
@@ -321,10 +415,11 @@ describe('createSimulation: the player car', () => {
         expect(player?.player).toBe(true)
         expect(sim.state.cars).toContain(player)
         expect(sim.state.manualDriving).toBe(false)
-        for (const [index, racingCar] of sim.state.cars.entries()) {
-            expect(racingCar.car.position).toEqual(
-                lanePosition(sim.state.road, index % sim.state.road.laneCount),
-            )
+        // The player shares the one start line with everybody else, rather than being
+        // given a lane of its own.
+        const middle = lanePosition(sim.state.road, Math.floor(sim.state.road.laneCount / 2))
+        for (const racingCar of sim.state.cars) {
+            expect(racingCar.car.position).toEqual(middle)
         }
 
         // Nobody is driving: its network moves it like everyone else's.
@@ -335,8 +430,8 @@ describe('createSimulation: the player car', () => {
     })
 
     it('starts a fresh manual round and freezes it until the first driving intent', () => {
-        const champion = straightThrottleNetwork() // every network would floor the throttle
-        const sim = createSimulation(smallSettings, { champion, trafficSeed: 'wheel' })
+        const winner = straightThrottleNetwork() // every network would floor the throttle
+        const sim = createSimulation(smallSettings, { winner, trafficSeed: 'wheel' })
         const generation = sim.state.generation
         const previousPlayer = sim.state.playerCar
         const controls: Controls = { throttle: 0, brake: 1, steering: 0 }
@@ -371,8 +466,8 @@ describe('createSimulation: the player car', () => {
     })
 
     it('returns control to the trained neural network without restarting the round', () => {
-        const champion = stationaryNetwork()
-        const sim = createSimulation(smallSettings, { champion, trafficSeed: 'handoff' })
+        const winner = stationaryNetwork()
+        const sim = createSimulation(smallSettings, { winner, trafficSeed: 'handoff' })
         const manualControls: Controls = { throttle: 1, brake: 1, steering: 1 }
 
         sim.startManualDriving(manualControls)
@@ -392,8 +487,8 @@ describe('createSimulation: the player car', () => {
     })
 
     it('updates the player network through backpropagation on every manual step', () => {
-        const champion = stationaryNetwork()
-        const sim = createSimulation(smallSettings, { champion, trafficSeed: 'backprop' })
+        const winner = stationaryNetwork()
+        const sim = createSimulation(smallSettings, { winner, trafficSeed: 'backprop' })
 
         sim.startManualDriving({ throttle: 1, brake: 0, steering: 1 })
         sim.beginManualDriving()
@@ -417,8 +512,8 @@ describe('createSimulation: the player car', () => {
     })
 
     it('does not train the player network towards zero while no key is pressed', () => {
-        const champion = stationaryNetwork()
-        const sim = createSimulation(smallSettings, { champion, trafficSeed: 'neutral-input' })
+        const winner = stationaryNetwork()
+        const sim = createSimulation(smallSettings, { winner, trafficSeed: 'neutral-input' })
 
         sim.startManualDriving({ throttle: 0, brake: 0, steering: 0 })
         sim.beginManualDriving()
@@ -473,14 +568,14 @@ describe('createSimulation: the player car', () => {
         )
         expect(afterConsolidation).not.toBe(beforeConsolidation)
 
-        expect(sim.state.champion).toBe(taughtNetwork)
+        expect(sim.state.winner).toBe(taughtNetwork)
         expect(sim.state.parents).toEqual([taughtNetwork])
 
         runThroughGameOver(sim)
 
-        const nextChampion = sim.state.cars[0]
-        expect(nextChampion.network).toBe(taughtNetwork)
-        expect(nextChampion.car.controls.throttle).toBeGreaterThan(0)
+        const nextWinner = sim.state.cars[0]
+        expect(nextWinner.network).toBe(taughtNetwork)
+        expect(nextWinner.car.controls.throttle).toBeGreaterThan(0)
     })
 })
 
@@ -491,24 +586,23 @@ describe('createSimulation: promoteBest', () => {
         expect(sim.promoteBest()).toBeUndefined()
     })
 
-    it('returns the current best car network and sets it as the champion', () => {
+    it('returns the current best car network and sets it as the winner', () => {
         const sim = createSimulation(smallSettings, { trafficSeed: 'promote-test' })
         sim.step(SIMULATION.stepSeconds)
 
         const promoted = sim.promoteBest()
 
         expect(promoted).toBe(sim.state.bestCar?.network)
-        expect(sim.state.champion).toBe(promoted)
+        expect(sim.state.winner).toBe(promoted)
     })
 
-    it('promotes the current best even below the previous champion record', () => {
-        const champion = straightThrottleNetwork()
-        champion.bestFitness = 1000
-        const sim = createSimulation(smallSettings, { champion, trafficSeed: 'promote-record' })
+    it('promotes the current best even when it scored almost nothing', () => {
+        const winner = straightThrottleNetwork()
+        const sim = createSimulation(smallSettings, { winner, trafficSeed: 'promote-record' })
         sim.state.bestCar = sim.state.cars[1]
-        sim.state.bestCar.stats.fitness = 100
+        sim.state.bestCar.stats.overtakes = 1
 
         expect(sim.promoteBest()).toBe(sim.state.bestCar.network)
-        expect(sim.state.champion).toBe(sim.state.bestCar.network)
+        expect(sim.state.winner).toBe(sim.state.bestCar.network)
     })
 })

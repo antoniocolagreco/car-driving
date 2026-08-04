@@ -1,23 +1,33 @@
 /**
- * Sparse race objective: passing traffic is the only source of fitness.
+ * Sparse race objective: the score is the number of traffic cars passed, one point each,
+ * plus a single `BRAKE_DISCOVERY_BONUS` for a car that both braked and passed somebody,
+ * and doing it sooner is the only tie-breaker.
  *
- * Progress is still measured for the idle death timeout, and elapsed time is still
- * measured for the overtake death timeout. Neither contributes points. A collision
- * removes a speed-dependent fraction of the earned overtake score. A timeout applies
- * the same fraction as a maximum-speed impact; no other event changes fitness.
+ * There is nothing else. No points for progress, speed, survival, steering or for
+ * crashing gently, and no malus for crashing at all. Every knob of that kind that has
+ * been tried here was found and exploited within a few dozen generations: paying per
+ * frame for braking near an obstacle produced cars that tucked in behind traffic and
+ * pumped the brake forever, and discounting the crash malus at traffic pace produced
+ * cars that deliberately bumped the wall sideways at exactly that speed. A reward is an
+ * instruction, and the population always follows the instruction rather than the
+ * intention behind it, so the only safe instruction is the goal itself: pass every
+ * traffic car, and get there first.
+ *
+ * The brake bonus is the one exception, and it is shaped to expire rather than to be
+ * followed: it pays once per race for one press, so there is no behaviour to escalate
+ * into, and once every car has it the ranking is decided by overtakes again. It also
+ * cannot be collected instead of racing, which is exactly what it did when it was first
+ * tried without that condition. See `BRAKE_DISCOVERY_BONUS`.
+ *
+ * Crashing needs no penalty of its own. A wreck stops overtaking, and the cars that keep
+ * going pass it in the only currency there is.
+ *
+ * There is no separate fitness number, either: at one point per overtake it would have
+ * been the same integer under a second name.
  */
 
-import { PENALTY, REWARD, SIMULATION } from '@core/config'
+import { BRAKE_DISCOVERY_BONUS, SIMULATION } from '@core/config'
 import type { Vec2 } from '@core/geometry'
-import { clamp, lerp } from '@core/math'
-
-/** The only reward contribution and its total, kept explicit for the HUD. */
-export type FitnessBreakdown = {
-    overtakes: number
-    /** Negative fraction of the overtake reward removed by a collision or timeout. */
-    crash: number
-    total: number
-}
 
 /** Runtime counters for one car's current race. */
 export type CarStats = {
@@ -27,39 +37,30 @@ export type CarStats = {
     groundProgress: number
     /** Maximum number of traffic cars left behind during this race. */
     overtakes: number
-    /** Race time when the current overtake maximum was first reached. */
+    /** Race time when the current overtake maximum was first reached: the tie-breaker. */
     lastOvertakeAtSeconds: number
     /** Time since the most recent overtake, used exclusively by the overtake timeout. */
     secondsSinceLastOvertake: number
-    /** A timed-out result cannot be selected as winner or parent. */
+    /** A car that missed the overtake deadline cannot be selected as winner or parent. */
     overtakeTimedOut: boolean
-    /** Whether either death timeout retired this car. */
-    timedOut: boolean
+    /** Whether the brake was ever pressed while moving: worth `BRAKE_DISCOVERY_BONUS`, once. */
+    usedBrake: boolean
     /** Elapsed race time, needed to timestamp overtakes. */
     aliveSeconds: number
     /** Time since enough ground progress was last made. */
     idleSeconds: number
     /** Ground-progress baseline from which the idle threshold is measured. */
     progressAtIdleReset: number
-    /** Whether this run ended in a physical collision. */
-    crashed: boolean
-    /** Absolute impact speed divided by the car's maximum speed. */
-    impactSpeedRatio: number
-    /** Cached sparse fitness. */
-    fitness: number
-    breakdown: FitnessBreakdown
 }
 
 /** The observations required by scoring and the two death timeouts. */
 export type FitnessSample = {
     readonly position: Vec2
     readonly overtakes: number
-}
-
-const ZERO_BREAKDOWN: FitnessBreakdown = {
-    overtakes: 0,
-    crash: 0,
-    total: 0,
+    /** Brake pressure applied this step, in [0, 1]. */
+    readonly brake: number
+    /** Current speed, so that holding the brake at a standstill earns nothing. */
+    readonly speed: number
 }
 
 export const createStats = (startPosition: Vec2): CarStats => ({
@@ -69,19 +70,21 @@ export const createStats = (startPosition: Vec2): CarStats => ({
     lastOvertakeAtSeconds: 0,
     secondsSinceLastOvertake: 0,
     overtakeTimedOut: false,
-    timedOut: false,
+    usedBrake: false,
     aliveSeconds: 0,
     idleSeconds: 0,
     progressAtIdleReset: 0,
-    crashed: false,
-    impactSpeedRatio: 0,
-    fitness: 0,
-    breakdown: ZERO_BREAKDOWN,
 })
 
-/** Updates sparse fitness and the independent timeout counters. Mutates `stats`. */
+/** Updates the overtake count, the brake bonus flag and the timeout counters. Mutates `stats`. */
 export const updateStats = (stats: CarStats, sample: FitnessSample, dt: number): void => {
     stats.aliveSeconds += dt
+
+    // Only while moving: a brake held at a standstill changes nothing about the driving,
+    // and paying for it would hand the bonus to every car that never sets off.
+    if (sample.brake > 0 && sample.speed !== 0) {
+        stats.usedBrake = true
+    }
 
     const previousOvertakes: number = stats.overtakes
     stats.overtakes = Math.max(previousOvertakes, sample.overtakes)
@@ -100,56 +103,39 @@ export const updateStats = (stats: CarStats, sample: FitnessSample, dt: number):
     } else {
         stats.idleSeconds += dt
     }
-
-    stats.breakdown = computeFitness(stats)
-    stats.fitness = stats.breakdown.total
-}
-
-/** Records an impact and reapplies the sole penalty to the earned overtake score. */
-export const recordCrash = (stats: CarStats, impactSpeedRatio: number): void => {
-    stats.crashed = true
-    stats.impactSpeedRatio = clamp(impactSpeedRatio, 0, 1)
-    stats.breakdown = computeFitness(stats)
-    stats.fitness = stats.breakdown.total
-}
-
-/** Applies the maximum 90% failure penalty for either death timeout. */
-export const recordTimeout = (stats: CarStats): void => {
-    stats.timedOut = true
-    stats.breakdown = computeFitness(stats)
-    stats.fitness = stats.breakdown.total
-}
-
-/** Marks a missed overtake deadline as ineligible and applies the timeout penalty. */
-export const recordOvertakeTimeout = (stats: CarStats): void => {
-    stats.overtakeTimedOut = true
-    recordTimeout(stats)
-}
-
-/** Overtakes are the only reward; collision speed or a timeout determines the only penalty. */
-export const computeFitness = (stats: CarStats): FitnessBreakdown => {
-    const overtakes: number = stats.overtakes * REWARD.overtake
-    const impactPenalty: number = stats.crashed
-        ? lerp(PENALTY.crashAtMinimumSpeed, PENALTY.crashAtMaximumSpeed, stats.impactSpeedRatio)
-        : 0
-    const penaltyFraction: number = stats.timedOut
-        ? Math.max(impactPenalty, PENALTY.crashAtMaximumSpeed)
-        : impactPenalty
-    const crash: number = penaltyFraction > 0 ? -overtakes * penaltyFraction : 0
-    return { overtakes, crash, total: overtakes + crash }
 }
 
 /**
- * More overtakes always win. At equal counts, residual fitness after the failure
- * penalty comes next, then the earlier overtake time as a deterministic tie-breaker.
- * Overtake-timed-out cars and cars with zero overtakes are excluded.
+ * Marks a missed overtake deadline. This is an elimination, not a penalty: the score is
+ * left exactly as earned, and the car is simply no longer allowed to win or breed. A car
+ * that stops overtaking has stopped racing, and its remaining points are telemetry.
+ */
+export const recordOvertakeTimeout = (stats: CarStats): void => {
+    stats.overtakeTimedOut = true
+}
+
+/**
+ * What the ranking compares: traffic cars passed, plus the one-off brake bonus for a
+ * car that both braked and got at least one car past it. A car that never overtook
+ * scores nothing, however much it braked.
+ *
+ * Kept apart from `stats.overtakes`, which stays the literal number of cars passed,
+ * because that count is also what decides whether the course has been cleared and what
+ * the Champion record stores. Inflating it would let a car "finish" a course it never
+ * drove to the end of.
+ */
+export const raceScore = (stats: CarStats): number =>
+    stats.overtakes + (stats.usedBrake && stats.overtakes > 0 ? BRAKE_DISCOVERY_BONUS : 0)
+
+/**
+ * A higher score always wins; at equal scores the car that got there first does. That is
+ * the whole ranking, and it is exactly the goal: pass everybody, as soon as possible.
+ * Overtake-timed-out cars and cars that scored nothing at all are excluded.
  */
 const compareRacePerformance = (left: CarStats, right: CarStats): number =>
-    right.overtakes - left.overtakes ||
-    right.fitness - left.fitness ||
-    left.lastOvertakeAtSeconds - right.lastOvertakeAtSeconds
+    raceScore(right) - raceScore(left) || left.lastOvertakeAtSeconds - right.lastOvertakeAtSeconds
 
-const hasRaceResult = (stats: CarStats): boolean => !stats.overtakeTimedOut && stats.overtakes > 0
+const hasRaceResult = (stats: CarStats): boolean => !stats.overtakeTimedOut && raceScore(stats) > 0
 
 export const selectBest = <T extends { stats: CarStats }>(cars: readonly T[]): T | undefined => {
     let best: T | undefined

@@ -7,22 +7,31 @@ import type { SimulationSettings } from '@core/simulation'
  * The only module allowed to touch `localStorage`: `core/` never does, and `app.ts` is
  * the only caller of this file.
  *
- * Every key is suffixed `-v2` except neural-network saves, which use `-v6` so neither
- * an old sensor shape nor the old bipolar brake output is loaded. `deserializeNetwork`'s
- * `undefined` return (version/shape mismatch) is surfaced as "nothing saved",
- * never logged as an error, and every loaded setting is clamped through the
- * limits in `@core/config` instead of trusted as-is.
+ * Storage key names stay stable; compatibility belongs to the serialized network's
+ * internal format version, not to the key that contains it. `deserializeNetwork`'s
+ * `undefined` return (version/shape mismatch) is surfaced as "nothing saved", never
+ * logged as an error, and every loaded setting is clamped through the limits in
+ * `@core/config` instead of trusted as-is.
  */
 
 const STORAGE_KEYS = {
-    champion: 'champion-network-v6',
-    backup: 'backup-network-v6',
-    carsQuantity: 'cars-quantity-v2',
-    mutationRate: 'mutation-rate-v2',
-    hiddenLayers: 'hidden-layers-v2',
+    winner: 'winner-network',
+    /** The record holder: a network that finished the course, with the run that earned it. */
+    champion: 'champion-record',
+    carsQuantity: 'cars-quantity',
+    mutationRate: 'mutation-rate',
+    hiddenLayers: 'hidden-layers',
 } as const
 
-/** Settings persisted alongside the champion. */
+/**
+ * Obsolete saves cannot consume the temporal input. They are removed on the next write
+ * or explicit reset rather than migrated with an invented weight that would silently
+ * change the saved policy.
+ */
+const OBSOLETE_WINNER_KEYS: readonly string[] = ['winner-network-v6', 'champion-network-v6']
+const OBSOLETE_CHAMPION_KEYS: readonly string[] = ['champion-record-v2']
+
+/** Settings persisted alongside the winner. */
 export type StoredSettings = SimulationSettings
 
 /** Reads and parses a network from `key`. `undefined` covers "nothing there" and "unreadable" alike. */
@@ -43,20 +52,91 @@ const writeNetwork = (key: string, network: Network): void => {
     localStorage.setItem(key, JSON.stringify(serializeNetwork(network)))
 }
 
-/** Loads the persisted champion network, or `undefined` if there is none (or it no longer deserializes). */
-export const loadChampion = (): Network | undefined => readNetwork(STORAGE_KEYS.champion)
+/** Loads the persisted winner network, or `undefined` if there is none (or it no longer deserializes). */
+export const loadWinner = (): Network | undefined => readNetwork(STORAGE_KEYS.winner)
 
-/** Persists `network` as the champion carried into the next generation. */
-export const saveChampion = (network: Network): void => writeNetwork(STORAGE_KEYS.champion, network)
+/** Persists `network` as the winner carried into the next generation. */
+export const saveWinner = (network: Network): void => {
+    writeNetwork(STORAGE_KEYS.winner, network)
+    for (const key of OBSOLETE_WINNER_KEYS) {
+        localStorage.removeItem(key)
+    }
+}
 
-/** Removes the persisted champion, so the next load starts from a fresh population. */
-export const clearChampion = (): void => localStorage.removeItem(STORAGE_KEYS.champion)
+/** Removes the persisted winner, so the next load starts from a fresh population. */
+export const clearWinner = (): void => {
+    localStorage.removeItem(STORAGE_KEYS.winner)
+    for (const key of OBSOLETE_WINNER_KEYS) {
+        localStorage.removeItem(key)
+    }
+}
 
-/** Loads the user-triggered backup network, or `undefined` if there is none. */
-export const loadBackup = (): Network | undefined => readNetwork(STORAGE_KEYS.backup)
+/**
+ * The record holder: the fastest network ever to finish the course, kept with the run
+ * that earned it. Unlike the winner, this one is never overwritten by an ordinary round,
+ * only by a faster finish, so it outlives Reset and every generation in between.
+ */
+export type ChampionRecord = {
+    readonly network: Network
+    /** Race seconds from the start line to passing the last traffic car. */
+    readonly seconds: number
+    /** Traffic cars passed on that run, which for a finished course is the whole field. */
+    readonly overtakes: number
+}
 
-/** Persists `network` as a manual backup, independent of the champion slot. */
-export const saveBackup = (network: Network): void => writeNetwork(STORAGE_KEYS.backup, network)
+/** Loads the record holder, or `undefined` when nobody has finished the course yet. */
+export const loadChampion = (): ChampionRecord | undefined => {
+    const raw = localStorage.getItem(STORAGE_KEYS.champion)
+    if (!raw) {
+        return undefined
+    }
+    try {
+        const data: unknown = JSON.parse(raw)
+        if (typeof data !== 'object' || data === null) {
+            return undefined
+        }
+        const { network, seconds, overtakes } = data as {
+            network?: unknown
+            seconds?: unknown
+            overtakes?: unknown
+        }
+        const deserialized = deserializeNetwork(network)
+        // A record without its time is not a record: it could never be beaten fairly.
+        if (!deserialized || typeof seconds !== 'number' || !Number.isFinite(seconds)) {
+            return undefined
+        }
+        return {
+            network: deserialized,
+            seconds,
+            overtakes: typeof overtakes === 'number' && Number.isFinite(overtakes) ? overtakes : 0,
+        }
+    } catch {
+        return undefined
+    }
+}
+
+/** Persists `record` as the new record holder. The caller decides whether it beats the old one. */
+export const saveChampion = (record: ChampionRecord): void => {
+    localStorage.setItem(
+        STORAGE_KEYS.champion,
+        JSON.stringify({
+            network: serializeNetwork(record.network),
+            seconds: record.seconds,
+            overtakes: record.overtakes,
+        }),
+    )
+    for (const key of OBSOLETE_CHAMPION_KEYS) {
+        localStorage.removeItem(key)
+    }
+}
+
+/** Removes the record holder, used when its architecture no longer matches the settings. */
+export const clearChampion = (): void => {
+    localStorage.removeItem(STORAGE_KEYS.champion)
+    for (const key of OBSOLETE_CHAMPION_KEYS) {
+        localStorage.removeItem(key)
+    }
+}
 
 /** Reads a number from `key`, falling back to `fallback` when absent or not finite. */
 const readNumber = (key: string, fallback: number): number => {

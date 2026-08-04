@@ -4,19 +4,19 @@ import type { SimulationState } from '@core/simulation'
 import type { CanvasLayer } from './canvas'
 import { cameraTranslation } from './camera'
 import { drawGround, drawRoad } from './world'
-import { drawCar, drawSensors } from './car'
+import { type RadarMode, drawCar, drawSensors } from './car'
 
 /** Options that affect only what is painted in the current frame. */
 export type SceneOptions = {
     /** Whether black traffic cars are drawn. Simulation state is always unchanged. */
     readonly trafficVisible?: boolean
-    /** Whether the followed car's radar is drawn. Perception remains active. */
-    readonly radarVisible?: boolean
+    /** How the followed car's radar is drawn, if at all. Perception remains active. */
+    readonly radarMode?: RadarMode
 }
 
 /**
  * Draws one full frame of the race. Racing cars have an explicit paint priority:
- * ordinary population, previous champion, current winner, then manually driven player.
+ * ordinary population, previous winner, current winner, then manually driven player.
  * A car that belongs to multiple categories is painted once at its highest-priority layer.
  *
  * Pure with respect to the simulation: reads `state`, draws onto `layer`,
@@ -29,7 +29,7 @@ export const drawScene = (
 ): void => {
     const ctx = layer.context
     const trafficVisible: boolean = options.trafficVisible ?? true
-    const radarVisible: boolean = options.radarVisible ?? true
+    const radarMode: RadarMode = options.radarMode ?? 'hull'
     layer.clear()
 
     // Fall back to the first traffic car when nothing is being followed (an
@@ -44,16 +44,16 @@ export const drawScene = (
     drawGround(ctx, state.road)
     drawRoad(ctx, state.road)
 
-    const championCar: RacingCar | undefined = state.champion
-        ? state.cars.find((racingCar) => racingCar.network === state.champion)
+    const previousWinner: RacingCar | undefined = state.winner
+        ? state.cars.find((racingCar) => racingCar.network === state.winner)
         : undefined
     const currentWinner: RacingCar | undefined = state.bestCar
     const manualPlayerCar: RacingCar | undefined = state.manualDriving ? state.playerCar : undefined
 
     // Perception belongs below every car body, so it never paints sensor colour across
     // either the followed racer or the traffic obstacles.
-    if (radarVisible && state.activeCar) {
-        drawSensors(ctx, state.activeCar.sensorState)
+    if (radarMode !== 'off' && state.activeCar) {
+        drawSensors(ctx, state.activeCar.sensorState, radarMode)
     }
 
     // 1. Ordinary evolved cars: always the lowest racing-car layer. A network-driven
@@ -61,7 +61,7 @@ export const drawScene = (
     // never disappears into the translucent population.
     for (const racingCar of state.cars) {
         if (
-            racingCar === championCar ||
+            racingCar === previousWinner ||
             racingCar === currentWinner ||
             racingCar === manualPlayerCar
         ) {
@@ -73,9 +73,9 @@ export const drawScene = (
         })
     }
 
-    // 2. Previous champion, painted at its real world position with no display offset.
-    if (championCar && championCar !== currentWinner && championCar !== manualPlayerCar) {
-        drawCar(ctx, championCar.car, { winner: championCar.winner })
+    // 2. Previous winner, painted at its real world position with no display offset.
+    if (previousWinner && previousWinner !== currentWinner && previousWinner !== manualPlayerCar) {
+        drawCar(ctx, previousWinner.car, { winner: previousWinner.winner })
     }
 
     // 3. Current winner.
@@ -237,14 +237,15 @@ export const drawGameOver = (layer: CanvasLayer, state: SimulationState): void =
 
         const idLine = state.bestCar.network.id
         const winsLine = state.courseCleared ? 'CLEARS THE COURSE' : 'WINS'
-        const fitnessLine = `with ${Math.round(state.bestCar.stats.fitness)} points`
+        const overtakes = state.bestCar.stats.overtakes
+        const scoreLine = `${overtakes} overtake${overtakes === 1 ? '' : 's'} in ${state.bestCar.stats.lastOvertakeAtSeconds.toFixed(1)} s`
 
         ctx.strokeText(idLine, centerX, centerY - 80)
         ctx.fillText(idLine, centerX, centerY - 80)
         ctx.strokeText(winsLine, centerX, centerY - 40)
         ctx.fillText(winsLine, centerX, centerY - 40)
-        ctx.strokeText(fitnessLine, centerX, centerY)
-        ctx.fillText(fitnessLine, centerX, centerY)
+        ctx.strokeText(scoreLine, centerX, centerY)
+        ctx.fillText(scoreLine, centerX, centerY)
     } else {
         // The population was empty: nobody ran, so nobody could be scored.
         // With the current fitness system this is the only way a generation

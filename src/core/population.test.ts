@@ -86,33 +86,33 @@ describe('createPopulation', () => {
         expect(cars).toHaveLength(baseOptions.quantity)
     })
 
-    it('gives car 0 the champion network, weight-for-weight identical, when a champion is provided', () => {
+    it('gives car 0 the winner network, weight-for-weight identical, when a winner is provided', () => {
         const road = createRoad()
-        const champion = createNetwork(architecture)
+        const winner = createNetwork(architecture)
 
-        const cars = createPopulation(road, { ...baseOptions, parents: [champion] })
+        const cars = createPopulation(road, { ...baseOptions, parents: [winner] })
 
-        expect(cars[0].network.layers).toEqual(champion.layers)
+        expect(cars[0].network.layers).toEqual(winner.layers)
     })
 
     // `mutationRate` is a probability per parameter, and the near-clone band mutates at
     // `MUTATION.lowRateFloor` whatever the requested rate, so a child legitimately comes
     // out numerically identical to its parent. What must never happen is a child SHARING
-    // the champion's arrays, which would let it rewrite its own parent.
-    it('gives every other car its own copy of the champion, never a shared one', () => {
+    // the winner's arrays, which would let it rewrite its own parent.
+    it('gives every other car its own copy of the winner, never a shared one', () => {
         const road = createRoad()
-        const champion = createNetwork(architecture)
+        const winner = createNetwork(architecture)
 
-        const cars = createPopulation(road, { ...baseOptions, parents: [champion], mutationRate: 1 })
+        const cars = createPopulation(road, { ...baseOptions, parents: [winner], mutationRate: 1 })
 
         for (let index = 1; index < cars.length; index++) {
             const layers = cars[index].network.layers
-            expect(layers).not.toBe(champion.layers)
-            expect(layers[0].weights[0]).not.toBe(champion.layers[0].weights[0])
+            expect(layers).not.toBe(winner.layers)
+            expect(layers[0].weights[0]).not.toBe(winner.layers[0].weights[0])
         }
     })
 
-    it('gives every car a fresh random network when there is no champion', () => {
+    it('gives every car a fresh random network when there is no winner', () => {
         const road = createRoad()
 
         const cars = createPopulation(road, baseOptions)
@@ -122,23 +122,27 @@ describe('createPopulation', () => {
         }
     })
 
-    it('distributes cars across every lane in round-robin order', () => {
+    it('starts every car from the same spot in the middle lane', () => {
         const road = createRoad()
+        const middle = lanePosition(road, Math.floor(road.laneCount / 2))
         const cars = createPopulation(road, baseOptions)
 
-        for (const [index, racingCar] of cars.entries()) {
-            expect(racingCar.car.position).toEqual(lanePosition(road, index % road.laneCount))
+        // One start line for everybody is what makes two scores in a generation
+        // comparable: these networks drive a trajectory, so a different start lane is a
+        // different task, and the elite would be re-run somewhere it never won.
+        for (const racingCar of cars) {
+            expect(racingCar.car.position).toEqual(middle)
         }
     })
 
     it('ignores a parent whose architecture does not match the requested one, and starts fresh instead of crashing', () => {
         const road = createRoad()
-        const mismatchedChampion = createNetwork([99, 4, 3])
+        const mismatchedWinner = createNetwork([99, 4, 3])
 
-        const cars = createPopulation(road, { ...baseOptions, parents: [mismatchedChampion] })
+        const cars = createPopulation(road, { ...baseOptions, parents: [mismatchedWinner] })
 
         expect(cars).toHaveLength(baseOptions.quantity)
-        expect(cars[0].network).not.toBe(mismatchedChampion)
+        expect(cars[0].network).not.toBe(mismatchedWinner)
         expect(cars[0].network.architecture).toEqual(architecture)
     })
 })

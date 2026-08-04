@@ -136,6 +136,79 @@ describe('drawSensors', () => {
         expect(context.fillStyle).toBe('#22c55e')
         expect(context.stroke).toHaveBeenCalledTimes(1)
     })
+
+    it('cuts every zone back to what it ran into, in zones mode', () => {
+        const context: DrawingContextStub = createContext()
+        const strokeColors: string[] = []
+        context.stroke.mockImplementation(() => {
+            strokeColors.push(String(context.strokeStyle))
+        })
+        const sensor: SensorState = {
+            origin: { x: 0, y: 0 },
+            readings: [0, 0.8],
+            zones: [
+                {
+                    id: SENSOR_ZONE.LEFT_INNER,
+                    area: [{ x: 0, y: 0 }, { x: -100, y: -700 }, { x: 0, y: -700 }],
+                    range: 700,
+                    distance: Infinity,
+                    closestHit: null,
+                    reading: 0,
+                },
+                {
+                    id: SENSOR_ZONE.FRONT,
+                    area: [
+                        { x: -21, y: 0 },
+                        { x: 21, y: 0 },
+                        { x: 21, y: -700 },
+                        { x: -21, y: -700 },
+                    ],
+                    range: 700,
+                    distance: 140,
+                    closestHit: { point: { x: 5, y: -140 }, distance: 140 },
+                    reading: 0.8,
+                },
+            ],
+        }
+
+        drawSensors(context, sensor, 'zones')
+
+        // Each area is traced from its own first vertex, rather than through the markers.
+        expect(context.moveTo).toHaveBeenCalledWith(0, 0)
+        expect(context.moveTo).toHaveBeenCalledWith(-21, 0)
+        // The clear triangle keeps its full 700 px; the front rectangle stops at the
+        // obstacle 140 px away instead of running on behind it.
+        expect(context.lineTo).toHaveBeenCalledWith(-100, -700)
+        expect(context.lineTo).toHaveBeenCalledWith(21, -140)
+        expect(context.lineTo).toHaveBeenCalledWith(-21, -140)
+        expect(context.lineTo).not.toHaveBeenCalledWith(21, -700)
+        // Free space is yellow in both views; red is reserved for the contact marker.
+        expect(strokeColors).toEqual(['#facc15', '#facc15'])
+        expect(context.arc).toHaveBeenCalledWith(5, -140, 3, 0, Math.PI * 2)
+    })
+
+    it('draws nothing at all when the radar is off', () => {
+        const context: DrawingContextStub = createContext()
+        const sensor: SensorState = {
+            origin: { x: 0, y: 0 },
+            readings: [0],
+            zones: [
+                {
+                    id: SENSOR_ZONE.FRONT,
+                    area: [{ x: 0, y: 0 }, { x: -100, y: -700 }, { x: 0, y: -700 }],
+                    range: 700,
+                    distance: Infinity,
+                    closestHit: null,
+                    reading: 0,
+                },
+            ],
+        }
+
+        drawSensors(context, sensor, 'off')
+
+        expect(context.save).not.toHaveBeenCalled()
+        expect(context.arc).not.toHaveBeenCalled()
+    })
 })
 
 describe('drawCar', () => {

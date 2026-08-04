@@ -1,5 +1,10 @@
-import { normalize, toHex, toHexDualColorRange } from '@core/math'
-import type { Layer, Network } from '@core/neural-network'
+import { normalize, toHex, toHexDualColorRange } from "@core/math";
+import type { Layer, Network } from "@core/neural-network";
+import {
+	SENSOR_ZONE,
+	SENSOR_ZONE_ORDER,
+	type SensorZoneId,
+} from "@core/sensor";
 
 /**
  * Visualizes a neural network on a 2D canvas: every layer is drawn as neurons
@@ -13,151 +18,198 @@ import type { Layer, Network } from '@core/neural-network'
  */
 
 /** Labels drawn above the three output neurons, in throttle/brake/steering order. */
-const OUTPUT_LABELS = ['Throttle', 'Brake', 'Steering'] as const
+const OUTPUT_LABELS = ["Throttle", "Brake", "Steering"] as const;
+
+/** Compact labels drawn below the network inputs in their exact left-to-right order. */
+const SENSOR_INPUT_LABELS: Readonly<Record<SensorZoneId, string>> = {
+	[SENSOR_ZONE.LEFT_SIDE]: "LEFT",
+	[SENSOR_ZONE.LEFT_LATERAL]: "L90",
+	[SENSOR_ZONE.LEFT_OUTER]: "L45",
+	[SENSOR_ZONE.LEFT_MIDDLE]: "L30",
+	[SENSOR_ZONE.LEFT_INNER]: "L15",
+	[SENSOR_ZONE.FRONT]: "FRONT",
+	[SENSOR_ZONE.RIGHT_INNER]: "R15",
+	[SENSOR_ZONE.RIGHT_MIDDLE]: "R30",
+	[SENSOR_ZONE.RIGHT_OUTER]: "R45",
+	[SENSOR_ZONE.RIGHT_LATERAL]: "R90",
+	[SENSOR_ZONE.RIGHT_SIDE]: "RIGHT",
+};
+const INPUT_LABELS: readonly string[] = [
+	...SENSOR_ZONE_ORDER.map(
+		(zone: SensorZoneId): string => SENSOR_INPUT_LABELS[zone],
+	),
+	"SPEED",
+];
 
 /** Radius of a neuron circle, in px. */
-const NODE_SIZE = 15
+const NODE_SIZE = 15;
 
 /**
  * Draws the whole network: one row of neurons per layer, output layer at the
  * bottom. Layers are drawn from last to first because the bottom (output) row
  * is the one that carries the throttle/brake/steering labels.
  */
-export const drawNetwork = (ctx: CanvasRenderingContext2D, network: Network): void => {
-    const width = ctx.canvas.clientWidth
-    const height = ctx.canvas.clientHeight
+export const drawNetwork = (
+	ctx: CanvasRenderingContext2D,
+	network: Network,
+): void => {
+	const width = ctx.canvas.clientWidth;
+	const height = ctx.canvas.clientHeight;
 
-    // 10% margin top and bottom so neurons never touch the canvas edge.
-    const margin = Math.floor(height * 0.1)
-    const heightSlice = Math.floor(height - margin * 2) / network.layers.length
+	// 10% margin top and bottom so neurons never touch the canvas edge.
+	const margin = Math.floor(height * 0.1);
+	const heightSlice = Math.floor(height - margin * 2) / network.layers.length;
 
-    for (let index = network.layers.length - 1; index >= 0; index--) {
-        const yStart = height - (index * heightSlice + margin)
-        const yEnd = height - ((index + 1) * heightSlice + margin)
-        const isFirstLayer = index === 0
-        const labels = index === network.layers.length - 1 ? OUTPUT_LABELS : []
+	for (let index = network.layers.length - 1; index >= 0; index--) {
+		const yStart = height - (index * heightSlice + margin);
+		const yEnd = height - ((index + 1) * heightSlice + margin);
+		const isFirstLayer = index === 0;
+		const outputLabels: readonly string[] =
+			index === network.layers.length - 1 ? OUTPUT_LABELS : [];
+		const inputLabels: readonly string[] = isFirstLayer ? INPUT_LABELS : [];
 
-        drawLayer(ctx, network.layers[index], width, yStart, yEnd, isFirstLayer, labels)
-    }
-}
+		drawLayer(
+			ctx,
+			network.layers[index],
+			width,
+			yStart,
+			yEnd,
+			isFirstLayer,
+			inputLabels,
+			outputLabels,
+		);
+	}
+};
 
 /**
  * Draws one layer: its connections, then its input neurons (only for the
  * first layer) and its output neurons.
  */
 const drawLayer = (
-    ctx: CanvasRenderingContext2D,
-    layer: Layer,
-    width: number,
-    yStart: number,
-    yEnd: number,
-    isFirstLayer: boolean,
-    labels: readonly string[],
+	ctx: CanvasRenderingContext2D,
+	layer: Layer,
+	width: number,
+	yStart: number,
+	yEnd: number,
+	isFirstLayer: boolean,
+	inputLabels: readonly string[],
+	outputLabels: readonly string[],
 ): void => {
-    const { biases, inputs, outputs, weights } = layer
+	const { biases, inputs, outputs, weights } = layer;
 
-    // Horizontal spacing that spreads neurons evenly, +1 so none sits on the edge.
-    const inputSlice = width / (inputs.length + 1)
-    const outputSlice = width / (outputs.length + 1)
+	// Horizontal spacing that spreads neurons evenly, +1 so none sits on the edge.
+	const inputSlice = width / (inputs.length + 1);
+	const outputSlice = width / (outputs.length + 1);
 
-    const yInput = yStart
-    const yOutput = yEnd
+	const yInput = yStart;
+	const yOutput = yEnd;
 
-    // PHASE 1: draw every connection (line) between an input and an output
-    // neuron. Each line is one weight of the network:
-    //   - thickness = |weight| (1 to 6 px): stronger weights draw thicker lines.
-    //   - colour = sign of the weight: green excitatory, red inhibitory.
-    //   - alpha = |input x weight|: the actual contribution to the output this
-    //     frame, so a transparent line means "this connection exists but isn't
-    //     carrying any signal right now", not "this weight is small".
-    for (let i = 0; i < inputs.length; i++) {
-        for (let j = 0; j < outputs.length; j++) {
-            ctx.beginPath()
-            ctx.lineWidth = Math.floor(normalize(weights[i][j], -1, 1, 1, 6))
+	// PHASE 1: draw every connection (line) between an input and an output
+	// neuron. Each line is one weight of the network:
+	//   - thickness = |weight| (1 to 6 px): stronger weights draw thicker lines.
+	//   - colour = sign of the weight: green excitatory, red inhibitory.
+	//   - alpha = |input x weight|: the actual contribution to the output this
+	//     frame, so a transparent line means "this connection exists but isn't
+	//     carrying any signal right now", not "this weight is small".
+	for (let i = 0; i < inputs.length; i++) {
+		for (let j = 0; j < outputs.length; j++) {
+			ctx.beginPath();
+			ctx.lineWidth = Math.floor(normalize(weights[i][j], -1, 1, 1, 6));
 
-            let weightColor = '#0000'
-            const contribution = Math.abs(inputs[i] * weights[i][j])
-            const weightAlpha = toHex(contribution, 0, 1)
-            if (weights[i][j] > 0) {
-                weightColor = `#00ff00${weightAlpha}`
-            } else if (weights[i][j] < 0) {
-                weightColor = `#ff0000${weightAlpha}`
-            }
+			let weightColor = "#0000";
+			const contribution = Math.abs(inputs[i] * weights[i][j]);
+			const weightAlpha = toHex(contribution, 0, 1);
+			if (weights[i][j] > 0) {
+				weightColor = `#00ff00${weightAlpha}`;
+			} else if (weights[i][j] < 0) {
+				weightColor = `#ff0000${weightAlpha}`;
+			}
 
-            ctx.strokeStyle = weightColor
-            ctx.setLineDash([])
-            ctx.moveTo(inputSlice * (i + 1), yInput)
-            ctx.lineTo(outputSlice * (j + 1), yOutput)
-            ctx.stroke()
-        }
-    }
+			ctx.strokeStyle = weightColor;
+			ctx.setLineDash([]);
+			ctx.moveTo(inputSlice * (i + 1), yInput);
+			ctx.lineTo(outputSlice * (j + 1), yOutput);
+			ctx.stroke();
+		}
+	}
 
-    // PHASE 2: input neurons, only drawn for the first layer (every other
-    // layer's inputs are the previous layer's outputs, already drawn as
-    // that layer's output row). Fill colour is a red/black/green gradient
-    // over the activation value, [-1, 1].
-    if (isFirstLayer) {
-        for (let index = 0; index < inputs.length; index++) {
-            const x = inputSlice * (index + 1)
+	// PHASE 2: input neurons, only drawn for the first layer (every other
+	// layer's inputs are the previous layer's outputs, already drawn as
+	// that layer's output row). Fill colour is a red/black/green gradient
+	// over the activation value, [-1, 1].
+	if (isFirstLayer) {
+		for (let index = 0; index < inputs.length; index++) {
+			const x = inputSlice * (index + 1);
 
-            ctx.beginPath()
-            ctx.fillStyle = toHexDualColorRange(inputs[index], -1, 1)
-            ctx.lineWidth = 1
-            ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2)
-            ctx.fill()
+			ctx.beginPath();
+			ctx.fillStyle = toHexDualColorRange(inputs[index], -1, 1);
+			ctx.lineWidth = 1;
+			ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2);
+			ctx.fill();
 
-            // Yellow outline, purely for visibility against the line clutter.
-            ctx.beginPath()
-            ctx.setLineDash([])
-            ctx.strokeStyle = '#ff0'
-            ctx.lineWidth = 4
-            ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2)
-            ctx.stroke()
-        }
-    }
+			// Yellow outline, purely for visibility against the line clutter.
+			ctx.beginPath();
+			ctx.setLineDash([]);
+			ctx.strokeStyle = "#ff0";
+			ctx.lineWidth = 4;
+			ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2);
+			ctx.stroke();
 
-    // PHASE 3: output neurons. Fill colour is the same red/black/green
-    // gradient, this time over the output value. The ring around each neuron
-    // is the "bias ring": yellow when the neuron is active (its output beats
-    // its own bias), otherwise green or red depending on the sign of the
-    // bias itself — a lazy (high-bias) neuron reads red-ringed even at rest.
-    for (let index = 0; index < outputs.length; index++) {
-        const x = outputSlice * (index + 1)
+			const label: string | undefined = inputLabels[index];
+			if (label) {
+				ctx.beginPath();
+				ctx.font = "9px monospace";
+				ctx.textAlign = "center";
+				ctx.textBaseline = "top";
+				ctx.fillStyle = "white";
+				ctx.fillText(label, x, yInput + NODE_SIZE + 7);
+			}
+		}
+	}
 
-        ctx.beginPath()
-        ctx.fillStyle = toHexDualColorRange(outputs[index], -1, 1)
-        ctx.lineWidth = 1
-        ctx.arc(x, yOutput, NODE_SIZE, 0, Math.PI * 2)
-        ctx.fill()
+	// PHASE 3: output neurons. Fill colour is the same red/black/green
+	// gradient, this time over the output value. The ring around each neuron
+	// is the "bias ring": yellow when the neuron is active (its output beats
+	// its own bias), otherwise green or red depending on the sign of the
+	// bias itself — a lazy (high-bias) neuron reads red-ringed even at rest.
+	for (let index = 0; index < outputs.length; index++) {
+		const x = outputSlice * (index + 1);
 
-        const isNeuronActive = outputs[index] > biases[index]
-        let biasColor = '#000'
-        let ringWidth = 2
+		ctx.beginPath();
+		ctx.fillStyle = toHexDualColorRange(outputs[index], -1, 1);
+		ctx.lineWidth = 1;
+		ctx.arc(x, yOutput, NODE_SIZE, 0, Math.PI * 2);
+		ctx.fill();
 
-        if (isNeuronActive) {
-            biasColor = '#FF0'
-            ringWidth = 4
-        } else if (biases[index] > 0) {
-            biasColor = '#0F0'
-        } else if (biases[index] < 0) {
-            biasColor = '#F00'
-        }
+		const isNeuronActive = outputs[index] > biases[index];
+		let biasColor = "#000";
+		let ringWidth = 2;
 
-        // A fresh path for the bias ring, so it never blends into the fill.
-        ctx.beginPath()
-        ctx.strokeStyle = biasColor
-        ctx.lineWidth = ringWidth
-        ctx.setLineDash([])
-        ctx.arc(x, yOutput, NODE_SIZE, 0, Math.PI * 2)
-        ctx.stroke()
+		if (isNeuronActive) {
+			biasColor = "#FF0";
+			ringWidth = 4;
+		} else if (biases[index] > 0) {
+			biasColor = "#0F0";
+		} else if (biases[index] < 0) {
+			biasColor = "#F00";
+		}
 
-        const label = labels[index]
-        if (label) {
-            ctx.beginPath()
-            ctx.textAlign = 'center'
-            ctx.textBaseline = 'middle'
-            ctx.fillStyle = 'white'
-            ctx.fillText(label, x, yOutput - 25)
-        }
-    }
-}
+		// A fresh path for the bias ring, so it never blends into the fill.
+		ctx.beginPath();
+		ctx.strokeStyle = biasColor;
+		ctx.lineWidth = ringWidth;
+		ctx.setLineDash([]);
+		ctx.arc(x, yOutput, NODE_SIZE, 0, Math.PI * 2);
+		ctx.stroke();
+
+		const label: string | undefined = outputLabels[index];
+		if (label) {
+			ctx.beginPath();
+			ctx.font = "10px monospace";
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillStyle = "white";
+			ctx.fillText(label, x, yOutput - 25);
+		}
+	}
+};

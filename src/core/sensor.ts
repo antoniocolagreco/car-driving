@@ -1,4 +1,4 @@
-import { RACING_CAR, SENSOR } from '@core/config'
+import { RACING_CAR, SENSOR, SENSOR_RANGE } from '@core/config'
 import {
     type Polygon,
     type Segment,
@@ -54,7 +54,10 @@ export type SensorZone = {
     readonly id: SensorZoneId
     /** Full unoccluded world-space area, retained for rendering. */
     readonly area: Polygon
-    /** Maximum distance represented by this zone. */
+    /**
+     * Maximum distance represented by this zone, and therefore its resolution: the
+     * reading is `1 - distance / range`. Zones do not share one — see `SENSOR_RANGE`.
+     */
     readonly range: number
     readonly distance: number
     readonly closestHit: SensorHit | null
@@ -86,10 +89,16 @@ const pointAlong = (origin: Vec2, direction: Vec2, amount: number): Vec2 =>
 export const sensorOrigin = (position: Vec2, heading: number): Vec2 =>
     pointAlong(position, directionAt(heading, 0), RACING_CAR.height / 2)
 
-const triangle = (origin: Vec2, heading: number, startDegrees: number, endDegrees: number): Polygon => [
+const triangle = (
+    origin: Vec2,
+    heading: number,
+    startDegrees: number,
+    endDegrees: number,
+    range: number,
+): Polygon => [
     origin,
-    pointAlong(origin, directionAt(heading, (startDegrees * Math.PI) / 180), SENSOR.range),
-    pointAlong(origin, directionAt(heading, (endDegrees * Math.PI) / 180), SENSOR.range),
+    pointAlong(origin, directionAt(heading, (startDegrees * Math.PI) / 180), range),
+    pointAlong(origin, directionAt(heading, (endDegrees * Math.PI) / 180), range),
 ]
 
 const frontArea = (origin: Vec2, heading: number): Polygon => {
@@ -98,14 +107,14 @@ const frontArea = (origin: Vec2, heading: number): Polygon => {
     const halfWidth = RACING_CAR.width / 2
     const nearLeft = pointAlong(origin, right, -halfWidth)
     const nearRight = pointAlong(origin, right, halfWidth)
-    const farLeft = pointAlong(nearLeft, forward, SENSOR.range)
-    const farRight = pointAlong(nearRight, forward, SENSOR.range)
+    const farLeft = pointAlong(nearLeft, forward, SENSOR_RANGE.front)
+    const farRight = pointAlong(nearRight, forward, SENSOR_RANGE.front)
     return [nearLeft, nearRight, farRight, farLeft]
 }
 
 const sideArea = (innerFront: Vec2, innerRear: Vec2, outward: Vec2): Polygon => {
-    const outerFront = pointAlong(innerFront, outward, SENSOR.sideClearanceRange)
-    const outerRear = pointAlong(innerRear, outward, SENSOR.sideClearanceRange)
+    const outerFront = pointAlong(innerFront, outward, SENSOR_RANGE.side)
+    const outerRear = pointAlong(innerRear, outward, SENSOR_RANGE.side)
     return [innerFront, innerRear, outerRear, outerFront]
 }
 
@@ -138,68 +147,92 @@ export const sensorZones = (position: Vec2, heading: number): readonly ZoneDefin
         {
             id: SENSOR_ZONE.LEFT_SIDE,
             area: leftSide,
-            range: SENSOR.sideClearanceRange,
+            range: SENSOR_RANGE.side,
             measureDistance: (point: Vec2): number =>
                 Math.max(0, dot(vec(point.x - bodyFrontLeft.x, point.y - bodyFrontLeft.y), left)),
         },
         {
             id: SENSOR_ZONE.LEFT_LATERAL,
-            area: triangle(frontLeft, heading, SENSOR.lateralCoverageDegrees, outerAngle),
-            range: SENSOR.range,
+            area: triangle(
+                frontLeft,
+                heading,
+                SENSOR.lateralCoverageDegrees,
+                outerAngle,
+                SENSOR_RANGE.lateral,
+            ),
+            range: SENSOR_RANGE.lateral,
             measureDistance: radialDistanceFrom(frontLeft),
         },
         {
             id: SENSOR_ZONE.LEFT_OUTER,
-            area: triangle(frontLeft, heading, outerAngle, outerAngle - sector),
-            range: SENSOR.range,
+            area: triangle(frontLeft, heading, outerAngle, outerAngle - sector, SENSOR_RANGE.outer),
+            range: SENSOR_RANGE.outer,
             measureDistance: radialDistanceFrom(frontLeft),
         },
         {
             id: SENSOR_ZONE.LEFT_MIDDLE,
-            area: triangle(frontLeft, heading, outerAngle - sector, sector),
-            range: SENSOR.range,
+            area: triangle(frontLeft, heading, outerAngle - sector, sector, SENSOR_RANGE.middle),
+            range: SENSOR_RANGE.middle,
             measureDistance: radialDistanceFrom(frontLeft),
         },
         {
             id: SENSOR_ZONE.LEFT_INNER,
-            area: triangle(frontLeft, heading, sector, 0),
-            range: SENSOR.range,
+            area: triangle(frontLeft, heading, sector, 0, SENSOR_RANGE.inner),
+            range: SENSOR_RANGE.inner,
             measureDistance: radialDistanceFrom(frontLeft),
         },
         {
             id: SENSOR_ZONE.FRONT,
             area: front,
-            range: SENSOR.range,
+            range: SENSOR_RANGE.front,
             measureDistance: longitudinalDistance,
         },
         {
             id: SENSOR_ZONE.RIGHT_INNER,
-            area: triangle(frontRight, heading, 0, -sector),
-            range: SENSOR.range,
+            area: triangle(frontRight, heading, 0, -sector, SENSOR_RANGE.inner),
+            range: SENSOR_RANGE.inner,
             measureDistance: radialDistanceFrom(frontRight),
         },
         {
             id: SENSOR_ZONE.RIGHT_MIDDLE,
-            area: triangle(frontRight, heading, -sector, -(outerAngle - sector)),
-            range: SENSOR.range,
+            area: triangle(
+                frontRight,
+                heading,
+                -sector,
+                -(outerAngle - sector),
+                SENSOR_RANGE.middle,
+            ),
+            range: SENSOR_RANGE.middle,
             measureDistance: radialDistanceFrom(frontRight),
         },
         {
             id: SENSOR_ZONE.RIGHT_OUTER,
-            area: triangle(frontRight, heading, -(outerAngle - sector), -outerAngle),
-            range: SENSOR.range,
+            area: triangle(
+                frontRight,
+                heading,
+                -(outerAngle - sector),
+                -outerAngle,
+                SENSOR_RANGE.outer,
+            ),
+            range: SENSOR_RANGE.outer,
             measureDistance: radialDistanceFrom(frontRight),
         },
         {
             id: SENSOR_ZONE.RIGHT_LATERAL,
-            area: triangle(frontRight, heading, -outerAngle, -SENSOR.lateralCoverageDegrees),
-            range: SENSOR.range,
+            area: triangle(
+                frontRight,
+                heading,
+                -outerAngle,
+                -SENSOR.lateralCoverageDegrees,
+                SENSOR_RANGE.lateral,
+            ),
+            range: SENSOR_RANGE.lateral,
             measureDistance: radialDistanceFrom(frontRight),
         },
         {
             id: SENSOR_ZONE.RIGHT_SIDE,
             area: rightSide,
-            range: SENSOR.sideClearanceRange,
+            range: SENSOR_RANGE.side,
             measureDistance: (point: Vec2): number =>
                 Math.max(0, dot(vec(point.x - bodyFrontRight.x, point.y - bodyFrontRight.y), right)),
         },

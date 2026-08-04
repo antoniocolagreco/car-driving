@@ -1,5 +1,5 @@
 import { type Polygon, type Size, type Vec2, carPolygon, vec } from '@core/geometry'
-import { clamp, normalizeWithThreshold } from '@core/math'
+import { normalizeWithThreshold } from '@core/math'
 import { RACING_CAR, SIMULATION, TRAFFIC_CAR } from '@core/config'
 
 /**
@@ -13,13 +13,7 @@ import { RACING_CAR, SIMULATION, TRAFFIC_CAR } from '@core/config'
 export type Controls = {
     /** [-1, 1], negative = reverse. */
     throttle: number
-    /**
-     * Brake pressure in [0, 1], NOT a boolean. This is what makes speed control
-     * learnable: a network whose only brake is an on/off switch above a threshold
-     * has to discover an all-or-nothing behaviour, and measured over 30 generations
-     * the champion never once pressed it. With analog pressure, "slow down a bit"
-     * is a small change to one output instead of a cliff.
-     */
+    /** Brake pressure in [0, 1]. Manual controls may modulate it; the network emits only 0 or 1. */
     brake: number
     /** [-1, 1], negative = left. */
     steering: number
@@ -45,7 +39,7 @@ export type Car = {
     crashed: boolean
     /** Steering applied this step, in degrees, for the HUD. */
     steeringDegrees: number
-    /** Absolute deviation from the road axis in degrees, 0-180, for the HUD. */
+    /** Signed deviation from the road axis in degrees, (-180, 180]: right is positive. */
     headingDegrees: number
 }
 
@@ -89,11 +83,20 @@ export const createCar = (position: Vec2, spec: CarSpec, color: string): Car => 
     headingDegrees: 0,
 })
 
-/** Folds a heading in radians to [0, 360) degrees, then to the minimal deviation from the road axis, in [0, 180]. */
+/**
+ * Folds a heading in radians to a SIGNED deviation from the road axis in degrees,
+ * within (-180, 180]: 0 points straight up the road, positive leans right, negative
+ * leans left.
+ *
+ * The sign is flipped on purpose. Forward is -y and +x is right, so a right turn
+ * decreases `heading` (see the rotation in `stepCar`), and a raw reading would show
+ * a right-hand steering input as a negative angle. Reporting it the other way round
+ * makes the number agree with `Controls.steering`, where positive is right.
+ */
 const headingDeviationDegrees = (heading: number): number => {
-    const degrees = (heading * (180 / Math.PI)) % 360
+    const degrees = (-heading * (180 / Math.PI)) % 360
     const normalized = (degrees + 360) % 360
-    return normalized <= 180 ? normalized : 360 - normalized
+    return normalized <= 180 ? normalized : normalized - 360
 }
 
 /**
@@ -183,24 +186,25 @@ export const crash = (car: Car): void => {
 }
 
 const BRAKE_OUTPUT_INDEX = 1
+/** The original autopilot contract: the brake is off through 0.5 and fully on above it. */
+const BRAKE_OUTPUT_THRESHOLD = 0.5
 
 /**
  * Turns network outputs into controls: `[throttle, brake, steering]`.
  *
  * Throttle and steering use the bipolar [-1, 1] range directly (negative = reverse /
- * left). The network already exposes brake as pressure in [0, 1]; this final clamp is
- * defensive for callers that provide a raw or malformed output vector.
+ * left). Brake is a binary decision: its physical pressure is 0 through the threshold
+ * and 1 as soon as the activation exceeds it.
  */
 export const controlsFromOutputs = (outputs: readonly number[]): Controls => ({
     throttle: outputs[0],
-    brake: clamp(outputs[BRAKE_OUTPUT_INDEX], 0, 1),
+    brake: outputs[BRAKE_OUTPUT_INDEX] > BRAKE_OUTPUT_THRESHOLD ? 1 : 0,
     steering: outputs[2],
 })
 
 /**
- * Builds the network input vector: sensor readings followed by the car's speed,
- * normalized to [-1, 1] around 0 (see `normalizeWithThreshold`) so both forward
- * and reverse speed share one symmetric input despite their different ranges.
+ * Builds the network input vector: eleven spatial readings followed by the car's speed,
+ * normalized to [-1, 1] around zero.
  */
 export const networkInputs = (car: Car, readings: readonly number[]): number[] => {
     const normalizedSpeed = normalizeWithThreshold(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SIMULATION } from '@core/config'
+import { RACING_CAR, SIMULATION, TRAFFIC_CAR } from '@core/config'
 import { type Road, createRoad, lanePosition } from './road'
 import { type TrafficPattern, TRAFFIC_PATTERNS, generateTraffic } from './traffic'
 
@@ -19,9 +19,9 @@ const nearestLane = (road: Road, x: number): number => {
 
 /**
  * Re-derives which `TrafficPattern` produced each row of generated traffic, purely
- * from car positions. Row spacing (400px) is far larger than any pattern's internal
- * stagger (at most 100px), so a row index and each car's offset within it can be
- * recovered unambiguously.
+ * from car positions. Row spacing (500px) is more than twice any pattern's internal
+ * stagger (at most 200px), so a row index and each car's offset within it can be
+ * recovered unambiguously — a stagger of half the row spacing could not.
  */
 const identifyPatternPerRow = (
     road: Road,
@@ -83,16 +83,41 @@ describe('generateTraffic', () => {
         expect(b.map((car) => car.position)).not.toEqual(a.map((car) => car.position))
     })
 
-    it('never repeats the same traffic pattern in two consecutive rows', () => {
+    it('gives two patterns the same kind exactly when they leave the same lanes open', () => {
+        // The whole generation rule rests on this: a kind stands for the gap a row
+        // leaves, so "a different kind than the row before" means "a different gap".
+        const openLanes = (pattern: TrafficPattern): string =>
+            [0, 1, 2].filter((lane) => !pattern.cars.some((spot) => spot.lane === lane)).join(',')
+
+        for (const left of TRAFFIC_PATTERNS) {
+            for (const right of TRAFFIC_PATTERNS) {
+                expect({
+                    pair: `${left.name}/${right.name}`,
+                    sameKind: left.kind === right.kind,
+                }).toEqual({
+                    pair: `${left.name}/${right.name}`,
+                    sameKind: openLanes(left) === openLanes(right),
+                })
+            }
+        }
+    })
+
+    it('never leaves the same gap open in two consecutive rows', () => {
         const road = createRoad()
         const rows = 20
+        const kindOf = (name: string | undefined): string | undefined =>
+            TRAFFIC_PATTERNS.find((pattern) => pattern.name === name)?.kind
 
         for (let seed = 0; seed < 100; seed++) {
             const traffic = generateTraffic(road, rows, `no-repeat-${seed}`)
-            const patterns = identifyPatternPerRow(road, traffic, rows)
+            const kinds = identifyPatternPerRow(road, traffic, rows).map(kindOf)
 
-            for (let row = 1; row < patterns.length; row++) {
-                expect(patterns[row]).not.toBe(patterns[row - 1])
+            for (let row = 1; row < kinds.length; row++) {
+                expect({ seed, row, kind: kinds[row] }).not.toEqual({
+                    seed,
+                    row,
+                    kind: kinds[row - 1],
+                })
             }
         }
     })
@@ -130,6 +155,37 @@ describe('generateTraffic', () => {
         }
     })
 
+    it('leaves every pattern passable by a straight line down the road', () => {
+        const road = createRoad()
+        const passingClearance = (RACING_CAR.width + TRAFFIC_CAR.width) / 2
+        const halfCar = RACING_CAR.width / 2
+
+        // A straight line at constant x is the only guarantee that a row can be driven
+        // through at all, and it is not a conservative one: cars are 96px long while a
+        // pattern staggers them by at most 200px, so two of them leave a few px of clear
+        // road between their bodies — never the ~96px a car would need to sit in the gap
+        // and swap sides, let alone the ~400px of closing distance a lane change costs at
+        // top speed. A row with no straight corridor is therefore a wall, not a puzzle.
+        for (const pattern of TRAFFIC_PATTERNS) {
+            const clears = (x: number): boolean =>
+                pattern.cars.every(
+                    (spot) => Math.abs(x - lanePosition(road, spot.lane).x) >= passingClearance,
+                )
+
+            const corridor: number[] = []
+            for (let x = road.left + halfCar; x <= road.left + road.width - halfCar; x++) {
+                if (clears(x)) {
+                    corridor.push(x)
+                }
+            }
+
+            expect({ pattern: pattern.name, corridor: corridor.length > 0 }).toEqual({
+                pattern: pattern.name,
+                corridor: true,
+            })
+        }
+    })
+
     it('creates every traffic car rolling forward at full throttle', () => {
         const road = createRoad()
         const traffic = generateTraffic(road, 20, 'throttle-seed')
@@ -140,29 +196,53 @@ describe('generateTraffic', () => {
         }
     })
 
-    it('covers every pattern of each difficulty within its own course section', () => {
+    it('never puts a pattern in a section easier than its own difficulty', () => {
         const road = createRoad()
-        // 40 rows: divisible by 4, and each resulting section (10 rows) is bigger
-        // than every difficulty's pattern count, so section boundaries line up
-        // exactly with quarters of the course.
-        const rows = 40
-        const traffic = generateTraffic(road, rows, 'coverage-seed')
-        const patternPerRow = identifyPatternPerRow(road, traffic, rows)
-
+        const rows = 20
         const sectionSize = rows / 4
-        const sections: Record<TrafficPattern['difficulty'], (string | undefined)[]> = {
-            easy: patternPerRow.slice(0, sectionSize),
-            medium: patternPerRow.slice(sectionSize, sectionSize * 2),
-            hard: patternPerRow.slice(sectionSize * 2, sectionSize * 3),
-            veryHard: patternPerRow.slice(sectionSize * 3, sectionSize * 4),
-        }
+        // Read as "by the end of this quarter, these difficulties are allowed".
+        const allowedBySection: readonly TrafficPattern['difficulty'][][] = [
+            ['easy'],
+            ['easy', 'medium'],
+            ['easy', 'medium', 'hard'],
+            ['easy', 'medium', 'hard', 'veryHard'],
+        ]
+        const difficultyOf = (name: string | undefined): string | undefined =>
+            TRAFFIC_PATTERNS.find((pattern) => pattern.name === name)?.difficulty
 
-        for (const difficulty of ['easy', 'medium', 'hard', 'veryHard'] as const) {
-            const expectedNames = TRAFFIC_PATTERNS.filter(
-                (pattern) => pattern.difficulty === difficulty,
-            ).map((pattern) => pattern.name)
-            for (const name of expectedNames) {
-                expect(sections[difficulty]).toContain(name)
+        for (let seed = 0; seed < 50; seed++) {
+            const traffic = generateTraffic(road, rows, `ramp-${seed}`)
+            const perRow = identifyPatternPerRow(road, traffic, rows)
+
+            perRow.forEach((name, row) => {
+                const section = Math.floor(row / sectionSize)
+                const difficulty = difficultyOf(name)
+                expect({ seed, row, difficulty, allowed: true }).toEqual({
+                    seed,
+                    row,
+                    difficulty,
+                    allowed: allowedBySection[section].includes(
+                        difficulty as TrafficPattern['difficulty'],
+                    ),
+                })
+            })
+        }
+    })
+
+    it('uses every pattern of the catalogue at least once', () => {
+        const road = createRoad()
+        const rows = 20
+
+        for (let seed = 0; seed < 50; seed++) {
+            const traffic = generateTraffic(road, rows, `coverage-${seed}`)
+            const used = new Set(identifyPatternPerRow(road, traffic, rows))
+
+            for (const pattern of TRAFFIC_PATTERNS) {
+                expect({ seed, name: pattern.name, used: used.has(pattern.name) }).toEqual({
+                    seed,
+                    name: pattern.name,
+                    used: true,
+                })
             }
         }
     })

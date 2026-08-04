@@ -4,6 +4,27 @@ import { SIMULATION } from '@core/config'
 import { RACING_CAR_SPEC, controlsFromOutputs, createCar, networkInputs, stepCar } from './car'
 
 describe('stepCar', () => {
+    it('reports heading as a signed deviation, positive when steering right', () => {
+        const right = createCar(vec(0, 0), RACING_CAR_SPEC, 'red')
+        const left = createCar(vec(0, 0), RACING_CAR_SPEC, 'red')
+        right.speed = RACING_CAR_SPEC.maxSpeed
+        left.speed = RACING_CAR_SPEC.maxSpeed
+        right.controls = { throttle: 1, brake: 0, steering: 1 }
+        left.controls = { throttle: 1, brake: 0, steering: -1 }
+
+        for (let step = 0; step < 60; step++) {
+            stepCar(right, SIMULATION.stepSeconds)
+            stepCar(left, SIMULATION.stepSeconds)
+        }
+
+        // Same magnitude, opposite signs: the number reads like the steering that caused it.
+        expect(right.headingDegrees).toBeGreaterThan(0)
+        expect(left.headingDegrees).toBeCloseTo(-right.headingDegrees)
+        // And the car really did move right, which is what the sign claims.
+        expect(right.position.x).toBeGreaterThan(0)
+        expect(left.position.x).toBeLessThan(0)
+    })
+
     it('accelerates under throttle up to spec.maxSpeed and no further', () => {
         const car = createCar(vec(0, 0), RACING_CAR_SPEC, 'red')
         car.controls = { throttle: 1, brake: 0, steering: 0 }
@@ -99,20 +120,21 @@ describe('controlsFromOutputs', () => {
         const controls = controlsFromOutputs([0.3, 0.9, -0.5])
 
         expect(controls.throttle).toBe(0.3)
-        expect(controls.brake).toBe(0.9)
+        expect(controls.brake).toBe(1)
         expect(controls.steering).toBe(-0.5)
     })
 
-    // The network already emits [0, 1]; the clamp also keeps malformed external vectors safe.
-    it('reads the brake as pressure in [0, 1]', () => {
-        expect(controlsFromOutputs([0, 0.5, 0]).brake).toBe(0.5)
+    it('keeps the network brake off through 0.5 and turns it fully on above the threshold', () => {
+        expect(controlsFromOutputs([0, 0.5, 0]).brake).toBe(0)
+        expect(controlsFromOutputs([0, 0.500_001, 0]).brake).toBe(1)
+        expect(controlsFromOutputs([0, 1, 0]).brake).toBe(1)
         expect(controlsFromOutputs([0, -0.4, 0]).brake).toBe(0)
         expect(controlsFromOutputs([0, 0, 0]).brake).toBe(0)
     })
 })
 
 describe('networkInputs', () => {
-    it('returns readings.length + 1 values, all within [-1, 1]', () => {
+    it('appends normalized car speed after the sensor readings', () => {
         const car = createCar(vec(0, 0), RACING_CAR_SPEC, 'red')
         car.speed = 5
         const readings = [0.1, 0.9, 0, 0.4]
@@ -120,6 +142,7 @@ describe('networkInputs', () => {
         const inputs = networkInputs(car, readings)
 
         expect(inputs).toHaveLength(readings.length + 1)
+        expect(inputs.at(-1)).toBe(0.5)
         for (const value of inputs) {
             expect(value).toBeGreaterThanOrEqual(-1)
             expect(value).toBeLessThanOrEqual(1)

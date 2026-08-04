@@ -1,6 +1,7 @@
 import { SIMULATION } from '@core/config'
 import type { SimulationState } from '@core/simulation'
 import { ELEMENT_IDS, findElement } from './dom'
+import type { ChampionRecord } from './persistence'
 
 /**
  * The didactic centrepiece: shows which car the camera follows, how the
@@ -16,28 +17,27 @@ import { ELEMENT_IDS, findElement } from './dom'
 export type Hud = {
     /** Call once per rendered frame; internally throttled. */
     update(state: SimulationState, fps: number): void
+    /**
+     * Fills the record holder's panel. Called only when the record changes, not per
+     * frame: the champion lives in localStorage, not in `SimulationState`.
+     */
+    showChampion(record: ChampionRecord | undefined): void
 }
 
 /** Numeric fields refresh at most this often. */
 const UPDATE_INTERVAL_MS = 100
 
-type BreakdownElements = {
-    overtakes: HTMLElement
-    crash: HTMLElement
-}
-
 type HudElements = {
     networkId: HTMLElement
     generation: HTMLElement
     aliveCars: HTMLElement
-    bestFitness: HTMLElement
-    currentFitness: HTMLElement
+    overtakes: HTMLElement
+    raceTime: HTMLElement
     idleTimeout: HTMLElement
     overtakeTimeout: HTMLElement
     speed: HTMLElement
     headingDeviation: HTMLElement
     fps: HTMLElement
-    breakdown: BreakdownElements
     statusRegion: HTMLElement | undefined
 }
 
@@ -47,29 +47,25 @@ const resolveElements = (): HudElements | undefined => {
     const networkId = findElement(ids.networkId)
     const generation = findElement(ids.generation)
     const aliveCars = findElement(ids.aliveCars)
-    const bestFitness = findElement(ids.bestFitness)
-    const currentFitness = findElement(ids.currentFitness)
+    const overtakes = findElement(ids.overtakes)
+    const raceTime = findElement(ids.raceTime)
     const idleTimeout = findElement(ids.idleTimeout)
     const overtakeTimeout = findElement(ids.overtakeTimeout)
     const speed = findElement(ids.speed)
     const headingDeviation = findElement(ids.headingDeviation)
     const fps = findElement(ids.fps)
-    const overtakes = findElement(ids.breakdown.overtakes)
-    const crash = findElement(ids.breakdown.crash)
 
     if (
         !networkId ||
         !generation ||
         !aliveCars ||
-        !bestFitness ||
-        !currentFitness ||
+        !overtakes ||
+        !raceTime ||
         !idleTimeout ||
         !overtakeTimeout ||
         !speed ||
         !headingDeviation ||
-        !fps ||
-        !overtakes ||
-        !crash
+        !fps
     ) {
         return undefined
     }
@@ -78,14 +74,13 @@ const resolveElements = (): HudElements | undefined => {
         networkId,
         generation,
         aliveCars,
-        bestFitness,
-        currentFitness,
+        overtakes,
+        raceTime,
         idleTimeout,
         overtakeTimeout,
         speed,
         headingDeviation,
         fps,
-        breakdown: { overtakes, crash },
         statusRegion: findElement(ELEMENT_IDS.statusRegion),
     }
 }
@@ -102,6 +97,19 @@ const formatNumber = (value: number | undefined, decimals = 1): string =>
 
 const formatCountdown = (value: number | undefined): string =>
     value === undefined ? '–' : `${value.toFixed(1)} s`
+
+/**
+ * Heading as an explicitly signed angle, so the panel says which way the car is pointing
+ * rather than only how far off it is. Rounded before the sign is read, so a hair to the
+ * left of straight reads `0.0°` instead of `-0.0°`.
+ */
+const formatDegrees = (value: number | undefined): string => {
+    if (value === undefined) {
+        return '–'
+    }
+    const rounded: number = Number(value.toFixed(1))
+    return `${rounded > 0 ? '+' : ''}${rounded.toFixed(1)}°`
+}
 
 /** Builds the HUD, resolving its DOM elements once. Missing elements make `update` a no-op. */
 export const createHud = (): Hud => {
@@ -145,13 +153,14 @@ export const createHud = (): Hud => {
 
         const activeCar = state.activeCar
         const stats = activeCar?.stats
-        const breakdown = stats?.breakdown
 
         setText(elements.networkId, activeCar?.network.id ?? '–')
         setText(elements.generation, String(state.generation))
         setText(elements.aliveCars, `${state.aliveCars.length} / ${state.cars.length}`)
-        setText(elements.bestFitness, formatNumber(state.champion?.bestFitness))
-        setText(elements.currentFitness, formatNumber(stats?.fitness))
+        setText(elements.overtakes, stats ? String(stats.overtakes) : '–')
+        // The round clock, not the followed car's own: it is what the champion's time is
+        // measured on, so the two numbers can be read against each other while racing.
+        setText(elements.raceTime, `${state.elapsedSeconds.toFixed(1)} s`)
         setText(
             elements.idleTimeout,
             formatCountdown(
@@ -173,12 +182,29 @@ export const createHud = (): Hud => {
             elements.speed,
             formatNumber(activeCar ? activeCar.car.speed / SIMULATION.stepSeconds : undefined, 0),
         )
-        setText(elements.headingDeviation, formatNumber(activeCar?.car.headingDegrees))
+        setText(elements.headingDeviation, formatDegrees(activeCar?.car.headingDegrees))
         setText(elements.fps, formatNumber(fps, 0))
-
-        setText(elements.breakdown.overtakes, formatNumber(breakdown?.overtakes))
-        setText(elements.breakdown.crash, formatNumber(breakdown?.crash))
     }
 
-    return { update }
+    // Resolved separately from `resolveElements`: the champion panel is optional, and a
+    // page without it must still show the live stats rather than nothing at all.
+    const championElements = {
+        networkId: findElement(ELEMENT_IDS.champion.networkId),
+        seconds: findElement(ELEMENT_IDS.champion.seconds),
+        overtakes: findElement(ELEMENT_IDS.champion.overtakes),
+    }
+
+    const showChampion = (record: ChampionRecord | undefined): void => {
+        if (championElements.networkId) {
+            setText(championElements.networkId, record?.network.id ?? '–')
+        }
+        if (championElements.seconds) {
+            setText(championElements.seconds, record ? `${record.seconds.toFixed(2)} s` : '–')
+        }
+        if (championElements.overtakes) {
+            setText(championElements.overtakes, record ? String(record.overtakes) : '–')
+        }
+    }
+
+    return { update, showChampion }
 }

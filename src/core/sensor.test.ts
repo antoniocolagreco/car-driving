@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { type Polygon, type Segment, type Vec2, clipSegmentToConvexPolygon, vec } from '@core/geometry'
-import { RACING_CAR, SENSOR } from '@core/config'
+import { RACING_CAR, SENSOR_RANGE } from '@core/config'
 import {
     SENSOR_ZONE,
     SENSOR_ZONE_ORDER,
@@ -97,7 +97,18 @@ describe('castSensors', () => {
         }
     })
 
-    it('projects full-flank side areas out to the common sensor range', () => {
+    it('looks deepest straight ahead and shorter with every step towards a flank', () => {
+        const ranges = sensorZones(origin, 0).map((zone) => zone.range)
+        const front = Math.floor(ranges.length / 2)
+
+        expect(ranges).toEqual([...ranges].reverse())
+        expect(ranges[front]).toBe(SENSOR_RANGE.front)
+        for (let index = 1; index <= front; index++) {
+            expect(ranges[index]).toBeGreaterThan(ranges[index - 1])
+        }
+    })
+
+    it('projects full-flank side areas out to the short side range, not the front one', () => {
         const halfWidth = RACING_CAR.width / 2
         const halfHeight = RACING_CAR.height / 2
         const sensor = castSensors(origin, 0, [
@@ -110,14 +121,14 @@ describe('castSensors', () => {
         const expectedLeft: readonly Vec2[] = [
             vec(-halfWidth, -halfHeight),
             vec(-halfWidth, halfHeight),
-            vec(-halfWidth - SENSOR.range, halfHeight),
-            vec(-halfWidth - SENSOR.range, -halfHeight),
+            vec(-halfWidth - SENSOR_RANGE.side, halfHeight),
+            vec(-halfWidth - SENSOR_RANGE.side, -halfHeight),
         ]
         const expectedRight: readonly Vec2[] = [
             vec(halfWidth, -halfHeight),
             vec(halfWidth, halfHeight),
-            vec(halfWidth + SENSOR.range, halfHeight),
-            vec(halfWidth + SENSOR.range, -halfHeight),
+            vec(halfWidth + SENSOR_RANGE.side, halfHeight),
+            vec(halfWidth + SENSOR_RANGE.side, -halfHeight),
         ]
         expectedLeft.forEach((point, index) => {
             expect(leftSide?.area[index].x).toBeCloseTo(point.x)
@@ -129,8 +140,8 @@ describe('castSensors', () => {
         })
         expect(leftSide?.distance).toBeCloseTo(10)
         expect(rightSide?.distance).toBeCloseTo(15)
-        expect(leftSide?.reading).toBeCloseTo(1 - 10 / SENSOR.sideClearanceRange)
-        expect(rightSide?.reading).toBeCloseTo(1 - 15 / SENSOR.sideClearanceRange)
+        expect(leftSide?.reading).toBeCloseTo(1 - 10 / SENSOR_RANGE.side)
+        expect(rightSide?.reading).toBeCloseTo(1 - 15 / SENSOR_RANGE.side)
     })
 
     it('front sees an obstacle between former ray lines across the whole car width', () => {
@@ -142,7 +153,7 @@ describe('castSensors', () => {
 
         expect(front?.distance).toBeCloseTo(expectedDistance)
         expect(front?.closestHit?.point.x).toBe(insideX)
-        expect(front?.reading).toBeCloseTo(1 - expectedDistance / SENSOR.range)
+        expect(front?.reading).toBeCloseTo(1 - expectedDistance / SENSOR_RANGE.front)
     })
 
     it('front ignores a segment just outside its car-width rectangle', () => {

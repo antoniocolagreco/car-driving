@@ -1,5 +1,6 @@
 import { clamp } from '@core/math'
 import type { SimulationSettings } from '@core/simulation'
+import type { RadarMode } from '@render/car'
 import { ELEMENT_IDS, findElement } from './dom'
 
 /**
@@ -9,7 +10,17 @@ import { ELEMENT_IDS, findElement } from './dom'
  * `value` from `initial`, it never invents a range of its own.
  */
 
-export type UiAction = 'restart' | 'backup' | 'restore' | 'reset' | 'evolve'
+export type UiAction = 'restart' | 'loadChampion' | 'reset' | 'evolve'
+
+/** The handle `app.ts` keeps on the panel after wiring it. */
+export type ControlPanel = {
+    /**
+     * Enables or disables Load Champion. There is nothing to load until some network has
+     * finished the course, and a button that silently does nothing is worse than a
+     * disabled one.
+     */
+    setChampionAvailable(available: boolean): void
+}
 
 export type ControlPanelHandlers = {
     onSettingsChange(settings: SimulationSettings): void
@@ -18,8 +29,21 @@ export type ControlPanelHandlers = {
     onDriveToggle(driving: boolean): void
     /** Traffic paint switched on or off; it must not affect the simulation. */
     onTrafficVisibilityToggle(visible: boolean): void
-    /** Radar paint switched on or off; sensing and network inputs remain active. */
-    onRadarVisibilityToggle(visible: boolean): void
+    /** Radar presentation changed; sensing and network inputs remain active. */
+    onRadarModeChange(mode: RadarMode): void
+}
+
+/**
+ * The order the radar button cycles through: the summary first, then what it is made
+ * of, then nothing. Three states are why the radar is a cycling button and not a switch
+ * like the two next to it — `role="switch"` can only be on or off.
+ */
+const RADAR_CYCLE: readonly RadarMode[] = ['hull', 'zones', 'off']
+
+const RADAR_LABELS: Readonly<Record<RadarMode, string>> = {
+    hull: 'Radar: free area',
+    zones: 'Radar: zones',
+    off: 'Radar: hidden',
 }
 
 const isPositiveInteger = (value: number): boolean =>
@@ -48,12 +72,15 @@ const parseHiddenLayers = (text: string): readonly number[] | undefined => {
  * - Hidden layers is a free-text field, applied on Enter, and rejects anything
  *   that is not a comma-separated list of positive integers by restoring the
  *   previous text instead of building a broken architecture.
+ * - Load Champion starts disabled and is enabled by `setChampionAvailable`, because
+ *   whether a record holder exists is a localStorage question and this module never
+ *   reads storage.
  */
 export const createControlPanel = (
     initial: SimulationSettings,
     handlers: ControlPanelHandlers,
     signal: AbortSignal,
-): void => {
+): ControlPanel => {
     let settings: SimulationSettings = {
         carsQuantity: initial.carsQuantity,
         mutationRate: initial.mutationRate,
@@ -223,31 +250,34 @@ export const createControlPanel = (
 
     trafficButton?.addEventListener('click', toggleTrafficVisibility, { signal })
 
-    // --- Radar visibility -----------------------------------------------------
+    // --- Radar presentation ---------------------------------------------------
     const radarButton = findElement<HTMLButtonElement>(ELEMENT_IDS.buttons.radar)
     const radarState = findElement<HTMLSpanElement>(ELEMENT_IDS.radarState)
-    let radarVisible: boolean = true
+    let radarMode: RadarMode = RADAR_CYCLE[0]
 
     const setRadarLabel = (): void => {
         if (!radarButton) {
             return
         }
         if (radarState) {
-            radarState.textContent = radarVisible ? 'Radar: visible' : 'Radar: hidden'
+            radarState.textContent = RADAR_LABELS[radarMode]
         }
-        radarButton.setAttribute('aria-checked', String(radarVisible))
-        radarButton.classList.toggle('bg-emerald-600', radarVisible)
-        radarButton.classList.toggle('hover:bg-emerald-700', radarVisible)
+        // Its own label is the only place the current mode is announced, so the colour
+        // says nothing more than "something is being drawn".
+        const painting: boolean = radarMode !== 'off'
+        radarButton.classList.toggle('bg-emerald-600', painting)
+        radarButton.classList.toggle('hover:bg-emerald-700', painting)
     }
     setRadarLabel()
 
-    const toggleRadarVisibility = (): void => {
-        radarVisible = !radarVisible
+    const cycleRadarMode = (): void => {
+        const next: number = (RADAR_CYCLE.indexOf(radarMode) + 1) % RADAR_CYCLE.length
+        radarMode = RADAR_CYCLE[next]
         setRadarLabel()
-        handlers.onRadarVisibilityToggle(radarVisible)
+        handlers.onRadarModeChange(radarMode)
     }
 
-    radarButton?.addEventListener('click', toggleRadarVisibility, { signal })
+    radarButton?.addEventListener('click', cycleRadarMode, { signal })
 
     document.addEventListener(
         'keydown',
@@ -285,9 +315,17 @@ export const createControlPanel = (
             { signal },
         )
     }
-    wireAction(ELEMENT_IDS.buttons.backup, 'backup')
-    wireAction(ELEMENT_IDS.buttons.restore, 'restore')
+    const loadChampionButton = findElement<HTMLButtonElement>(ELEMENT_IDS.buttons.loadChampion)
+    wireAction(ELEMENT_IDS.buttons.loadChampion, 'loadChampion')
     wireAction(ELEMENT_IDS.buttons.reset, 'reset')
     wireAction(ELEMENT_IDS.buttons.restart, 'restart')
     wireAction(ELEMENT_IDS.buttons.evolve, 'evolve')
+
+    return {
+        setChampionAvailable(available: boolean): void {
+            if (loadChampionButton) {
+                loadChampionButton.disabled = !available
+            }
+        },
+    }
 }

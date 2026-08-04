@@ -1,5 +1,6 @@
-import { type Vec2, vec } from '@core/geometry'
+import { type Polygon, type Vec2, vec } from '@core/geometry'
 import { type Car, carShape } from '@core/car'
+import { clamp } from '@core/math'
 import { type SensorState, type SensorZone } from '@core/sensor'
 
 /**
@@ -41,7 +42,7 @@ const BASE_LIGHT_THICKNESS = 6
 const BASE_LIGHT_COLOR = 'gray'
 const BASE_LIGHT_ALPHA = 0.5
 
-/** Brake pressure below this leaves the brake lights off — a feather touch is not braking. */
+/** Manual pressure below this leaves the lights off; neural control supplies only 0 or 1. */
 const BRAKE_LIGHT_THRESHOLD = 0.1
 
 /** Brighter, narrower lights drawn on top of the base ones while the brake is pressed. */
@@ -55,8 +56,21 @@ const SENSOR_FAN_COLOR = '#facc15'
 const SENSOR_HIT_COLOR = '#ef4444'
 const SENSOR_CLEAR_COLOR = '#22c55e'
 const SENSOR_AREA_ALPHA = 0.18
+/**
+ * Fainter than the hull's: a clear zone still reaches its full 700 px, and eleven of
+ * those cover most of the screen. They also butt up against each other, so the outlines
+ * carry the shape and the fill only has to hint at the area.
+ */
+const SENSOR_ZONE_AREA_ALPHA = 0.1
 const SENSOR_COLLISION_LINE_WIDTH = 2
 const SENSOR_MARKER_RADIUS = 3
+
+/**
+ * How perception is presented. The hull is the summary — one closed polygon through the
+ * eleven markers, i.e. the space the car currently reads as clear — and `zones` shows the
+ * individual perception areas that summary is built from.
+ */
+export type RadarMode = 'hull' | 'zones' | 'off'
 
 /** World-space centre point of each rear light, offset sideways and forward of the car's rear edge. */
 const rearLightCenters = (car: Car): { left: Vec2; right: Vec2 } => {
@@ -179,12 +193,65 @@ export const drawCar = (ctx: CanvasRenderingContext2D, car: Car, style?: CarStyl
     }
 }
 
+/** Point `amount` of the way from `from` to `to`. */
+const towards = (from: Vec2, to: Vec2, amount: number): Vec2 =>
+    vec(from.x + (to.x - from.x) * amount, from.y + (to.y - from.y) * amount)
+
 /**
- * Draws one closed radar polygon through the eleven zone markers. A marker is the
- * closest collision or, for a clear zone, the midpoint of its outer edge.
+ * The part of a zone that is actually clear: its own area cut back to the closest
+ * obstacle, so the polygon ENDS where the car would hit something instead of running
+ * on to the full 700 px range regardless of what is in the way.
+ *
+ * Both zone shapes shrink along their own measurement axis: a triangle towards its
+ * apex, a rectangle towards its near edge. `carPolygon`-style vertex order makes the
+ * pairing fixed — rectangles store [near, near, far, far] with [1] opposite [2] and
+ * [0] opposite [3]; triangles store their apex first and both far points after it.
  */
-export const drawSensors = (ctx: CanvasRenderingContext2D, sensor: SensorState): void => {
-    if (sensor.zones.length === 0) {
+const clearedArea = (zone: SensorZone): Polygon => {
+    const reach: number = zone.closestHit ? clamp(zone.closestHit.distance / zone.range, 0, 1) : 1
+    if (reach >= 1) {
+        return zone.area
+    }
+
+    if (zone.area.length === 4) {
+        const [nearLeft, nearRight, farRight, farLeft] = zone.area
+        return [
+            nearLeft,
+            nearRight,
+            towards(nearRight, farRight, reach),
+            towards(nearLeft, farLeft, reach),
+        ]
+    }
+
+    const [apex, farStart, farEnd] = zone.area
+    return [apex, towards(apex, farStart, reach), towards(apex, farEnd, reach)]
+}
+
+/** Traces `polygon` as a closed path, leaving the fill and the stroke to the caller. */
+const tracePolygon = (ctx: CanvasRenderingContext2D, polygon: Polygon): void => {
+    ctx.beginPath()
+    ctx.moveTo(polygon[0].x, polygon[0].y)
+    for (let index = 1; index < polygon.length; index++) {
+        ctx.lineTo(polygon[index].x, polygon[index].y)
+    }
+    ctx.closePath()
+}
+
+/**
+ * Draws perception in the requested `mode`, over the same eleven zone markers: a marker
+ * is the closest collision or, for a clear zone, the midpoint of the zone's outer edge.
+ *
+ * `hull` joins those markers into one closed polygon — an approximation of the space the
+ * car reads as free. `zones` draws the same free space one perception area at a time,
+ * each cut back to whatever it ran into: same yellow, same markers, but this view shows
+ * WHICH of the eleven inputs is firing and how far into its own area the obstacle sits.
+ */
+export const drawSensors = (
+    ctx: CanvasRenderingContext2D,
+    sensor: SensorState,
+    mode: RadarMode = 'hull',
+): void => {
+    if (mode === 'off' || sensor.zones.length === 0) {
         return
     }
 
@@ -202,24 +269,36 @@ export const drawSensors = (ctx: CanvasRenderingContext2D, sensor: SensorState):
     const markerPoints: Vec2[] = sensor.zones.map(markerPoint)
 
     ctx.save()
-    if (markerPoints.length >= 3) {
-        // One solid closed path replaces every former per-zone fill and outline.
-        ctx.setLineDash([])
+    ctx.setLineDash([])
+    ctx.lineWidth = SENSOR_COLLISION_LINE_WIDTH
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+
+    if (mode === 'hull') {
+        // Two markers cannot enclose anything: with fewer than three zones only the
+        // markers themselves are drawn.
+        if (markerPoints.length >= 3) {
+            ctx.strokeStyle = SENSOR_FAN_COLOR
+            ctx.fillStyle = SENSOR_FAN_COLOR
+            tracePolygon(ctx, markerPoints)
+            ctx.globalAlpha = SENSOR_AREA_ALPHA
+            ctx.fill()
+            ctx.globalAlpha = 1
+            ctx.stroke()
+        }
+    } else {
+        // Yellow like the hull, because it is the same thing seen zone by zone: the free
+        // space. Red belongs to the contact markers alone — an area painted in the colour
+        // of a collision reads as "this zone is blocked" when it means the opposite.
         ctx.strokeStyle = SENSOR_FAN_COLOR
         ctx.fillStyle = SENSOR_FAN_COLOR
-        ctx.lineWidth = SENSOR_COLLISION_LINE_WIDTH
-        ctx.lineJoin = 'round'
-        ctx.lineCap = 'round'
-        ctx.beginPath()
-        ctx.moveTo(markerPoints[0].x, markerPoints[0].y)
-        for (let index = 1; index < markerPoints.length; index++) {
-            ctx.lineTo(markerPoints[index].x, markerPoints[index].y)
+        for (const zone of sensor.zones) {
+            tracePolygon(ctx, clearedArea(zone))
+            ctx.globalAlpha = SENSOR_ZONE_AREA_ALPHA
+            ctx.fill()
+            ctx.globalAlpha = 1
+            ctx.stroke()
         }
-        ctx.closePath()
-        ctx.globalAlpha = SENSOR_AREA_ALPHA
-        ctx.fill()
-        ctx.globalAlpha = 1
-        ctx.stroke()
     }
 
     for (let index = 0; index < sensor.zones.length; index++) {

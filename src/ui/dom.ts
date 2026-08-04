@@ -15,11 +15,12 @@ export const ELEMENT_IDS = {
     /** Text inside the radar-visibility switch. */
     radarState: 'radar-state',
     buttons: {
-        backup: 'backup-network-button',
-        restore: 'restore-network-button',
+        loadChampion: 'load-champion-button',
         reset: 'reset-network-button',
         restart: 'restart-network-button',
         evolve: 'evolve-network-button',
+        simulate: 'simulate-button',
+        simulateStop: 'simulate-stop-button',
         drive: 'drive-button',
         traffic: 'traffic-button',
         radar: 'radar-button',
@@ -35,17 +36,19 @@ export const ELEMENT_IDS = {
         networkId: 'hud-network-id',
         generation: 'hud-generation',
         aliveCars: 'hud-alive-cars',
-        bestFitness: 'hud-best-fitness',
-        currentFitness: 'hud-current-fitness',
+        overtakes: 'hud-overtakes',
+        raceTime: 'hud-race-time',
         idleTimeout: 'hud-idle-timeout',
         overtakeTimeout: 'hud-overtake-timeout',
         speed: 'hud-speed',
         headingDeviation: 'hud-heading-deviation',
         fps: 'hud-fps',
-        breakdown: {
-            overtakes: 'hud-breakdown-overtakes',
-            crash: 'hud-breakdown-crash',
-        },
+    },
+    /** The record holder's panel, filled from localStorage rather than from the simulation. */
+    champion: {
+        networkId: 'champion-network-id',
+        seconds: 'champion-seconds',
+        overtakes: 'champion-overtakes',
     },
 } as const
 

@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { PENALTY, REWARD, SIMULATION } from './config'
+import { BRAKE_DISCOVERY_BONUS, SIMULATION } from './config'
 import { vec } from './geometry'
 import {
-    computeFitness,
     createStats,
     hasMissedOvertakeDeadline,
     isStuck,
-    recordCrash,
+    raceScore,
     recordOvertakeTimeout,
-    recordTimeout,
     selectBest,
     selectParents,
     updateStats,
@@ -17,9 +15,11 @@ import type { CarStats, FitnessSample } from './fitness'
 
 const START = vec(0, 10_000)
 
-const sample = (y: number, overtakes = 0): FitnessSample => ({
+const sample = (y: number, overtakes = 0, brake = 0, speed = 10): FitnessSample => ({
     position: vec(0, y),
     overtakes,
+    brake,
+    speed,
 })
 
 const drive = (
@@ -37,19 +37,7 @@ describe('sparse overtake fitness', () => {
     it('starts at zero', () => {
         const stats: CarStats = createStats(START)
 
-        expect(stats.fitness).toBe(0)
-        expect(stats.breakdown).toEqual({ overtakes: 0, crash: 0, total: 0 })
-    })
-
-    it('awards only the fixed reward for each overtake', () => {
-        const stats: CarStats = createStats(START)
-        stats.overtakes = 3
-
-        expect(computeFitness(stats)).toEqual({
-            overtakes: 3 * REWARD.overtake,
-            crash: 0,
-            total: 3 * REWARD.overtake,
-        })
+        expect(stats.overtakes).toBe(0)
     })
 
     it('does not award movement or survival without an overtake', () => {
@@ -59,7 +47,7 @@ describe('sparse overtake fitness', () => {
 
         expect(stats.groundProgress).toBe(1_000)
         expect(stats.aliveSeconds).toBe(5)
-        expect(stats.fitness).toBe(0)
+        expect(stats.overtakes).toBe(0)
     })
 
     it('keeps the maximum overtake count when a car falls behind again', () => {
@@ -69,70 +57,6 @@ describe('sparse overtake fitness', () => {
         updateStats(stats, sample(START.y - 50, 1), 1)
 
         expect(stats.overtakes).toBe(3)
-        expect(stats.fitness).toBe(3 * REWARD.overtake)
-    })
-})
-
-describe('the sole fitness penalty', () => {
-    const earnedStats = (): CarStats => {
-        const stats: CarStats = createStats(START)
-        updateStats(stats, sample(START.y - 100, 2), 1)
-        return stats
-    }
-
-    it('removes 50% after a minimum-speed collision', () => {
-        const stats: CarStats = earnedStats()
-
-        recordCrash(stats, 0)
-
-        expect(stats.breakdown.crash).toBe(-stats.breakdown.overtakes * 0.5)
-        expect(stats.fitness).toBe(stats.breakdown.overtakes * 0.5)
-    })
-
-    it('linearly increases the collision malus with impact speed', () => {
-        const stats: CarStats = earnedStats()
-
-        recordCrash(stats, 0.5)
-
-        const expectedFraction: number =
-            (PENALTY.crashAtMinimumSpeed + PENALTY.crashAtMaximumSpeed) / 2
-        expect(stats.breakdown.crash).toBeCloseTo(-stats.breakdown.overtakes * expectedFraction)
-        expect(stats.fitness).toBeCloseTo(stats.breakdown.overtakes * (1 - expectedFraction))
-    })
-
-    it('removes 90% after a maximum-speed collision', () => {
-        const stats: CarStats = earnedStats()
-
-        recordCrash(stats, 1)
-
-        expect(stats.breakdown.crash).toBeCloseTo(
-            -stats.breakdown.overtakes * PENALTY.crashAtMaximumSpeed,
-        )
-        expect(stats.fitness).toBeCloseTo(
-            stats.breakdown.overtakes * (1 - PENALTY.crashAtMaximumSpeed),
-        )
-    })
-
-    it('applies the maximum-speed malus to a timeout', () => {
-        const stats: CarStats = earnedStats()
-
-        recordTimeout(stats)
-
-        expect(stats.timedOut).toBe(true)
-        expect(stats.fitness).toBeCloseTo(
-            stats.breakdown.overtakes * (1 - PENALTY.crashAtMaximumSpeed),
-        )
-    })
-
-    it('never stacks a timeout and collision above the 90% maximum', () => {
-        const stats: CarStats = earnedStats()
-
-        recordCrash(stats, 0)
-        recordTimeout(stats)
-
-        expect(stats.fitness).toBeCloseTo(
-            stats.breakdown.overtakes * (1 - PENALTY.crashAtMaximumSpeed),
-        )
     })
 })
 
@@ -143,7 +67,7 @@ describe('timeouts', () => {
         drive(stats, 1, SIMULATION.idleTimeoutSeconds, () => sample(START.y))
 
         expect(isStuck(stats)).toBe(true)
-        expect(stats.fitness).toBe(0)
+        expect(stats.overtakes).toBe(0)
     })
 
     it('resets the idle timeout after enough ground progress', () => {
@@ -164,7 +88,7 @@ describe('timeouts', () => {
         )
 
         expect(hasMissedOvertakeDeadline(stats)).toBe(true)
-        expect(stats.fitness).toBe(0)
+        expect(stats.overtakes).toBe(0)
     })
 
     it('resets the overtake timeout and timestamps a new overtake', () => {
@@ -175,18 +99,19 @@ describe('timeouts', () => {
 
         expect(stats.secondsSinceLastOvertake).toBe(0)
         expect(stats.lastOvertakeAtSeconds).toBe(6)
-        expect(stats.fitness).toBe(REWARD.overtake)
+        expect(stats.overtakes).toBe(1)
     })
 
-    it('marks an overtake timeout as ineligible and applies the maximum malus', () => {
+    it('marks an overtake timeout as ineligible without touching the score', () => {
         const stats: CarStats = createStats(START)
         updateStats(stats, sample(START.y - 100, 2), 1)
 
         recordOvertakeTimeout(stats)
 
         expect(stats.overtakeTimedOut).toBe(true)
-        expect(stats.timedOut).toBe(true)
-        expect(stats.fitness).toBeCloseTo(2 * REWARD.overtake * (1 - PENALTY.crashAtMaximumSpeed))
+        // Elimination, not a malus: the two overtakes it did make are still on the board,
+        // they just cannot win or breed any more.
+        expect(stats.overtakes).toBe(2)
     })
 })
 
@@ -215,15 +140,17 @@ describe('selection', () => {
         expect(selectBest([slower, faster])).toBe(faster)
     })
 
-    it('prefers the higher residual fitness when overtake counts are equal', () => {
-        const gentle: { stats: CarStats } = { stats: createStats(START) }
-        const severe: { stats: CarStats } = { stats: createStats(START) }
-        updateStats(gentle.stats, sample(START.y - 100, 4), 10)
-        updateStats(severe.stats, sample(START.y - 100, 4), 5)
-        recordCrash(gentle.stats, 0)
-        recordCrash(severe.stats, 1)
+    it('ignores everything except overtakes and the time they took', () => {
+        const slowSurvivor: { stats: CarStats } = { stats: createStats(START) }
+        const fastWreck: { stats: CarStats } = { stats: createStats(START) }
+        updateStats(slowSurvivor.stats, sample(START.y - 100, 4), 10)
+        updateStats(fastWreck.stats, sample(START.y - 100, 4), 5)
+        slowSurvivor.stats.groundProgress = 100_000
+        slowSurvivor.stats.aliveSeconds = 100
 
-        expect(selectBest([severe, gentle])).toBe(gentle)
+        // Same four overtakes. How the round ended, how far either drove and how long
+        // either lasted are not part of the comparison: only who got there first is.
+        expect(selectBest([slowSurvivor, fastWreck])).toBe(fastWreck)
     })
 
     it('does not select a car that made zero overtakes', () => {
@@ -242,6 +169,71 @@ describe('selection', () => {
         timedOut.stats.overtakeTimedOut = true
 
         expect(selectBest([timedOut, valid])).toBe(valid)
+    })
+
+    it('outranks a better driver that never braked, once, by the bonus', () => {
+        const braked: { stats: CarStats } = { stats: createStats(START) }
+        const dry: { stats: CarStats } = { stats: createStats(START) }
+        braked.stats.overtakes = 1
+        braked.stats.usedBrake = true
+        dry.stats.overtakes = 9
+
+        // 1 + 10 beats 9. That is the ignition working as intended for as long as the
+        // brake is still a rarity in the field.
+        expect(selectBest([dry, braked])).toBe(braked)
+        expect(raceScore(braked.stats)).toBe(1 + BRAKE_DISCOVERY_BONUS)
+    })
+
+    it('stops deciding anything once both cars have braked', () => {
+        const better: { stats: CarStats } = { stats: createStats(START) }
+        const worse: { stats: CarStats } = { stats: createStats(START) }
+        better.stats.overtakes = 9
+        better.stats.usedBrake = true
+        worse.stats.overtakes = 1
+        worse.stats.usedBrake = true
+
+        // The bonus is the same constant on both sides, so it cancels and the ranking is
+        // back to being overtakes alone. This is why it is safe to make it large.
+        expect(selectBest([worse, better])).toBe(better)
+    })
+
+    it('pays the bonus once, however long the brake is held', () => {
+        const stats: CarStats = createStats(START)
+
+        drive(stats, 1, 30, (step) => sample(START.y - 100 * step, 1, 1))
+
+        expect(raceScore(stats)).toBe(1 + BRAKE_DISCOVERY_BONUS)
+    })
+
+    it('pays nothing to a car that braked but never passed anybody', () => {
+        const stats: CarStats = createStats(START)
+
+        drive(stats, 1, 30, (step) => sample(START.y - 100 * step, 0, 1))
+
+        // Braking at the start line and creeping until the idle timeout is cheaper than
+        // racing. Left ungated, the whole population found that within one generation
+        // and stopped overtaking entirely.
+        expect(stats.usedBrake).toBe(true)
+        expect(raceScore(stats)).toBe(0)
+    })
+
+    it('does not pay for a brake pressed at a standstill', () => {
+        const stats: CarStats = createStats(START)
+
+        drive(stats, 1, 30, () => sample(START.y, 1, 1, 0))
+
+        expect(stats.usedBrake).toBe(false)
+        expect(raceScore(stats)).toBe(1)
+    })
+
+    it('never counts the bonus as a traffic car passed', () => {
+        const stats: CarStats = createStats(START)
+
+        updateStats(stats, sample(START.y - 100, 3, 1), 1)
+
+        // `overtakes` still has to mean "cars actually passed": it is what decides a
+        // cleared course and what the Champion record stores.
+        expect(stats.overtakes).toBe(3)
     })
 
     it('uses the same sparse ordering for the parent pool', () => {

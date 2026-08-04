@@ -4,8 +4,36 @@
  * Nothing here depends on the DOM: the whole `core/` folder is pure logic, so it can
  * be unit tested and, in principle, run without a browser at all.
  *
- * Evolution currently uses a deliberately sparse objective: only overtakes earn points.
+ * Evolution uses a deliberately sparse objective: overtakes earn points, plus the one
+ * bootstrapping bonus in `BRAKE_DISCOVERY_BONUS`.
  */
+
+/**
+ * One-off bonus, counted in overtakes, for a car that presses the brake at least once
+ * while moving AND passes at least one traffic car. Awarded once per race, no matter
+ * how often the brake is used after that.
+ *
+ * This is an ignition, not a reward for braking: half the row-to-row transitions in a
+ * course cannot be taken at full throttle, so a car that never discovers the pedal has
+ * a ceiling it cannot pass, and evolution has no reason to find it because the first
+ * touch of the brake pays nothing on its own. Ten points is deliberately more than a
+ * typical round's overtake count, so while braking is still rare a braking car outranks
+ * a non-braking one even when it drives worse. It then cancels itself out: once the
+ * whole field brakes, every car carries the same +10 and the ranking is decided by
+ * overtakes again.
+ *
+ * The overtake requirement is not a detail, it is what makes the bonus survivable.
+ * Without it, measured over 25 generations, the population collapsed within one
+ * generation onto a car that braked, crawled, passed nobody and still scored 10, and
+ * every generation after that produced a field with ZERO overtakes: braking at the
+ * start line and dying of the idle timeout is cheaper than racing, and it pays the same.
+ * Gated behind one overtake the same run climbed from 8 to 17 overtakes while the share
+ * of braking cars went from 1 in 81 to 45 in 81.
+ *
+ * It never counts towards clearing the course, which still means passing every traffic
+ * car for real, and pressing the brake at a standstill earns nothing.
+ */
+export const BRAKE_DISCOVERY_BONUS = 10;
 
 /** Physics runs on a fixed step so the simulation behaves identically on any display. */
 export const SIMULATION = {
@@ -42,9 +70,9 @@ export const SIMULATION = {
 	cameraHeightRatio: 0.7,
 	/**
 	 * How many consecutive generations share one course layout. Within a block the
-	 * course is identical, so fitness is directly comparable and the champion can
+	 * course is identical, so fitness is directly comparable and the winner can
 	 * only be dethroned by a car that genuinely out-drove it on the same obstacles;
-	 * every block the layout changes, so a champion cannot coast on a memorised one.
+	 * every block the layout changes, so a winner cannot coast on a memorised one.
 	 */
 	generationsPerCourse: 3,
 	/** How many traffic rows the course is made of. */
@@ -90,13 +118,21 @@ export const TRAFFIC_CAR = {
 	height: 96,
 } as const;
 
-const SENSOR_RANGE = 700;
+/** Range and resolution of each perception zone, deepest in front and shortest at the flanks. */
+export const SENSOR_RANGE = {
+	front: 700,
+	inner: 600,
+	middle: 500,
+	outer: 400,
+	lateral: 300,
+	side: 200,
+} as const;
+
+/** The deepest zone: the broad-phase reach for skipping obstacles no zone can see. */
+export const SENSOR_MAX_RANGE: number = Math.max(...Object.values(SENSOR_RANGE));
 
 /** Fixed eleven-zone perception shared by every racing car and network. */
 export const SENSOR = {
-	range: SENSOR_RANGE,
-	/** Side areas project outwards as far as every other perception area. */
-	sideClearanceRange: SENSOR_RANGE,
 	sideSectorDegrees: 15,
 	/** The fixed `LEFT_*`/`RIGHT_*` identifiers contain exactly this many zones per side. */
 	sideSectorsPerSide: 3,
@@ -130,7 +166,7 @@ export const MANUAL_TRAINING = {
  * One is the obvious choice and it is a trap: a population where every car is a
  * variation of a single network is a hill climber wearing a genetic algorithm's
  * clothes, and it stalls the moment that one network sits in a local optimum —
- * measured, the champion plateaued at 6 overtakes for a dozen generations at a time.
+ * measured, the winner plateaued at 6 overtakes for a dozen generations at a time.
  * Breeding from the top few keeps genuinely different strategies alive in parallel,
  * and elitism still guarantees the very best network survives untouched.
  */
@@ -141,7 +177,7 @@ export const MUTATION = {
 	maxRate: 1,
 	/**
 	 * The floor used for the "barely mutated" share of the population. Cloning the
-	 * champion exactly would waste those cars, so even they get a nudge.
+	 * winner exactly would waste those cars, so even they get a nudge.
 	 */
 	lowRateFloor: 0.01,
 	/**
@@ -149,9 +185,9 @@ export const MUTATION = {
 	 * a rate of its own. It used to explore between the chosen rate and `maxRate`,
 	 * which meant the slider was ignored by a third of the population: measured with
 	 * the slider at 2 %, 22 cars out of 100 were still mutated above 20 % and one at
-	 * 93 %, i.e. very nearly random networks that carried nothing of the champion.
+	 * 93 %, i.e. very nearly random networks that carried nothing of the winner.
 	 * Asking for a 2 % mutation has to produce a generation that drives like the
-	 * champion, not a lottery with a 2 % label on it.
+	 * winner, not a lottery with a 2 % label on it.
 	 */
 	explorerFactor: 4,
 	/**
@@ -167,14 +203,14 @@ export const MUTATION = {
  * How the mutation budget is spread across a generation.
  *
  * A single mutation rate is a bad bet: too low and the population never explores,
- * too high and it forgets what the champion already knew. So the generation is split
- * into bands. The elite (car 0) is the champion itself, untouched, which guarantees a
+ * too high and it forgets what the winner already knew. So the generation is split
+ * into bands. The elite (car 0) is the winner itself, untouched, which guarantees a
  * generation can never be worse than the one before it.
  *
  * The four shares below must sum to 1.
  */
 export const MUTATION_DISTRIBUTION = {
-	/** Almost-clones, mutated at `MUTATION.lowRateFloor`: they refine the champion. */
+	/** Almost-clones, mutated at `MUTATION.lowRateFloor`: they refine the winner. */
 	minimal: 0.25,
 	/** Mutated somewhere between the floor and the user's rate. */
 	low: 0.35,
@@ -182,20 +218,6 @@ export const MUTATION_DISTRIBUTION = {
 	target: 0.25,
 	/** Mutated between the user's rate and `MUTATION.explorerFactor` times it. */
 	high: 0.15,
-} as const;
-
-/** Sparse evolutionary objective: every completed overtake earns a fixed reward. */
-export const REWARD = {
-	/** Passing one traffic car. No other event changes fitness. */
-	overtake: 50,
-} as const;
-
-/** The only fitness penalty: the fraction lost after a collision or death timeout. */
-export const PENALTY = {
-	/** A very low-speed collision removes half of the earned overtake score. */
-	crashAtMinimumSpeed: 0.5,
-	/** A collision at maximum speed removes ninety percent of the earned score. */
-	crashAtMaximumSpeed: 0.9,
 } as const;
 
 /** Defaults for the settings the user can change, before anything is stored. */

@@ -10,12 +10,12 @@ import { MUTATION } from '@core/config'
  * I/O CONTRACT — this is the crux of the whole simulation:
  *
  * Inputs are the eleven fixed area readings (left flank through right flank), each
- * normalized from 0 clear to 1 touching, followed by the car's speed normalized to
- * [-1, 1].
+ * normalized from 0 clear to 1 touching, followed by the car's own speed normalized
+ * to [-1, 1].
  *
  * Outputs are always exactly 3 — `[throttle, brake, steering]`:
  *   - throttle is in [-1, 1], negative meaning reverse.
- *   - brake is analog pressure in [0, 1]; a negative internal activation is exposed as 0.
+ *   - brake is an activation in [-1, 1]; `car.ts` turns values above 0.5 into full braking.
  *   - steering is in [-1, 1], negative meaning left.
  *
  * So a network's `architecture` is always `[12, ...hiddenLayers, 3]`.
@@ -55,8 +55,6 @@ export type Network = {
     layers: Layer[]
     /** Which generation of the population this network belongs to. */
     generation: number
-    /** The best fitness this network (or its lineage) has ever scored. */
-    bestFitness: number
 }
 
 /** One supervised observation: network inputs paired with the controls chosen by a human. */
@@ -76,7 +74,7 @@ export type NetworkGradients = {
     examples: number
 }
 
-const NETWORK_FORMAT_VERSION = 6
+const NETWORK_FORMAT_VERSION = 8
 const BRAKE_OUTPUT_INDEX = 1
 
 /** JSON-safe shape of a `Network`, used for localStorage persistence. */
@@ -85,7 +83,6 @@ export type SerializedNetwork = {
     id: string
     architecture: number[]
     generation: number
-    bestFitness: number
     layers: { weights: number[][]; biases: number[] }[]
 }
 
@@ -129,7 +126,6 @@ export const createNetwork = (architecture: readonly number[]): Network => {
         architecture,
         layers,
         generation: 0,
-        bestFitness: 0,
     }
 }
 
@@ -174,15 +170,8 @@ const feedLayer = (layer: Layer, inputs: readonly number[]): number[] => {
  */
 export const feedForward = (network: Network, inputs: readonly number[]): readonly number[] => {
     let current: readonly number[] = inputs
-    for (let index = 0; index < network.layers.length; index++) {
-        const layer = network.layers[index]
+    for (const layer of network.layers) {
         current = feedLayer(layer, current)
-        if (index === network.layers.length - 1 && layer.outputs.length > BRAKE_OUTPUT_INDEX) {
-            // Brake pressure is unipolar. Rectify it at the network boundary so neither
-            // physics, rendering nor training ever observes a nonsensical negative brake.
-            layer.outputs[BRAKE_OUTPUT_INDEX] = clamp(layer.outputs[BRAKE_OUTPUT_INDEX], 0, 1)
-            current = layer.outputs
-        }
     }
     return current
 }
@@ -195,7 +184,7 @@ export const feedForward = (network: Network, inputs: readonly number[]): readon
  * is what makes the search work. The previous version blended *every* parameter
  * with a fresh random value at `rate` — a 10 % mutation moved all ~200 weights at
  * once, which in weight space is a long jump in a random direction, not a small
- * step. There was no local search at any rate, so the champion plateaued within a
+ * step. There was no local search at any rate, so the winner plateaued within a
  * few generations: measured on the standard course, generation 3 reached 1935 px
  * and generations 4-12 never improved on it. Touching a tenth of the parameters
  * by a small amount is a step; touching all of them a little is a leap.
@@ -233,7 +222,6 @@ export const mutate = (network: Network, rate: number): Network => {
         architecture: network.architecture,
         layers: network.layers.map((layer) => mutateLayer(layer, clampedRate)),
         generation: 0,
-        bestFitness: 0,
     }
 }
 
@@ -247,10 +235,9 @@ export const mutate = (network: Network, rate: number): Network => {
  * should move — because here, unlike in the race, we have the answer. When a human
  * drives, their inputs ARE the answer, so the car's network can simply be taught them.
  *
- * Hidden neurons, throttle and steering use `tanh(sum + bias)` (see `math.ts`), whose
- * derivative is `1 - y²`. Brake is rectified to [0, 1]; at its zero floor the same slope
- * is deliberately retained as a straight-through gradient, otherwise a negative initial
- * activation could never learn to become a positive braking command from human examples.
+ * Every neuron uses `tanh(sum + bias)` (see `math.ts`), whose derivative is `1 - y²`.
+ * Human examples teach the brake activation towards 0 for released and 1 for pressed;
+ * the binary 0.5 decision belongs to the control boundary in `car.ts`, not to training.
  * Every delta in a batch is computed before any weight is written: a hidden layer's error
  * depends on the layer in front of it, and updating between examples would make the final
  * result depend on their order.
@@ -384,7 +371,6 @@ export const serializeNetwork = (network: Network): SerializedNetwork => ({
     id: network.id,
     architecture: [...network.architecture],
     generation: network.generation,
-    bestFitness: network.bestFitness,
     layers: network.layers.map((layer) => ({
         weights: layer.weights.map((row) => [...row]),
         biases: [...layer.biases],
@@ -419,7 +405,7 @@ export const deserializeNetwork = (data: unknown): Network | undefined => {
     if (!isNumberArray(payload.architecture) || payload.architecture.length < 2) {
         return undefined
     }
-    if (typeof payload.generation !== 'number' || typeof payload.bestFitness !== 'number') {
+    if (typeof payload.generation !== 'number') {
         return undefined
     }
     if (!Array.isArray(payload.layers)) {
@@ -467,6 +453,5 @@ export const deserializeNetwork = (data: unknown): Network | undefined => {
         architecture,
         layers,
         generation: payload.generation,
-        bestFitness: payload.bestFitness,
     }
 }

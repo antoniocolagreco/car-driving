@@ -1,5 +1,5 @@
 ---
-import { ChevronsUpIcon, EyeIcon, FolderIcon, RedoIcon, SaveIcon, TrashIcon } from '@lucide/astro'
+import { ChevronsUpIcon, EyeIcon, FolderIcon, RedoIcon, TrashIcon } from '@lucide/astro'
 import type { HTMLAttributes } from 'astro/types'
 import { CARS_QUANTITY, DEFAULTS, MUTATION } from '@core/config'
 import { ELEMENT_IDS } from '@ui/dom'
@@ -10,7 +10,7 @@ import InfoText from '@components/info-text.astro'
 import Input from '@components/input.astro'
 import NumberInput from '@components/number-input.astro'
 import Range from '@components/range.astro'
-import ScorePanel from '@components/score-panel.astro'
+import ChampionPanel from '@components/champion-panel.astro'
 import DefaultLayout from '@layouts/default-layout.astro'
 
 type Props = HTMLAttributes<'div'>
@@ -55,16 +55,11 @@ const iconSize = 15
         >
             <menu class="flex flex-wrap gap-1.5">
                 <Button
-                    id={ELEMENT_IDS.buttons.backup}
+                    id={ELEMENT_IDS.buttons.loadChampion}
                     type="button"
-                    title="Make a backup of the active network"
-                    ><SaveIcon slot="icon" size={iconSize} />Backup</Button
-                >
-                <Button
-                    id={ELEMENT_IDS.buttons.restore}
-                    type="button"
-                    title="Restore the last saved network"
-                    ><FolderIcon slot="icon" size={iconSize} />Restore</Button
+                    disabled
+                    title="Load the champion, the fastest network ever to finish the course, and race on from it"
+                    ><FolderIcon slot="icon" size={iconSize} />Load Champion</Button
                 >
                 <Button
                     id={ELEMENT_IDS.buttons.reset}
@@ -81,7 +76,7 @@ const iconSize = 15
                 <Button
                     id={ELEMENT_IDS.buttons.evolve}
                     type="button"
-                    title="Save the active network as champion and restart"
+                    title="Save the active network as winner and restart"
                     ><ChevronsUpIcon slot="icon" size={iconSize} />Evolve</Button
                 >
             </menu>
@@ -123,13 +118,15 @@ const iconSize = 15
                 <span id={ELEMENT_IDS.trafficState}>Traffic: visible</span>
             </Button>
 
+            <!--
+                Three states, so this one is a cycling button rather than a switch: the free-area
+                polygon, the eleven zones it is built from, then nothing at all.
+            -->
             <Button
                 id={ELEMENT_IDS.buttons.radar}
                 type="button"
-                role="switch"
-                aria-checked="true"
-                class="min-w-36 bg-emerald-600 hover:bg-emerald-700"
-                title="Show or hide the radar polygon without changing sensing or neural-network inputs"
+                class="min-w-40 bg-emerald-600 hover:bg-emerald-700"
+                title="Cycle the radar between the free-area polygon, the eleven perception zones it summarises, and hidden — without changing sensing or neural-network inputs"
             >
                 <EyeIcon slot="icon" size={iconSize} aria-hidden="true" />
                 <span id={ELEMENT_IDS.radarState}>Radar: visible</span>
@@ -231,14 +228,14 @@ const iconSize = 15
                     title="Cars still racing, out of the total population"
                 />
                 <InfoText
-                    id={ELEMENT_IDS.hud.bestFitness}
-                    label="Record"
-                    title="Best overtake-only fitness recorded by the champion"
+                    id={ELEMENT_IDS.hud.overtakes}
+                    label="Overtakes"
+                    title="Traffic cars the followed car has left behind, one point each. This is the whole score"
                 />
                 <InfoText
-                    id={ELEMENT_IDS.hud.currentFitness}
-                    label="Fitness"
-                    title="Overtake-only fitness of the followed car"
+                    id={ELEMENT_IDS.hud.raceTime}
+                    label="Race time"
+                    title="Seconds since this round started, on the same clock the champion's record is measured on"
                 />
                 <InfoText
                     id={ELEMENT_IDS.hud.idleTimeout}
@@ -258,10 +255,10 @@ const iconSize = 15
                 <InfoText
                     id={ELEMENT_IDS.hud.headingDeviation}
                     label="Heading"
-                    title="Deviation from the road axis, in degrees"
+                    title="Deviation from the road axis in degrees: positive leans right, negative leans left"
                 />
                 <InfoText id={ELEMENT_IDS.hud.fps} label="FPS" title="Rendered frames per second" />
-                <ScorePanel class="mt-1 border-t border-white/20 pt-1" />
+                <ChampionPanel class="mt-1 border-t border-white/20 pt-1" />
             </InfoPanel>
             <div id={ELEMENT_IDS.statusRegion} class="sr-only" aria-live="polite"></div>
         </section>
