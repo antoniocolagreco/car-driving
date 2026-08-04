@@ -50,6 +50,14 @@ export const ELEMENT_IDS = {
         seconds: 'champion-seconds',
         overtakes: 'champion-overtakes',
     },
+    /** The modal shown while the simulation runs headless, with no rendering at all. */
+    simulate: {
+        dialog: 'simulate-dialog',
+        raceCount: 'simulate-race-count',
+        bestOvertakes: 'simulate-best-overtakes',
+        log: 'simulate-log',
+        empty: 'simulate-empty',
+    },
 } as const
 
 /**

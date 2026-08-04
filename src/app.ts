@@ -26,6 +26,7 @@ import {
     saveSettings,
     saveWinner,
 } from '@ui/persistence'
+import { createSimulateModal } from '@ui/simulate-modal'
 import victoryAudioUrl from '../audio/win.mp3?url'
 
 /**
@@ -101,9 +102,84 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         signal: abortController.signal,
     })
 
+    /**
+     * Background mode: the simulation is stepped as fast as the machine manages, with
+     * nothing drawn at all, so a change can be judged over dozens of races instead of
+     * being watched in real time. Drawing is what costs the time, so skipping it is the
+     * whole speed-up, and the modal is written to once per finished race rather than per
+     * frame.
+     */
+    let simulating = false
+    let stopAfterCurrentRace = false
+    let racesCompleted = 0
+    let simulateFrameId: number | undefined
+
+    /**
+     * Milliseconds of stepping per animation frame while simulating. It has to stay
+     * under a frame's worth of time: the browser can only repaint the modal, and react
+     * to the Stop button, between one slice and the next.
+     */
+    const SIMULATE_SLICE_MS = 12
+
+    const simulateSlice = (): void => {
+        const deadline = performance.now() + SIMULATE_SLICE_MS
+        // `simulating` is re-checked every step because the callbacks below run inside
+        // `step` and can end the run mid-slice.
+        while (simulating && performance.now() < deadline) {
+            simulation.step(SIMULATION.stepSeconds)
+        }
+        if (simulating) {
+            simulateFrameId = requestAnimationFrame(simulateSlice)
+        }
+    }
+
+    const stopSimulating = (): void => {
+        if (!simulating) {
+            return
+        }
+        simulating = false
+        if (simulateFrameId !== undefined) {
+            cancelAnimationFrame(simulateFrameId)
+            simulateFrameId = undefined
+        }
+        simulateModal.close()
+        // The rendered loop owns a fixed-timestep accumulator; whatever was left in it
+        // belongs to a frame that happened before the background run.
+        accumulator.seconds = 0
+        frameLoop.start()
+    }
+
+    const startSimulating = (): void => {
+        if (simulating) {
+            return
+        }
+        simulating = true
+        stopAfterCurrentRace = false
+        racesCompleted = 0
+        frameLoop.stop()
+        simulateModal.open()
+        simulateFrameId = requestAnimationFrame(simulateSlice)
+    }
+
     const onGenerationEnd = (winner: Network | undefined): void => {
         if (winner) {
             saveWinner(winner)
+        }
+        if (!simulating) {
+            return
+        }
+
+        racesCompleted += 1
+        simulateModal.reportRace({
+            index: racesCompleted,
+            overtakes: simulation.state.bestCar?.stats.overtakes ?? 0,
+            seconds: simulation.state.elapsedSeconds,
+        })
+
+        // Somebody cleared the course, or Stop was pressed and the race it was waiting on
+        // has now finished. Either way the run is over and the normal view comes back.
+        if (stopAfterCurrentRace || simulation.state.courseCleared) {
+            stopSimulating()
         }
     }
 
@@ -210,6 +286,12 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
 
     const frameLoop = createFrameLoop(onFrame)
 
+    // Stop is a request, not a switch: the race in progress is allowed to finish so the
+    // run never reports a truncated result, and `onGenerationEnd` closes the modal.
+    const simulateModal = createSimulateModal(() => {
+        stopAfterCurrentRace = true
+    }, abortController.signal)
+
     // One live `Controls` record the keyboard writes into for the whole session. The
     // first real driving intent releases a newly armed manual round; key repeat does not.
     const manualInput: ManualControlInput = createManualControls(abortController.signal, {
@@ -268,6 +350,10 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
                         }
                         break
                     }
+                    case 'simulate': {
+                        startSimulating()
+                        break
+                    }
                 }
             },
             onDriveToggle: (driving) => {
@@ -307,6 +393,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         },
         destroy(): void {
             abortController.abort()
+            stopSimulating()
             frameLoop.destroy()
             victoryAudio.pause()
             victoryAudio.currentTime = 0

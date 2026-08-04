@@ -1,0 +1,79 @@
+---
+import { ELEMENT_IDS } from '@ui/dom'
+import Button from '@components/button.astro'
+
+/**
+ * Shown while the simulation runs headless. A native `<dialog>` rather than a div:
+ * `showModal()` brings the focus trap, the inert background and the backdrop with it,
+ * and Esc is handled as a stop request rather than as a plain close, because the run
+ * has to finish the race it is in before the normal UI comes back.
+ *
+ * The box is a fixed size, and the results area holds its height whether it is empty or
+ * full. A dialog that grows a row at a time redraws the whole layout under the pointer
+ * every second, which is exactly when the Stop button moves out from under it.
+ *
+ * Nothing here updates per frame. The point of the mode is that nothing is drawn, so
+ * this panel is written once per finished race.
+ */
+---
+
+<dialog
+    id={ELEMENT_IDS.simulate.dialog}
+    aria-labelledby="simulate-dialog-title"
+    class="m-auto h-[28rem] max-h-[calc(100dvh-3rem)] w-[min(30rem,calc(100vw-2rem))] overflow-hidden rounded-md bg-neutral-900 p-0 text-stone-50 shadow-xl ring-1 ring-white/20 backdrop:bg-black/70"
+>
+    <div class="flex h-full flex-col">
+        <!-- Same rose bar as the page header, so the modal reads as part of this app. -->
+        <header class="shrink-0 bg-rose-600 px-3 py-1">
+            <h2 id="simulate-dialog-title" class="text-base font-bold">Background simulation</h2>
+        </header>
+
+        <div class="flex min-h-0 grow flex-col gap-3 p-3">
+            <p class="text-xs leading-snug text-white/60">
+                Races are being run without being drawn, as fast as this machine can
+                compute them. The run ends on its own when a car clears the course.
+            </p>
+
+            <div class="flex shrink-0 gap-6">
+                <div class="flex flex-col">
+                    <span class="text-[11px] tracking-wide text-white/60 uppercase"
+                        >Races completed</span
+                    >
+                    <span
+                        id={ELEMENT_IDS.simulate.raceCount}
+                        class="text-2xl leading-tight font-semibold tabular-nums">0</span
+                    >
+                </div>
+                <div class="flex flex-col">
+                    <span class="text-[11px] tracking-wide text-white/60 uppercase"
+                        >Best overtakes</span
+                    >
+                    <span
+                        id={ELEMENT_IDS.simulate.bestOvertakes}
+                        class="text-2xl leading-tight font-semibold tabular-nums text-amber-300"
+                        >0</span
+                    >
+                </div>
+            </div>
+
+            <!--
+                Newest first, and capped in `simulate-modal.ts`: a long run would otherwise
+                grow an unbounded list of rows nobody scrolls back to. Only this area
+                scrolls, and only vertically.
+            -->
+            <div
+                class="min-h-0 grow overflow-x-hidden overflow-y-auto rounded-sm bg-black/30 p-1"
+            >
+                <p id={ELEMENT_IDS.simulate.empty} class="px-1 py-2 text-xs text-white/50">
+                    Waiting for the first race to finish.
+                </p>
+                <ol id={ELEMENT_IDS.simulate.log} class="flex flex-col text-xs tabular-nums"></ol>
+            </div>
+
+            <!-- No tooltip on this button: inside a dialog it can only render clipped. -->
+            <menu class="flex shrink-0 justify-end">
+                <Button id={ELEMENT_IDS.buttons.simulateStop} type="button">Stop</Button>
+            </menu>
+        </div>
+    </div>
+</dialog>

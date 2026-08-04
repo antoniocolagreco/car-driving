@@ -10,7 +10,7 @@ import { ELEMENT_IDS, findElement } from './dom'
  * `value` from `initial`, it never invents a range of its own.
  */
 
-export type UiAction = 'restart' | 'loadChampion' | 'reset' | 'evolve'
+export type UiAction = 'restart' | 'loadChampion' | 'reset' | 'evolve' | 'simulate'
 
 /** The handle `app.ts` keeps on the panel after wiring it. */
 export type ControlPanel = {
@@ -320,6 +320,7 @@ export const createControlPanel = (
     wireAction(ELEMENT_IDS.buttons.reset, 'reset')
     wireAction(ELEMENT_IDS.buttons.restart, 'restart')
     wireAction(ELEMENT_IDS.buttons.evolve, 'evolve')
+    wireAction(ELEMENT_IDS.buttons.simulate, 'simulate')
 
     return {
         setChampionAvailable(available: boolean): void {

@@ -1,5 +1,12 @@
 ---
-import { ChevronsUpIcon, EyeIcon, FolderIcon, RedoIcon, TrashIcon } from '@lucide/astro'
+import {
+    ChevronsUpIcon,
+    EyeIcon,
+    FastForwardIcon,
+    FolderIcon,
+    RedoIcon,
+    TrashIcon,
+} from '@lucide/astro'
 import type { HTMLAttributes } from 'astro/types'
 import { CARS_QUANTITY, DEFAULTS, MUTATION } from '@core/config'
 import { ELEMENT_IDS } from '@ui/dom'
@@ -11,6 +18,7 @@ import Input from '@components/input.astro'
 import NumberInput from '@components/number-input.astro'
 import Range from '@components/range.astro'
 import ChampionPanel from '@components/champion-panel.astro'
+import SimulateModal from '@components/simulate-modal.astro'
 import DefaultLayout from '@layouts/default-layout.astro'
 
 type Props = HTMLAttributes<'div'>
@@ -78,6 +86,13 @@ const iconSize = 15
                     type="button"
                     title="Save the active network as winner and restart"
                     ><ChevronsUpIcon slot="icon" size={iconSize} />Evolve</Button
+                >
+                <Button
+                    id={ELEMENT_IDS.buttons.simulate}
+                    type="button"
+                    class="bg-sky-600 hover:bg-sky-700 focus-visible:outline-sky-400"
+                    title="Race in the background without drawing anything, about seventy times faster. Every finished race is listed with its overtakes and its time, and the run ends when a car clears the course"
+                    ><FastForwardIcon slot="icon" size={iconSize} />Simulate</Button
                 >
             </menu>
 
@@ -262,5 +277,6 @@ const iconSize = 15
             </InfoPanel>
             <div id={ELEMENT_IDS.statusRegion} class="sr-only" aria-live="polite"></div>
         </section>
+        <SimulateModal />
     </div>
 </DefaultLayout>
