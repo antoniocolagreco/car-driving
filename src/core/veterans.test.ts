@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { VETERANS } from '@core/config'
 import type { Network } from './neural-network'
-import { medianScore, rankRoster, selectRacers, updateRoster } from './veterans'
+import {
+    bestScore,
+    bestTime,
+    medianScore,
+    rankRoster,
+    selectRacers,
+    updateRoster,
+    worstScore,
+} from './veterans'
 
 /** A network stripped to what the archive actually reads: an identity and a record. */
 const networkWith = (id: string, scores: readonly number[]): Network =>
@@ -128,5 +136,38 @@ describe('updateRoster', () => {
         expect(updateRoster(full, [networkWith('newcomer', [10])])).toHaveLength(
             VETERANS.rosterSize,
         )
+    })
+})
+
+describe('the numbers the standings show', () => {
+    it('reports the highest and lowest overtake counts on record', () => {
+        const network = networkWith('spread', [12, 40, 22])
+
+        expect(bestScore(network)).toBe(40)
+        expect(worstScore(network)).toBe(12)
+    })
+
+    it('reports zeroes for a network that has never raced', () => {
+        const network = networkWith('fresh', [])
+
+        expect(bestScore(network)).toBe(0)
+        expect(worstScore(network)).toBe(0)
+    })
+
+    it('has no best time until a course is actually cleared', () => {
+        expect(bestTime(networkWith('never-finished', [12, 22, 30]))).toBeUndefined()
+    })
+
+    it('reports the fastest of several cleared courses', () => {
+        const network = {
+            id: 'finisher',
+            history: [
+                { overtakes: 40, seconds: 44.2 },
+                { overtakes: 12 },
+                { overtakes: 40, seconds: 39.8 },
+            ],
+        } as unknown as Network
+
+        expect(bestTime(network)).toBe(39.8)
     })
 })

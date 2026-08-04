@@ -5,6 +5,7 @@ import {
     FastForwardIcon,
     FolderIcon,
     RedoIcon,
+    TableIcon,
     TrashIcon,
 } from '@lucide/astro'
 import type { HTMLAttributes } from 'astro/types'
@@ -145,6 +146,18 @@ const iconSize = 15
             >
                 <EyeIcon slot="icon" size={iconSize} aria-hidden="true" />
                 <span id={ELEMENT_IDS.radarState}>Radar: visible</span>
+            </Button>
+
+            <Button
+                id={ELEMENT_IDS.buttons.sidePanel}
+                type="button"
+                role="switch"
+                aria-checked="false"
+                class="min-w-40"
+                title="Switch the right-hand pane between the followed car's network and the veterans standings: every network the archive remembers, with its races, its best and worst runs, its median and the time of any course it cleared"
+            >
+                <TableIcon slot="icon" size={iconSize} aria-hidden="true" />
+                <span id={ELEMENT_IDS.sidePanelState}>Panel: network</span>
             </Button>
 
             <div class="h-5 w-px bg-current opacity-20" aria-hidden="true"></div>

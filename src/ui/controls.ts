@@ -12,6 +12,9 @@ import { ELEMENT_IDS, findElement } from './dom'
 
 export type UiAction = 'restart' | 'loadChampion' | 'reset' | 'evolve' | 'simulate'
 
+/** What the right-hand pane shows: the followed car's network, or the veterans standings. */
+export type SidePanelView = 'network' | 'veterans'
+
 /** The handle `app.ts` keeps on the panel after wiring it. */
 export type ControlPanel = {
     /**
@@ -31,6 +34,8 @@ export type ControlPanelHandlers = {
     onTrafficVisibilityToggle(visible: boolean): void
     /** Radar presentation changed; sensing and network inputs remain active. */
     onRadarModeChange(mode: RadarMode): void
+    /** The right-hand pane switched between the network graph and the veterans standings. */
+    onSidePanelChange(view: SidePanelView): void
 }
 
 /**
@@ -44,6 +49,12 @@ const RADAR_LABELS: Readonly<Record<RadarMode, string>> = {
     hull: 'Radar: free area',
     zones: 'Radar: zones',
     off: 'Radar: hidden',
+}
+
+/** The label names what is on screen now, not what clicking would switch to. */
+const SIDE_PANEL_LABELS: Readonly<Record<SidePanelView, string>> = {
+    network: 'Panel: network',
+    veterans: 'Panel: veterans',
 }
 
 const isPositiveInteger = (value: number): boolean =>
@@ -278,6 +289,31 @@ export const createControlPanel = (
     }
 
     radarButton?.addEventListener('click', cycleRadarMode, { signal })
+
+    // --- Right-hand pane ------------------------------------------------------
+    // The two things worth looking at while a race runs compete for the same space and
+    // answer different questions: the graph is about the one car being followed right
+    // now, the standings are about what the run has accumulated. Showing them side by
+    // side would halve both.
+    const sidePanelButton = findElement<HTMLButtonElement>(ELEMENT_IDS.buttons.sidePanel)
+    const sidePanelState = findElement<HTMLSpanElement>(ELEMENT_IDS.sidePanelState)
+    let sidePanelView: SidePanelView = 'network'
+
+    const setSidePanelLabel = (): void => {
+        if (sidePanelState) {
+            sidePanelState.textContent = SIDE_PANEL_LABELS[sidePanelView]
+        }
+        sidePanelButton?.setAttribute('aria-checked', String(sidePanelView === 'veterans'))
+    }
+    setSidePanelLabel()
+
+    const toggleSidePanel = (): void => {
+        sidePanelView = sidePanelView === 'network' ? 'veterans' : 'network'
+        setSidePanelLabel()
+        handlers.onSidePanelChange(sidePanelView)
+    }
+
+    sidePanelButton?.addEventListener('click', toggleSidePanel, { signal })
 
     document.addEventListener(
         'keydown',

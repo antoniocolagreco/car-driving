@@ -36,6 +36,32 @@ export const medianScore = (network: Network): number => {
     return scores.length % 2 === 1 ? scores[middle] : (scores[middle - 1] + scores[middle]) / 2
 }
 
+/** The highest raw overtake count a network has ever managed, or 0 before its first race. */
+export const bestScore = (network: Network): number =>
+    network.history.reduce((best, record) => Math.max(best, record.overtakes), 0)
+
+/** The lowest raw overtake count on record, or 0 before the first race. */
+export const worstScore = (network: Network): number =>
+    network.history.length === 0
+        ? 0
+        : network.history.reduce((worst, record) => Math.min(worst, record.overtakes), Infinity)
+
+/**
+ * The fastest course this network ever cleared, or `undefined` if it never has.
+ *
+ * Only a cleared course carries a time, so this is also the answer to "has it ever
+ * actually won one": a network that has never finished has nothing to compare.
+ */
+export const bestTime = (network: Network): number | undefined => {
+    let fastest: number | undefined
+    for (const record of network.history) {
+        if (record.seconds !== undefined && (fastest === undefined || record.seconds < fastest)) {
+            fastest = record.seconds
+        }
+    }
+    return fastest
+}
+
 /** True while a network has too few races for its median to mean anything. */
 export const isProvisional = (network: Network): boolean =>
     raceCount(network) < VETERANS.provisionalRaces

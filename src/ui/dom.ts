@@ -14,6 +14,8 @@ export const ELEMENT_IDS = {
     trafficState: 'traffic-state',
     /** Text inside the radar-visibility switch. */
     radarState: 'radar-state',
+    /** Text inside the switch that chooses what the right-hand pane shows. */
+    sidePanelState: 'side-panel-state',
     buttons: {
         loadChampion: 'load-champion-button',
         reset: 'reset-network-button',
@@ -24,6 +26,7 @@ export const ELEMENT_IDS = {
         drive: 'drive-button',
         traffic: 'traffic-button',
         radar: 'radar-button',
+        sidePanel: 'side-panel-button',
     },
     inputs: {
         carsQuantityRange: 'cars-quantity-range',

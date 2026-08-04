@@ -12,7 +12,7 @@ import { type RadarMode } from '@render/car'
 import { createFrameLoop } from '@render/frame-loop'
 import { drawNetwork } from '@render/network'
 import { drawScene } from '@render/scene'
-import { type ControlPanel, createControlPanel } from '@ui/controls'
+import { type ControlPanel, type SidePanelView, createControlPanel } from '@ui/controls'
 import { createHud } from '@ui/hud'
 import { type ManualControlInput, createManualControls } from '@ui/keyboard'
 import {
@@ -30,6 +30,7 @@ import {
     saveWinner,
 } from '@ui/persistence'
 import { createSimulateModal } from '@ui/simulate-modal'
+import { createVeteransPanel } from '@ui/veterans-panel'
 import victoryAudioUrl from '../audio/win.mp3?url'
 
 /**
@@ -62,6 +63,8 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         hiddenLayers: stored.hiddenLayers,
     }
     let lastNetworkDrawMs = 0
+    /** The generation the standings on screen were built for; 0 means never painted. */
+    let standingsGeneration = 0
     // A paint-only preference: changing it must never alter or restart the simulation.
     let trafficVisible: boolean = true
     let radarMode: RadarMode = 'hull'
@@ -256,14 +259,36 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
     })
 
     const simulationLayer = createCanvasLayer(container, 'Simulation')
-    const networkLayer = createCanvasLayer(container, 'Network')
+
+    // The network graph and the veterans standings share the second grid cell, so the
+    // cell gets its own wrapper: appending both straight into the container would make
+    // it a three-column grid and squeeze the road down to a third of the width.
+    const sidePane = document.createElement('div')
+    sidePane.className = 'relative min-h-0 min-w-0'
+    container.appendChild(sidePane)
+    const networkLayer = createCanvasLayer(sidePane, 'Network')
+    const veteransPanel = createVeteransPanel(sidePane, abortController.signal)
+    let sidePanelView: SidePanelView = 'network'
+
+    /**
+     * Repaints the standings. Called once per race rather than per frame: the archive
+     * only changes when a race ends, and a hundred rows rebuilt sixty times a second
+     * would cost more than the race itself.
+     */
+    const refreshVeterans = (): void => {
+        if (sidePanelView !== 'veterans') {
+            return
+        }
+        const racingIds = new Set(simulation.state.cars.map((racingCar) => racingCar.network.id))
+        veteransPanel.update(simulation.state.veterans, racingIds)
+    }
 
     const hud = createHud()
 
     const accumulator = { seconds: 0 }
 
     const drawNetworkThrottled = (nowMs: number): void => {
-        if (nowMs - lastNetworkDrawMs < NETWORK_DRAW_INTERVAL_MS) {
+        if (sidePanelView !== 'network' || nowMs - lastNetworkDrawMs < NETWORK_DRAW_INTERVAL_MS) {
             return
         }
         lastNetworkDrawMs = nowMs
@@ -304,6 +329,14 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             })
         }
         victoryWasActive = victoryIsActive
+
+        // Once per race, on the generation the new grid belongs to: the standings answer
+        // "who is out there and what have they done", and both halves of that only change
+        // when a race starts.
+        if (simulation.state.generation !== standingsGeneration) {
+            standingsGeneration = simulation.state.generation
+            refreshVeterans()
+        }
 
         drawScene(simulationLayer, simulation.state, { trafficVisible, radarMode })
         drawNetworkThrottled(performance.now())
@@ -407,6 +440,16 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             onRadarModeChange: (mode) => {
                 radarMode = mode
             },
+            onSidePanelChange: (view) => {
+                sidePanelView = view
+                veteransPanel.setVisible(view === 'veterans')
+                // `createCanvasLayer` sets `display: block` inline, so hiding the canvas
+                // has to go through the same property rather than through a class.
+                networkLayer.element.style.display = view === 'network' ? 'block' : 'none'
+                // Painted here rather than waiting for the next race: the standings are
+                // switched to in order to be read now, and the next race can be a minute off.
+                refreshVeterans()
+            },
         },
         abortController.signal,
     )
@@ -431,6 +474,8 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             victoryAudio.currentTime = 0
             simulationLayer.destroy()
             networkLayer.destroy()
+            veteransPanel.destroy()
+            sidePane.remove()
         },
     }
 }
