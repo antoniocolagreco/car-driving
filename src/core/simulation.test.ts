@@ -133,6 +133,51 @@ describe('createSimulation: collisions', () => {
     })
 })
 
+describe('createSimulation: the car in front', () => {
+    // The badge and the camera answer "who is winning the race you are watching". The
+    // round's result answers "which network gets bred", and a wreck keeps what it earned
+    // before it stopped, so the two are different cars more often than not.
+    it('badges the car in front rather than the highest score, and points the camera at it', () => {
+        const sim = createSimulation(smallSettings, { trafficSeed: 'lead-badge' })
+        const ahead = sim.state.cars[0]
+        const scorer = sim.state.cars[1]
+
+        // The scorer banked eight before hitting something and stopping where it was.
+        scorer.stats.overtakes = 8
+        crash(scorer.car)
+        // The other is still driving, two cars passed, and 200 px further up the road,
+        // which is inside the first gap and so passes nothing new.
+        ahead.stats.overtakes = 2
+        ahead.car.position = vec(ahead.car.position.x, ahead.car.position.y - 200)
+
+        sim.step(SIMULATION.stepSeconds)
+
+        expect(sim.state.bestCar).toBe(scorer)
+        expect(sim.state.leadCar).toBe(ahead)
+        expect(ahead.winner).toBe(true)
+        expect(scorer.winner).toBe(false)
+        expect(sim.state.activeCar).toBe(sim.state.leadCar)
+    })
+
+    it('hands the badge to the best result once nobody is left racing', () => {
+        const sim = createSimulation(smallSettings, {
+            winner: stationaryNetwork(),
+            trafficSeed: 'lead-empty',
+        })
+        sim.state.cars[0].stats.overtakes = 3
+
+        // Nobody moves, so the idle timeout empties the field.
+        const steps = Math.ceil(SIMULATION.idleTimeoutSeconds / SIMULATION.stepSeconds) + 2
+        for (let step = 0; step < steps; step++) {
+            sim.step(SIMULATION.stepSeconds)
+        }
+
+        expect(sim.state.aliveCars).toEqual([])
+        expect(sim.state.leadCar).toBe(sim.state.bestCar)
+        expect(sim.state.activeCar).toBe(sim.state.bestCar)
+    })
+})
+
 describe('createSimulation: idle death', () => {
     it('kills a car that makes no progress after SIMULATION.idleTimeoutSeconds', () => {
         const winner = stationaryNetwork()
