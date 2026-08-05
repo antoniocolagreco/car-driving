@@ -234,7 +234,10 @@ export const sensorZones = (position: Vec2, heading: number): readonly ZoneDefin
             area: rightSide,
             range: SENSOR_RANGE.side,
             measureDistance: (point: Vec2): number =>
-                Math.max(0, dot(vec(point.x - bodyFrontRight.x, point.y - bodyFrontRight.y), right)),
+                Math.max(
+                    0,
+                    dot(vec(point.x - bodyFrontRight.x, point.y - bodyFrontRight.y), right),
+                ),
         },
     ]
 }
@@ -253,7 +256,8 @@ const closestZoneHit = (zone: ZoneDefinition, obstacle: Segment): SensorHit | nu
     if (lengthSquared > 0) {
         const origin = zone.area[0]
         const projection = clamp(
-            dot(vec(origin.x - inside.a.x, origin.y - inside.a.y), segmentDirection) / lengthSquared,
+            dot(vec(origin.x - inside.a.x, origin.y - inside.a.y), segmentDirection) /
+                lengthSquared,
             0,
             1,
         )

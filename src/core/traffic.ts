@@ -1,7 +1,7 @@
-import { SIMULATION } from "@core/config";
-import { type Car, TRAFFIC_CAR_SPEC, createCar } from "./car";
-import { type Random, createRandom } from "@core/random";
-import { type Road, lanePosition } from "./road";
+import { SIMULATION } from '@core/config'
+import { type Car, TRAFFIC_CAR_SPEC, createCar } from './car'
+import { type Random, createRandom } from '@core/random'
+import { type Road, lanePosition } from './road'
 
 /**
  * Every traffic car shares one dark body colour on purpose. Traffic is scenery to be
@@ -9,7 +9,7 @@ import { type Road, lanePosition } from "./road";
  * the colourful bodies. Giving traffic random colours too makes it impossible to tell
  * at a glance who is driving and who is being driven around.
  */
-const TRAFFIC_COLOR = "#1c1917";
+const TRAFFIC_COLOR = '#1c1917'
 
 /**
  * Deterministic traffic generation. The obstacle course a car has to drive
@@ -19,147 +19,138 @@ const TRAFFIC_COLOR = "#1c1917";
  */
 
 type TrafficPatternKind =
-	| "left"
-	| "middle"
-	| "right"
-	| "left-middle"
-	| "left-right"
-	| "right-middle";
+    'left' | 'middle' | 'right' | 'left-middle' | 'left-right' | 'right-middle'
 /** One row of the traffic course: which lanes are occupied, and by how much each car is offset. */
 export type TrafficPattern = {
-	readonly name: string;
-	readonly difficulty: "easy" | "medium" | "hard" | "veryHard";
-	readonly kind: TrafficPatternKind;
-	/** Cars in this row: lane index plus an extra offset in px (0 = on the row line). */
-	readonly cars: readonly { readonly lane: number; readonly offset: number }[];
-};
+    readonly name: string
+    readonly difficulty: 'easy' | 'medium' | 'hard' | 'veryHard'
+    readonly kind: TrafficPatternKind
+    /** Cars in this row: lane index plus an extra offset in px (0 = on the row line). */
+    readonly cars: readonly { readonly lane: number; readonly offset: number }[]
+}
 
 export const TRAFFIC_PATTERNS: readonly TrafficPattern[] = [
-	// Easy: a single car, or two cars that leave the middle lane open.
-	{
-		name: "singleCenter",
-		difficulty: "easy",
-		kind: "middle",
-		cars: [{ lane: 1, offset: 0 }],
-	},
+    // Easy: a single car, or two cars that leave the middle lane open.
+    {
+        name: 'singleCenter',
+        difficulty: 'easy',
+        kind: 'middle',
+        cars: [{ lane: 1, offset: 0 }],
+    },
 
-	{
-		name: "singleLeft",
-		difficulty: "easy",
-		kind: "left",
-		cars: [{ lane: 0, offset: 0 }],
-	},
-	{
-		name: "singleRight",
-		difficulty: "easy",
-		kind: "right",
-		cars: [{ lane: 2, offset: 0 }],
-	},
-	{
-		name: "bothSides",
-		difficulty: "easy",
-		kind: "left-right",
-		cars: [
-			{ lane: 0, offset: 0 },
-			{ lane: 2, offset: 0 },
-		],
-	},
-	// Medium: two cars, one lane still open but closer to the others.
-	{
-		name: "doubleLeft",
-		difficulty: "medium",
-		kind: "left-middle",
-		cars: [
-			{ lane: 0, offset: 0 },
-			{ lane: 1, offset: 0 },
-		],
-	},
-	{
-		name: "doubleRight",
-		difficulty: "medium",
-		kind: "right-middle",
-		cars: [
-			{ lane: 1, offset: 0 },
-			{ lane: 2, offset: 0 },
-		],
-	},
-	// The second car is staggered on purpose: without the offset this row would be
-	// `bothSides` again (lanes 0 and 2, level) rather than a distinct obstacle.
-	{
-		name: "doubleMiddle",
-		difficulty: "medium",
-		kind: "left-right",
-		cars: [
-			{ lane: 0, offset: 0 },
-			{ lane: 2, offset: -100 },
-		],
-	},
-	// Two cars per outer lane, each pair staggered: without the offsets the two cars
-	// of a pair would spawn on top of each other.
-	{
-		name: "doubleBothSides",
-		difficulty: "medium",
-		kind: "left-right",
-		cars: [
-			{ lane: 0, offset: 0 },
-			{ lane: 0, offset: -120 },
-			{ lane: 2, offset: 0 },
-			{ lane: 2, offset: -120 },
-		],
-	},
-	// Hard: a diagonal "staircase" the car must weave through.
-	{
-		name: "leftStairs",
-		difficulty: "hard",
+    {
+        name: 'singleLeft',
+        difficulty: 'easy',
+        kind: 'left',
+        cars: [{ lane: 0, offset: 0 }],
+    },
+    {
+        name: 'singleRight',
+        difficulty: 'easy',
+        kind: 'right',
+        cars: [{ lane: 2, offset: 0 }],
+    },
+    {
+        name: 'bothSides',
+        difficulty: 'easy',
+        kind: 'left-right',
+        cars: [
+            { lane: 0, offset: 0 },
+            { lane: 2, offset: 0 },
+        ],
+    },
+    // Medium: two cars, one lane still open but closer to the others.
+    {
+        name: 'doubleLeft',
+        difficulty: 'medium',
+        kind: 'left-middle',
+        cars: [
+            { lane: 0, offset: 0 },
+            { lane: 1, offset: 0 },
+        ],
+    },
+    {
+        name: 'doubleRight',
+        difficulty: 'medium',
+        kind: 'right-middle',
+        cars: [
+            { lane: 1, offset: 0 },
+            { lane: 2, offset: 0 },
+        ],
+    },
+    // The second car is staggered on purpose: without the offset this row would be
+    // `bothSides` again (lanes 0 and 2, level) rather than a distinct obstacle.
+    {
+        name: 'doubleMiddle',
+        difficulty: 'medium',
+        kind: 'left-right',
+        cars: [
+            { lane: 0, offset: 0 },
+            { lane: 2, offset: -100 },
+        ],
+    },
+    // Two cars per outer lane, each pair staggered: without the offsets the two cars
+    // of a pair would spawn on top of each other.
+    {
+        name: 'doubleBothSides',
+        difficulty: 'medium',
+        kind: 'left-right',
+        cars: [
+            { lane: 0, offset: 0 },
+            { lane: 0, offset: -120 },
+            { lane: 2, offset: 0 },
+            { lane: 2, offset: -120 },
+        ],
+    },
+    // Hard: a diagonal "staircase" the car must weave through.
+    {
+        name: 'leftStairs',
+        difficulty: 'hard',
 
-		kind: "left-middle",
-		cars: [
-			{ lane: 0, offset: 0 },
-			{ lane: 1, offset: -100 },
-		],
-	},
-	{
-		name: "rightStairs",
-		difficulty: "hard",
+        kind: 'left-middle',
+        cars: [
+            { lane: 0, offset: 0 },
+            { lane: 1, offset: -100 },
+        ],
+    },
+    {
+        name: 'rightStairs',
+        difficulty: 'hard',
 
-		kind: "right-middle",
-		cars: [
-			{ lane: 1, offset: -100 },
-			{ lane: 2, offset: 0 },
-		],
-	},
-	// Very hard: a three-car "L" shape that blocks two lanes at two different depths.
-	{
-		name: "rightL",
-		difficulty: "veryHard",
-		kind: "right-middle",
-		cars: [
-			{ lane: 2, offset: 0 },
-			{ lane: 1, offset: 0 },
-			{ lane: 1, offset: -120 },
-		],
-	},
-	{
-		name: "leftL",
-		difficulty: "veryHard",
-		kind: "left-middle",
-		cars: [
-			{ lane: 0, offset: 0 },
-			{ lane: 1, offset: 0 },
-			{ lane: 1, offset: -120 },
-		],
-	},
-] as const;
+        kind: 'right-middle',
+        cars: [
+            { lane: 1, offset: -100 },
+            { lane: 2, offset: 0 },
+        ],
+    },
+    // Very hard: a three-car "L" shape that blocks two lanes at two different depths.
+    {
+        name: 'rightL',
+        difficulty: 'veryHard',
+        kind: 'right-middle',
+        cars: [
+            { lane: 2, offset: 0 },
+            { lane: 1, offset: 0 },
+            { lane: 1, offset: -120 },
+        ],
+    },
+    {
+        name: 'leftL',
+        difficulty: 'veryHard',
+        kind: 'left-middle',
+        cars: [
+            { lane: 0, offset: 0 },
+            { lane: 1, offset: 0 },
+            { lane: 1, offset: -120 },
+        ],
+    },
+] as const
 
 /** Used when the caller does not pass a seed, so a plain `generateTraffic(road, rows)` call still repeats. */
-const DEFAULT_SEED = "1234";
+const DEFAULT_SEED = '1234'
 
-const patternsOf = (
-	...difficulties: readonly TrafficPattern["difficulty"][]
-): TrafficPattern[] =>
-	TRAFFIC_PATTERNS.filter((pattern) =>
-		difficulties.includes(pattern.difficulty),
-	);
+const patternsOf = (...difficulties: readonly TrafficPattern['difficulty'][]): TrafficPattern[] =>
+    TRAFFIC_PATTERNS.filter((pattern) => difficulties.includes(pattern.difficulty))
 
 /**
  * Builds the row-by-row course: one quarter per difficulty, easy first, and each
@@ -182,47 +173,39 @@ const patternsOf = (
  *   same gap are one obstacle with a hole in it and are cleared by driving straight.
  */
 const buildCourse = (random: Random, rows: number): TrafficPattern[] => {
-	const sectionSize: number = Math.floor(rows / 4);
-	const course: TrafficPattern[] = [];
-	const unused = new Set<string>(TRAFFIC_PATTERNS.map((pattern) => pattern.name));
+    const sectionSize: number = Math.floor(rows / 4)
+    const course: TrafficPattern[] = []
+    const unused = new Set<string>(TRAFFIC_PATTERNS.map((pattern) => pattern.name))
 
-	const appendSection = (
-		pool: readonly TrafficPattern[],
-		length: number,
-	): void => {
-		for (let row = 0; row < length; row++) {
-			const previousKind: TrafficPatternKind | undefined =
-				course[course.length - 1]?.kind;
+    const appendSection = (pool: readonly TrafficPattern[], length: number): void => {
+        for (let row = 0; row < length; row++) {
+            const previousKind: TrafficPatternKind | undefined = course[course.length - 1]?.kind
 
-			// Every pool holds at least two kinds, so the fallback to `pool` is only
-			// ever reached by a future catalogue with a single-kind difficulty.
-			const allowed: readonly TrafficPattern[] = pool.filter(
-				(pattern) => pattern.kind !== previousKind,
-			);
-			const candidates: readonly TrafficPattern[] =
-				allowed.length > 0 ? allowed : pool;
+            // Every pool holds at least two kinds, so the fallback to `pool` is only
+            // ever reached by a future catalogue with a single-kind difficulty.
+            const allowed: readonly TrafficPattern[] = pool.filter(
+                (pattern) => pattern.kind !== previousKind,
+            )
+            const candidates: readonly TrafficPattern[] = allowed.length > 0 ? allowed : pool
 
-			const fresh: TrafficPattern[] = candidates.filter((pattern) =>
-				unused.has(pattern.name),
-			);
-			const choices: readonly TrafficPattern[] =
-				fresh.length > 0 ? fresh : candidates;
+            const fresh: TrafficPattern[] = candidates.filter((pattern) => unused.has(pattern.name))
+            const choices: readonly TrafficPattern[] = fresh.length > 0 ? fresh : candidates
 
-			const chosen: TrafficPattern = choices[random.nextInt(0, choices.length)];
-			unused.delete(chosen.name);
-			course.push(chosen);
-		}
-	};
+            const chosen: TrafficPattern = choices[random.nextInt(0, choices.length)]
+            unused.delete(chosen.name)
+            course.push(chosen)
+        }
+    }
 
-	appendSection(patternsOf("easy"), sectionSize);
-	appendSection(patternsOf("easy", "medium"), sectionSize);
-	appendSection(patternsOf("easy", "medium", "hard"), sectionSize);
-	// The last section takes whatever the flooring left over, so short courses still
-	// end on the full catalogue rather than losing rows.
-	appendSection(TRAFFIC_PATTERNS, rows - sectionSize * 3);
+    appendSection(patternsOf('easy'), sectionSize)
+    appendSection(patternsOf('easy', 'medium'), sectionSize)
+    appendSection(patternsOf('easy', 'medium', 'hard'), sectionSize)
+    // The last section takes whatever the flooring left over, so short courses still
+    // end on the full catalogue rather than losing rows.
+    appendSection(TRAFFIC_PATTERNS, rows - sectionSize * 3)
 
-	return course;
-};
+    return course
+}
 
 /**
  * Generates the traffic course ahead of the start line: `rows` rows of the road,
@@ -240,24 +223,24 @@ const buildCourse = (random: Random, rows: number): TrafficPattern[] => {
  * nearly stopped paying out.
  */
 export const generateTraffic = (
-	road: Road,
-	rows: number,
-	seed: string | number = DEFAULT_SEED,
+    road: Road,
+    rows: number,
+    seed: string | number = DEFAULT_SEED,
 ): Car[] => {
-	const random = createRandom(seed);
-	const course = buildCourse(random, rows);
-	const traffic: Car[] = [];
+    const random = createRandom(seed)
+    const course = buildCourse(random, rows)
+    const traffic: Car[] = []
 
-	course.forEach((pattern, rowIndex) => {
-		const rowOffset = -SIMULATION.trafficRowSpacing * (rowIndex + 1);
+    course.forEach((pattern, rowIndex) => {
+        const rowOffset = -SIMULATION.trafficRowSpacing * (rowIndex + 1)
 
-		for (const spot of pattern.cars) {
-			const position = lanePosition(road, spot.lane, rowOffset + spot.offset);
-			const car = createCar(position, TRAFFIC_CAR_SPEC, TRAFFIC_COLOR);
-			car.controls.throttle = 1;
-			traffic.push(car);
-		}
-	});
+        for (const spot of pattern.cars) {
+            const position = lanePosition(road, spot.lane, rowOffset + spot.offset)
+            const car = createCar(position, TRAFFIC_CAR_SPEC, TRAFFIC_COLOR)
+            car.controls.throttle = 1
+            traffic.push(car)
+        }
+    })
 
-	return traffic;
-};
+    return traffic
+}

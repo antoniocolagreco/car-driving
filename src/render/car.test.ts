@@ -18,9 +18,20 @@ type DrawingContextStub = CanvasRenderingContext2D & {
 
 const createContext = (): DrawingContextStub =>
     ({
-        beginPath: vi.fn(), closePath: vi.fn(), fill: vi.fn(), lineTo: vi.fn(), moveTo: vi.fn(),
-        restore: vi.fn(), save: vi.fn(), setLineDash: vi.fn(), stroke: vi.fn(), arc: vi.fn(),
-        fillStyle: '', strokeStyle: '', globalAlpha: 1, lineWidth: 1,
+        beginPath: vi.fn(),
+        closePath: vi.fn(),
+        fill: vi.fn(),
+        lineTo: vi.fn(),
+        moveTo: vi.fn(),
+        restore: vi.fn(),
+        save: vi.fn(),
+        setLineDash: vi.fn(),
+        stroke: vi.fn(),
+        arc: vi.fn(),
+        fillStyle: '',
+        strokeStyle: '',
+        globalAlpha: 1,
+        lineWidth: 1,
     }) as unknown as DrawingContextStub
 
 describe('drawSensors', () => {
@@ -29,14 +40,21 @@ describe('drawSensors', () => {
         const sensor: SensorState = {
             origin: { x: 0, y: 0 },
             readings: [0.5],
-            zones: [{
-                id: SENSOR_ZONE.FRONT,
-                area: [{ x: -20, y: 0 }, { x: 20, y: 0 }, { x: 20, y: -700 }, { x: -20, y: -700 }],
-                range: 700,
-                distance: 140,
-                closestHit: { point: { x: 5, y: -140 }, distance: 140 },
-                reading: 0.8,
-            }],
+            zones: [
+                {
+                    id: SENSOR_ZONE.FRONT,
+                    area: [
+                        { x: -20, y: 0 },
+                        { x: 20, y: 0 },
+                        { x: 20, y: -700 },
+                        { x: -20, y: -700 },
+                    ],
+                    range: 700,
+                    distance: 140,
+                    closestHit: { point: { x: 5, y: -140 }, distance: 140 },
+                    reading: 0.8,
+                },
+            ],
         }
 
         drawSensors(context, sensor)
@@ -66,7 +84,11 @@ describe('drawSensors', () => {
             zones: [SENSOR_ZONE.LEFT_INNER, SENSOR_ZONE.RIGHT_INNER, SENSOR_ZONE.RIGHT_MIDDLE].map(
                 (id, index) => ({
                     id,
-                    area: [{ x: 0, y: 0 }, { x: -150 + index * 100, y: -700 }, { x: -50 + index * 100, y: -700 }],
+                    area: [
+                        { x: 0, y: 0 },
+                        { x: -150 + index * 100, y: -700 },
+                        { x: -50 + index * 100, y: -700 },
+                    ],
                     range: 700,
                     distance: 140,
                     closestHit: { point: points[index], distance: 140 },
@@ -98,7 +120,11 @@ describe('drawSensors', () => {
             zones: [
                 {
                     id: SENSOR_ZONE.LEFT_INNER,
-                    area: [{ x: 0, y: 0 }, { x: -100, y: -700 }, { x: 0, y: -700 }],
+                    area: [
+                        { x: 0, y: 0 },
+                        { x: -100, y: -700 },
+                        { x: 0, y: -700 },
+                    ],
                     range: 700,
                     distance: Infinity,
                     closestHit: null,
@@ -119,7 +145,11 @@ describe('drawSensors', () => {
                 },
                 {
                     id: SENSOR_ZONE.RIGHT_INNER,
-                    area: [{ x: 0, y: 0 }, { x: 0, y: -700 }, { x: 100, y: -700 }],
+                    area: [
+                        { x: 0, y: 0 },
+                        { x: 0, y: -700 },
+                        { x: 100, y: -700 },
+                    ],
                     range: 700,
                     distance: Infinity,
                     closestHit: null,
@@ -149,7 +179,11 @@ describe('drawSensors', () => {
             zones: [
                 {
                     id: SENSOR_ZONE.LEFT_INNER,
-                    area: [{ x: 0, y: 0 }, { x: -100, y: -700 }, { x: 0, y: -700 }],
+                    area: [
+                        { x: 0, y: 0 },
+                        { x: -100, y: -700 },
+                        { x: 0, y: -700 },
+                    ],
                     range: 700,
                     distance: Infinity,
                     closestHit: null,
@@ -195,7 +229,11 @@ describe('drawSensors', () => {
             zones: [
                 {
                     id: SENSOR_ZONE.FRONT,
-                    area: [{ x: 0, y: 0 }, { x: -100, y: -700 }, { x: 0, y: -700 }],
+                    area: [
+                        { x: 0, y: 0 },
+                        { x: -100, y: -700 },
+                        { x: 0, y: -700 },
+                    ],
                     range: 700,
                     distance: Infinity,
                     closestHit: null,

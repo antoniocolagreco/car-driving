@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { type Polygon, type Segment, type Vec2, clipSegmentToConvexPolygon, vec } from '@core/geometry'
+import {
+    type Polygon,
+    type Segment,
+    type Vec2,
+    clipSegmentToConvexPolygon,
+    vec,
+} from '@core/geometry'
 import { RACING_CAR, SENSOR_RANGE } from '@core/config'
 import {
     SENSOR_ZONE,
@@ -193,7 +199,10 @@ describe('castSensors', () => {
     })
 
     it('uses the nearest point when multiple obstacles enter the same zone', () => {
-        const sensor = castSensors(origin, 0, [obstacleInSector(-7.5, 300), obstacleInSector(-7.5, 120)])
+        const sensor = castSensors(origin, 0, [
+            obstacleInSector(-7.5, 300),
+            obstacleInSector(-7.5, 120),
+        ])
         const rightInner = sensor.zones.find((zone) => zone.id === SENSOR_ZONE.RIGHT_INNER)
 
         expect(rightInner?.distance).toBeLessThan(130)
@@ -215,7 +224,10 @@ describe('castSensors', () => {
     })
 
     it('is deterministic for equal world inputs', () => {
-        const obstacles: Segment[] = [obstacleInSector(7.5), { a: vec(-15, -180), b: vec(15, -180) }]
+        const obstacles: Segment[] = [
+            obstacleInSector(7.5),
+            { a: vec(-15, -180), b: vec(15, -180) },
+        ]
         const first = castSensors(origin, 0, obstacles)
         const second = castSensors(origin, 0, obstacles)
 
