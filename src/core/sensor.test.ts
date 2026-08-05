@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-    type Polygon,
-    type Segment,
-    type Vec2,
-    clipSegmentToConvexPolygon,
-    vec,
-} from '@core/geometry'
+import { type Polygon, type Segment, type Vec2, clipSegmentToConvexPolygon, vec } from '@core/geometry'
 import { RACING_CAR, SENSOR_RANGE } from '@core/config'
 import {
     SENSOR_ZONE,
@@ -103,18 +97,18 @@ describe('castSensors', () => {
         }
     })
 
-    // The ranges used to taper towards the flanks. They no longer do, and that is a
-    // decision rather than an oversight: a zone reports 0 for anything past its own
-    // limit, which is what clear road reports, so a shorter range does not see a nearer
-    // world, it invents an empty one. See `SENSOR_RANGE`.
-    it('looks equally deep in every direction', () => {
+    it('looks deepest straight ahead and shorter with every step towards a flank', () => {
         const ranges = sensorZones(origin, 0).map((zone) => zone.range)
+        const front = Math.floor(ranges.length / 2)
 
         expect(ranges).toEqual([...ranges].reverse())
-        expect(new Set(ranges)).toEqual(new Set([SENSOR_RANGE.front]))
+        expect(ranges[front]).toBe(SENSOR_RANGE.front)
+        for (let index = 1; index <= front; index++) {
+            expect(ranges[index]).toBeGreaterThan(ranges[index - 1])
+        }
     })
 
-    it('projects full-flank side areas as rectangles out to the side range', () => {
+    it('projects full-flank side areas out to the short side range, not the front one', () => {
         const halfWidth = RACING_CAR.width / 2
         const halfHeight = RACING_CAR.height / 2
         const sensor = castSensors(origin, 0, [
@@ -199,10 +193,7 @@ describe('castSensors', () => {
     })
 
     it('uses the nearest point when multiple obstacles enter the same zone', () => {
-        const sensor = castSensors(origin, 0, [
-            obstacleInSector(-7.5, 300),
-            obstacleInSector(-7.5, 120),
-        ])
+        const sensor = castSensors(origin, 0, [obstacleInSector(-7.5, 300), obstacleInSector(-7.5, 120)])
         const rightInner = sensor.zones.find((zone) => zone.id === SENSOR_ZONE.RIGHT_INNER)
 
         expect(rightInner?.distance).toBeLessThan(130)
@@ -224,10 +215,7 @@ describe('castSensors', () => {
     })
 
     it('is deterministic for equal world inputs', () => {
-        const obstacles: Segment[] = [
-            obstacleInSector(7.5),
-            { a: vec(-15, -180), b: vec(15, -180) },
-        ]
+        const obstacles: Segment[] = [obstacleInSector(7.5), { a: vec(-15, -180), b: vec(15, -180) }]
         const first = castSensors(origin, 0, obstacles)
         const second = castSensors(origin, 0, obstacles)
 

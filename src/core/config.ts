@@ -120,29 +120,14 @@ export const TRAFFIC_CAR = {
 	height: 96,
 } as const;
 
-/**
- * Range and resolution of each perception zone. One number for all of them: 700 px is
- * 1.4 traffic rows, so every zone now reaches the row after the one being negotiated.
- *
- * They used to taper from 700 at the front down to 200 at the flanks, on the argument
- * that a car needs depth ahead and only proximity beside it. The taper turned out to
- * decide something else: the reading is `1 - distance / range`, so a shorter range does
- * not merely see less, it reports 0 for anything past its own limit, and 0 is what clear
- * road reports too. A car in the next lane 400 px ahead was, to a 300 px zone, not there.
- * That is precisely the information needed to choose which side of a row to take, since
- * the obstacle that makes one side wrong sits in the row beyond it.
- *
- * The cost is resolution: over a longer range the same 0 to 1 reading resolves distance
- * more coarsely, so a flank obstacle at 100 px and one at 200 px now differ by 0.14
- * rather than by 0.5.
- */
+/** Range and resolution of each perception zone, deepest in front and shortest at the flanks. */
 export const SENSOR_RANGE = {
 	front: 700,
-	inner: 700,
-	middle: 700,
-	outer: 700,
-	lateral: 700,
-	side: 700,
+	inner: 600,
+	middle: 500,
+	outer: 400,
+	lateral: 300,
+	side: 200,
 } as const;
 
 /** The deepest zone: the broad-phase reach for skipping obstacles no zone can see. */
