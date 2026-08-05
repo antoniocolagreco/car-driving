@@ -469,35 +469,39 @@ export const createSimulation = (
 
     /** Finalizes parent selection and enters the game-over phase exactly once. */
     const finishGeneration = (): void => {
+        const roundWinner: RacingCar | undefined = state.bestCar
+
+        // The demonstration is trained in before a single result is written down, so that
+        // everything below files the race under the network that will actually drive the
+        // next one. Consolidation rewrites the weights, and with them the content-addressed
+        // id, so running it afterwards would leave the archive saved with the weights that
+        // raced while the copy in memory carried the trained ones.
+        if (roundWinner && playerWasDriven && roundWinner === state.playerCar) {
+            completeConsolidation(roundWinner.network)
+        }
+
         recordRaceResults()
 
-        const roundWinner: RacingCar | undefined = state.bestCar
         if (roundWinner) {
-            if (playerWasDriven && roundWinner === state.playerCar) {
-                completeConsolidation(roundWinner.network)
-            }
             roundWinner.network.generation += 1
 
             // Whoever wins the round takes the seat for the next one. Nothing protects an
             // incumbent here, because scores from different layouts are not comparable
             // anyway; what stops a good network from being lost to one bad draw is the
             // archive, which keeps it racing on its median rather than on this round.
-            const rankedNetworks: Network[] = selectParents(state.cars, PARENT_COUNT).map(
-                (car) => car.network,
-            )
-
-            // A winning human demonstration takes over the whole parent pool, so the next
-            // generation develops the network that was just taught.
-            state.parents =
-                playerWasDriven && roundWinner === state.playerCar
-                    ? [roundWinner.network]
-                    : rankedNetworks
+            //
+            // The player's network is ranked here like any other competitor. It used to
+            // take over the whole pool whenever a human won, which threw away three
+            // working lineages on the strength of one lap somebody drove by hand; winning
+            // already makes it `parents[0]`, which is elitism plus the entire refining
+            // band, and that is what "the next generation is bred from your driving" means.
+            state.parents = selectParents(state.cars, PARENT_COUNT).map((car) => car.network)
             state.winner = state.parents[0]
         }
 
-        // Reported after the parent election, so a human demonstration that beat the
-        // course is offered in its consolidated form: the network that actually goes on
-        // to drive, not the half-trained one it held while the player was steering.
+        // A human demonstration that beat the course is therefore reported in its
+        // consolidated form: the network that goes on to drive, not the half-trained one it
+        // held while the player was steering.
         // `lastOvertakeAtSeconds` is the finish line here, since the last overtake of a
         // cleared course IS the last traffic car: the victory parade is not part of it.
         if (state.courseCleared && state.courseWinner) {

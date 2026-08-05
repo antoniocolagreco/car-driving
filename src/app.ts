@@ -191,9 +191,9 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
     }
 
     /**
-     * The record holder. Loaded once, replaced only by a strictly faster finish, and
-     * dropped when its architecture stops matching the settings, because a record nobody
-     * can load or race against is not a record.
+     * The record holder. Loaded once, replaced by whoever clears a course next, and
+     * dropped when its architecture stops matching the settings, because a champion nobody
+     * can load or race against cannot hold the seat.
      */
     let champion: ChampionRecord | undefined = loadChampion()
     if (champion && !isCompatibleNetwork(champion.network, settings.hiddenLayers)) {

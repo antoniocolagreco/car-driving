@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { vec } from '@core/geometry'
-import { SIMULATION, VETERANS } from '@core/config'
+import { PARENT_COUNT, SIMULATION, VETERANS } from '@core/config'
 import { SENSOR_ZONE_ORDER, sensorOrigin } from '@core/sensor'
 import { type Network, createNetwork } from './neural-network'
 import { type Controls, crash } from './car'
@@ -567,7 +567,7 @@ describe('createSimulation: the player car', () => {
         expect(parametersAfter).toBe(parametersBefore)
     })
 
-    it('hands a winning manual run to the whole next generation', () => {
+    it('breeds a winning manual run as the elite, without emptying the parent pool', () => {
         const sim = createSimulation(smallSettings, { trafficSeed: 'taught' })
         sim.startManualDriving({ throttle: 1, brake: 0, steering: 0 })
         sim.beginManualDriving()
@@ -576,11 +576,18 @@ describe('createSimulation: the player car', () => {
             sim.step(SIMULATION.stepSeconds)
         }
 
-        // Make the player the round's best, then end the round.
         const player = sim.state.playerCar
         const taughtNetwork = player?.network
-        const overtakes: number[] = sim.state.cars.map((racingCar) =>
-            racingCar === player ? 10 : 0,
+        // The brake bonus is worth more than the spread set below, and the AI cars decide
+        // for themselves whether to touch the brake. Cleared here so the ranking under
+        // test is the overtake ranking.
+        for (const racingCar of sim.state.cars) {
+            racingCar.stats.usedBrake = false
+        }
+        // The player wins, and the rest of the field still scores: they are owed the seats
+        // behind it.
+        const overtakes: number[] = sim.state.cars.map((racingCar, index) =>
+            racingCar === player ? 10 : 9 - index,
         )
         const beforeConsolidation: string | undefined = JSON.stringify(
             taughtNetwork?.layers.map((layer) => ({
@@ -599,14 +606,73 @@ describe('createSimulation: the player car', () => {
         )
         expect(afterConsolidation).not.toBe(beforeConsolidation)
 
+        // First place, and nothing more than first place: the networks it beat keep their
+        // seats instead of being cleared out of the pool.
         expect(sim.state.winner).toBe(taughtNetwork)
-        expect(sim.state.parents).toEqual([taughtNetwork])
+        expect(sim.state.parents[0]).toBe(taughtNetwork)
+        expect(sim.state.parents).toHaveLength(PARENT_COUNT)
+        expect(new Set(sim.state.parents).size).toBe(PARENT_COUNT)
 
         runThroughGameOver(sim)
 
-        const nextWinner = sim.state.cars[0]
-        expect(nextWinner.network).toBe(taughtNetwork)
-        expect(nextWinner.car.controls.throttle).toBeGreaterThan(0)
+        const nextElite = sim.state.cars[0]
+        expect(nextElite.network).toBe(taughtNetwork)
+        expect(nextElite.car.controls.throttle).toBeGreaterThan(0)
+    })
+
+    // The player's car is a competitor, not a guest: whatever the round decides about it
+    // is decided by the same ranking that decides everything else.
+    it('admits a top-scoring player network to the veterans archive like any other car', () => {
+        const sim = createSimulation(smallSettings, { trafficSeed: 'player-veteran' })
+        sim.startManualDriving({ throttle: 1, brake: 0, steering: 0 })
+        sim.beginManualDriving()
+        sim.step(SIMULATION.stepSeconds)
+
+        const player = sim.state.playerCar
+        const taughtNetwork = player?.network
+        for (const racingCar of sim.state.cars) {
+            racingCar.stats.usedBrake = false
+        }
+        finishRoundWithOvertakes(
+            sim,
+            sim.state.cars.map((racingCar, index) => (racingCar === player ? 10 : 9 - index)),
+        )
+
+        expect(sim.state.veterans).toHaveLength(VETERANS.admittedPerRace)
+        expect(sim.state.veterans[0]).toBe(taughtNetwork)
+        // Admitted with the race that earned it, not with an empty record.
+        expect(taughtNetwork?.history).toHaveLength(1)
+    })
+
+    // Consolidation rewrites the weights and the id derived from them, so it has to be
+    // over before the archive is written: otherwise localStorage keeps the network that
+    // raced while memory keeps the one that was trained.
+    it('stores the consolidated player network in the archive, not the one that raced', () => {
+        let savedRosterIds: string[] = []
+        const sim = createSimulation(smallSettings, {
+            trafficSeed: 'player-consolidated',
+            onVeteransChanged: (roster) => {
+                savedRosterIds = roster.map((network) => network.id)
+            },
+        })
+        sim.startManualDriving({ throttle: 1, brake: 0, steering: 1 })
+        sim.beginManualDriving()
+        for (let i = 0; i < 60; i++) {
+            sim.step(SIMULATION.stepSeconds)
+        }
+
+        const player = sim.state.playerCar
+        const idBeforeConsolidation: string | undefined = player?.network.id
+        for (const racingCar of sim.state.cars) {
+            racingCar.stats.usedBrake = false
+        }
+        finishRoundWithOvertakes(
+            sim,
+            sim.state.cars.map((racingCar, index) => (racingCar === player ? 10 : 9 - index)),
+        )
+
+        expect(player?.network.id).not.toBe(idBeforeConsolidation)
+        expect(savedRosterIds).toContain(player?.network.id)
     })
 })
 
