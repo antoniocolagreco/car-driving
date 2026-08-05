@@ -11,6 +11,7 @@ const smallSettings: SimulationSettings = {
     carsQuantity: 4,
     mutationRate: 0.1,
     hiddenLayers: [2],
+    generationsPerCourse: 3,
 }
 const smallArchitecture = [SENSOR_ZONE_ORDER.length + 1, ...smallSettings.hiddenLayers, 3]
 
@@ -63,6 +64,36 @@ describe('createSimulation: determinism', () => {
         expect(b.state.traffic.map((car) => car.position)).toEqual(
             a.state.traffic.map((car) => car.position),
         )
+    })
+
+    it('keeps one course layout for a block of generations, then draws a new one', () => {
+        const sim = createSimulation({ ...smallSettings, generationsPerCourse: 3 })
+        const layout = (): number[] => sim.state.traffic.map((car) => car.position.x)
+
+        const first = layout()
+        sim.restart()
+        expect(layout()).toEqual(first)
+        sim.restart()
+        expect(layout()).toEqual(first)
+        // Fourth generation, so the block boundary is crossed.
+        sim.restart()
+        expect(layout()).not.toEqual(first)
+    })
+
+    // The "never randomise" end of the slider. Every generation floors to seed 0, which
+    // is the whole mechanism: no branch, just a division by infinity.
+    it('never changes the course when the interval is infinite', () => {
+        const sim = createSimulation({
+            ...smallSettings,
+            generationsPerCourse: Number.POSITIVE_INFINITY,
+        })
+        const layout = (): number[] => sim.state.traffic.map((car) => car.position.x)
+
+        const first = layout()
+        for (let generation = 0; generation < 5; generation++) {
+            sim.restart()
+            expect(layout()).toEqual(first)
+        }
     })
 
     it('retains a compatible restored winner as the elite parent', () => {

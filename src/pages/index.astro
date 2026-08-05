@@ -3,13 +3,12 @@ import {
     ChevronsUpIcon,
     EyeIcon,
     FastForwardIcon,
-    FolderIcon,
     RedoIcon,
     TableIcon,
     TrashIcon,
 } from '@lucide/astro'
 import type { HTMLAttributes } from 'astro/types'
-import { CARS_QUANTITY, DEFAULTS, MUTATION } from '@core/config'
+import { CARS_QUANTITY, COURSE_INTERVALS, DEFAULTS, MUTATION } from '@core/config'
 import { ELEMENT_IDS } from '@ui/dom'
 import Button from '@components/button.astro'
 import Field from '@components/field.astro'
@@ -30,6 +29,13 @@ const { class: className, ...rest } = Astro.props
 const mutationMinPercent = Math.round(MUTATION.minRate * 100)
 const mutationMaxPercent = Math.round(MUTATION.maxRate * 100)
 const mutationDefaultPercent = Math.round(DEFAULTS.mutationRate * 100)
+
+// The traffic-interval slider carries an index into `COURSE_INTERVALS`, not the interval
+// itself: the last choice is "never re-randomise", which has no numeric place on a track.
+const courseIntervalIndex = COURSE_INTERVALS.indexOf(DEFAULTS.generationsPerCourse)
+const courseIntervalLabels = COURSE_INTERVALS.map((interval) =>
+    Number.isFinite(interval) ? String(interval) : '∞',
+).join(', ')
 
 const iconSize = 15
 ---
@@ -64,16 +70,9 @@ const iconSize = 15
         >
             <menu class="flex flex-wrap gap-1.5">
                 <Button
-                    id={ELEMENT_IDS.buttons.loadChampion}
-                    type="button"
-                    disabled
-                    title="Load the champion, the fastest network ever to finish the course, and race on from it"
-                    ><FolderIcon slot="icon" size={iconSize} />Load Champion</Button
-                >
-                <Button
                     id={ELEMENT_IDS.buttons.reset}
                     type="button"
-                    title="Delete the saved network and start from random ones"
+                    title="Forget everything evolved so far (the saved network, the veterans archive and the champion) and start from random ones"
                     ><TrashIcon slot="icon" size={iconSize} />Reset</Button
                 >
                 <Button
@@ -219,6 +218,26 @@ const iconSize = 15
                         value={DEFAULTS.hiddenLayers.join(', ')}
                         placeholder="16, 12, 8"
                     />
+                </Field>
+                <Field
+                    label="New traffic every"
+                    for={ELEMENT_IDS.inputs.courseIntervalRange}
+                    title={`How many generations share one traffic layout, which is the whole course: ${courseIntervalLabels} generations. Fewer means a winner has to re-earn its place against traffic it has never seen; ∞ never re-randomises the traffic, which is the only way to compare scores across a whole run and the fastest way to breed a car that has merely memorised one layout. Applies to the next generation`}
+                >
+                    <Range
+                        id={ELEMENT_IDS.inputs.courseIntervalRange}
+                        class="w-20"
+                        min="0"
+                        max={COURSE_INTERVALS.length - 1}
+                        step="1"
+                        value={courseIntervalIndex}
+                        aria-label="Generations per traffic layout"
+                    />
+                    <span
+                        id={ELEMENT_IDS.courseIntervalValue}
+                        class="w-6 text-center tabular-nums"
+                        aria-hidden="true">{DEFAULTS.generationsPerCourse}</span
+                    >
                 </Field>
             </div>
         </section>

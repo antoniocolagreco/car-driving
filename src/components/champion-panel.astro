@@ -3,9 +3,9 @@ import { ELEMENT_IDS } from '@ui/dom'
 import type { HTMLAttributes } from 'astro/types'
 
 /**
- * The record holder: the fastest network ever to finish the course. It sits inside the
- * live stats panel but is not live at all, so it is kept as its own titled block rather
- * than as three more rows among numbers that change sixty times a second.
+ * The champion: the most recent network to clear a course. It sits inside the live stats
+ * panel but is not live at all, so it is kept as its own titled block rather than as
+ * three more rows among numbers that change sixty times a second.
  */
 
 type Props = HTMLAttributes<'div'>
@@ -16,14 +16,14 @@ const { class: className, ...otherProps } = Astro.props
     <div class="text-xs font-semibold tracking-wide text-white/60 uppercase">Champion</div>
     <div
         class="flex items-baseline justify-between gap-2"
-        title="Identifier of the fastest network ever to finish the course"
+        title="Identifier of the last network to clear a course. It races in every round from then on"
     >
         <span class="text-white/70">Network</span>
         <span id={ELEMENT_IDS.champion.networkId} class="font-semibold tabular-nums">–</span>
     </div>
     <div
         class="flex items-baseline justify-between gap-2"
-        title="Seconds from the start line to passing the last traffic car. Only a faster finish takes the record"
+        title="Seconds from the start line to passing the last traffic car on that run. It describes the run, it does not defend the seat: the next network to clear a course takes it even with a worse time"
     >
         <span class="text-white/70">Time</span>
         <span id={ELEMENT_IDS.champion.seconds} class="font-semibold tabular-nums text-amber-300"
@@ -32,7 +32,7 @@ const { class: className, ...otherProps } = Astro.props
     </div>
     <div
         class="flex items-baseline justify-between gap-2"
-        title="Traffic cars passed on the record run, which for a finished course is all of them"
+        title="Traffic cars passed on that run, which for a cleared course is all of them"
     >
         <span class="text-white/70">Overtakes</span>
         <span id={ELEMENT_IDS.champion.overtakes} class="font-semibold tabular-nums">–</span>

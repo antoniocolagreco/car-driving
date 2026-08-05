@@ -47,13 +47,7 @@ describe('medianScore', () => {
 })
 
 describe('rankRoster', () => {
-    it('puts networks that have not served their probation ahead of everybody', () => {
-        const roster = [networkWith('established', [38, 38, 38, 38]), networkWith('newcomer', [3])]
-
-        expect(idsOf(rankRoster(roster))).toEqual(['newcomer', 'established'])
-    })
-
-    it('orders established members by descending median', () => {
+    it('orders by descending median', () => {
         const roster = [
             networkWith('weak', [10, 10, 10]),
             networkWith('strong', [30, 30, 30]),
@@ -63,7 +57,15 @@ describe('rankRoster', () => {
         expect(idsOf(rankRoster(roster))).toEqual(['strong', 'middling', 'weak'])
     })
 
-    it('sends the least-raced of two equal probationers out first', () => {
+    // How many races a member has run buys it nothing on its own: a newcomer with one
+    // good race outranks a veteran with a worse median over forty.
+    it('gives a newcomer with a better median the better place', () => {
+        const roster = [networkWith('established', [12, 12, 12, 12]), networkWith('newcomer', [30])]
+
+        expect(idsOf(rankRoster(roster))).toEqual(['newcomer', 'established'])
+    })
+
+    it('sends the least-raced of two equal medians out first', () => {
         const roster = [networkWith('twice', [20, 20]), networkWith('once', [20])]
 
         expect(idsOf(rankRoster(roster))).toEqual(['once', 'twice'])
@@ -114,28 +116,25 @@ describe('updateRoster', () => {
         expect(idsOf(updateRoster(full, [admitted]))).not.toContain('worst')
     })
 
-    // The rule that makes the median mean anything: a newcomer is admitted on one race,
-    // and one race is not evidence. Without this a good network admitted on a hard course
-    // would be evicted on the way in, having scored less than a hundred established
-    // members whose numbers came from courses it never drove.
-    it('keeps a probationer even when its single race is the worst score in the archive', () => {
+    // A newcomer gets no shelter for being new: admitted on a race it scored nothing in,
+    // it is the weakest entry in a full archive and leaves the way it came.
+    it('evicts a newcomer whose only race is the worst score in the archive', () => {
         const full = filler(VETERANS.rosterSize)
         const unlucky = networkWith('unlucky', [0])
 
-        expect(idsOf(updateRoster(full, [unlucky]))).toContain('unlucky')
+        expect(idsOf(updateRoster(full, [unlucky]))).not.toContain('unlucky')
     })
 
-    // Not a contradiction of the rule above: probationers go last in the eviction order,
-    // not out of it. An archive that could never evict them would grow without limit
-    // whenever members arrive faster than the grid can put them through probation.
-    it('evicts probationers rather than let the archive grow past its size', () => {
-        const full = Array.from({ length: VETERANS.rosterSize }, (_, index) =>
-            networkWith(`probationer-${index}`, [10]),
-        )
+    // Eviction has to be the exact reverse of the ranking, or a member could be dropped
+    // while still ranking above one that was kept.
+    it('drops exactly whoever ranked last', () => {
+        const full = [...filler(VETERANS.rosterSize - 1), networkWith('last', [2, 2, 2])]
+        const ranked = rankRoster(full)
 
-        expect(updateRoster(full, [networkWith('newcomer', [10])])).toHaveLength(
-            VETERANS.rosterSize,
-        )
+        const kept = idsOf(updateRoster(full, [networkWith('newcomer', [40])]))
+
+        expect(kept).not.toContain(idsOf(ranked).at(-1))
+        expect(kept).toContain('newcomer')
     })
 })
 

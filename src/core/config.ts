@@ -68,13 +68,6 @@ export const SIMULATION = {
 	overtakeTimeoutSeconds: 12,
 	/** Vertical position of the followed car on screen, as a fraction of canvas height. */
 	cameraHeightRatio: 0.7,
-	/**
-	 * How many consecutive generations share one course layout. Within a block the
-	 * course is identical, so fitness is directly comparable and the winner can
-	 * only be dethroned by a car that genuinely out-drove it on the same obstacles;
-	 * every block the layout changes, so a winner cannot coast on a memorised one.
-	 */
-	generationsPerCourse: 3,
 	/** How many traffic rows the course is made of. */
 	trafficRows: 20,
 	/** Vertical spacing between two traffic rows, in pixels. */
@@ -235,18 +228,13 @@ export const MUTATION_DISTRIBUTION = {
  * ignores both the lucky 40 and the catastrophic 0, and answers "what does this network
  * do on a typical course", which is the actual question.
  *
- * Two rules keep the median honest, and without them the whole thing is theatre:
+ * Ranking is the median and nothing else: the best medians race, the worst are dropped.
  *
- * A median over one race IS that race's score. A newcomer that scored 40 on an easy
- * course would otherwise outrank a veteran sitting at 25 over fifty races, and the
- * archive would fill with lucky first outings. So under `provisionalRaces` a network is
- * on probation: it cannot be dropped, and it is put on the track ahead of everybody
- * else, precisely so it stops being provisional.
- *
- * And a member that never races keeps whatever median it entered with, while the ones
- * that do race have theirs corrected by hard courses. Probation-first ordering is what
- * stops the top of the archive from silently filling with entries that were never
- * retested.
+ * A newcomer whose median comes from a single race is not a special case needing its own
+ * rule. Admission already requires finishing in a race's top three, so it arrives with a
+ * good score rather than an unknown one; if that score was luck, the median is corrected
+ * the first time it races again, and racing is what the best medians are given. If it was
+ * simply weak, it sinks in the standings on its own and is evicted from the bottom.
  */
 export const VETERANS = {
 	/** How many networks the archive holds. */
@@ -261,13 +249,36 @@ export const VETERANS = {
 	 * races, drawn from thirty-odd different winners.
 	 */
 	admittedPerRace: 3,
-	/** Races a network must have run before its median is trusted and it can be dropped. */
-	provisionalRaces: 3,
 	/** Share of the population handed to archive members, racing unmutated. */
 	racingShare: 0.1,
 	/** Races remembered per network; the oldest is dropped past this. */
 	historyLimit: 100,
 } as const;
+
+/**
+ * How many consecutive generations may share one course layout, as offered by the UI.
+ *
+ * "Course layout" and "traffic layout" are the same thing here: the road itself is two
+ * fixed guard rails, so the only thing a seed decides is where the traffic cars are, and
+ * that arrangement IS the course. This value is what the traffic seed is divided by.
+ *
+ * Within a block the course is identical, so fitness is directly comparable and the
+ * winner can only be dethroned by a car that genuinely out-drove it on the same
+ * obstacles; every block the layout changes, so a winner cannot coast on a memorised one.
+ *
+ * The two ends of the slider are both traps, and both are worth being able to reach:
+ *
+ * At 1 the layout changes every generation, so no two scores in a run are comparable and
+ * the population is judged on a course it has never seen. That is the honest test, and it
+ * is also the noisiest signal evolution can be given.
+ *
+ * At infinity the course never changes. Measured, this is how the winner stalled at
+ * 1935 px for nine generations straight: the population stops learning to drive and
+ * starts memorising one arrangement of obstacles. It is still the only setting that makes
+ * a long run's scores directly comparable, which is what makes it useful for measuring
+ * a change rather than for training against.
+ */
+export const COURSE_INTERVALS: readonly number[] = [1, 3, 5, 10, Number.POSITIVE_INFINITY];
 
 /** Defaults for the settings the user can change, before anything is stored. */
 export const DEFAULTS = {
@@ -277,6 +288,12 @@ export const DEFAULTS = {
 	 */
 	mutationRate: 0.1,
 	carsQuantity: 80,
+	/**
+	 * Three generations per course: long enough for a winner to be beaten on the same
+	 * obstacles rather than on a luckier layout, short enough that it cannot live off
+	 * a course it has memorised. Must be one of `COURSE_INTERVALS`.
+	 */
+	generationsPerCourse: 3,
 	/**
 	 * Hidden layers only; the fixed perception contributes eleven readings plus speed.
 	 *

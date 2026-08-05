@@ -1,3 +1,4 @@
+import { COURSE_INTERVALS, DEFAULTS } from '@core/config'
 import { clamp } from '@core/math'
 import type { SimulationSettings } from '@core/simulation'
 import type { RadarMode } from '@render/car'
@@ -10,20 +11,10 @@ import { ELEMENT_IDS, findElement } from './dom'
  * `value` from `initial`, it never invents a range of its own.
  */
 
-export type UiAction = 'restart' | 'loadChampion' | 'reset' | 'evolve' | 'simulate'
+export type UiAction = 'restart' | 'reset' | 'evolve' | 'simulate'
 
 /** What the right-hand pane shows: the followed car's network, or the veterans standings. */
 export type SidePanelView = 'network' | 'veterans'
-
-/** The handle `app.ts` keeps on the panel after wiring it. */
-export type ControlPanel = {
-    /**
-     * Enables or disables Load Champion. There is nothing to load until some network has
-     * finished the course, and a button that silently does nothing is worse than a
-     * disabled one.
-     */
-    setChampionAvailable(available: boolean): void
-}
 
 export type ControlPanelHandlers = {
     onSettingsChange(settings: SimulationSettings): void
@@ -57,6 +48,14 @@ const SIDE_PANEL_LABELS: Readonly<Record<SidePanelView, string>> = {
     veterans: 'Panel: veterans',
 }
 
+/**
+ * The course-interval slider steps through `COURSE_INTERVALS` by index rather than by
+ * value: the choices are 1, 3, 5, 10 and "never", which is not a range anything can be
+ * clamped into, and the last of them has no numeric position on a track at all.
+ */
+export const courseIntervalLabel = (interval: number): string =>
+    Number.isFinite(interval) ? String(interval) : '∞'
+
 const isPositiveInteger = (value: number): boolean =>
     Number.isFinite(value) && Number.isInteger(value) && value > 0
 
@@ -83,19 +82,17 @@ const parseHiddenLayers = (text: string): readonly number[] | undefined => {
  * - Hidden layers is a free-text field, applied on Enter, and rejects anything
  *   that is not a comma-separated list of positive integers by restoring the
  *   previous text instead of building a broken architecture.
- * - Load Champion starts disabled and is enabled by `setChampionAvailable`, because
- *   whether a record holder exists is a localStorage question and this module never
- *   reads storage.
  */
 export const createControlPanel = (
     initial: SimulationSettings,
     handlers: ControlPanelHandlers,
     signal: AbortSignal,
-): ControlPanel => {
+): void => {
     let settings: SimulationSettings = {
         carsQuantity: initial.carsQuantity,
         mutationRate: initial.mutationRate,
         hiddenLayers: initial.hiddenLayers,
+        generationsPerCourse: initial.generationsPerCourse,
     }
 
     const emitSettingsChange = (): void => {
@@ -203,6 +200,56 @@ export const createControlPanel = (
                 hiddenLayersInput.value = parsed.join(', ')
                 emitSettingsChange()
                 handlers.onAction('restart')
+            },
+            { signal },
+        )
+    }
+
+    // --- Course interval -------------------------------------------------------
+    // A slider over a list, so the input's value is an INDEX into `COURSE_INTERVALS` and
+    // never the interval itself; `∞` is a legitimate choice and has no place on a track.
+    // Like the mutation rate it must not restart: it decides which layout the NEXT
+    // generation draws, and interrupting the current one to say so would throw away the
+    // race being watched.
+    const courseIntervalRange = findElement<HTMLInputElement>(
+        ELEMENT_IDS.inputs.courseIntervalRange,
+    )
+    const courseIntervalValue = findElement<HTMLSpanElement>(ELEMENT_IDS.courseIntervalValue)
+
+    const showCourseInterval = (index: number): void => {
+        if (courseIntervalValue) {
+            courseIntervalValue.textContent = courseIntervalLabel(COURSE_INTERVALS[index])
+        }
+    }
+
+    if (courseIntervalRange) {
+        const storedIndex = COURSE_INTERVALS.indexOf(settings.generationsPerCourse)
+        // An unknown stored value falls back to the default's position rather than to
+        // index 0, which would silently turn "3" into "randomise every generation".
+        const initialIndex =
+            storedIndex === -1
+                ? COURSE_INTERVALS.indexOf(DEFAULTS.generationsPerCourse)
+                : storedIndex
+        courseIntervalRange.value = String(Math.max(0, initialIndex))
+        showCourseInterval(Math.max(0, initialIndex))
+
+        courseIntervalRange.addEventListener(
+            'input',
+            () => showCourseInterval(Number(courseIntervalRange.value)),
+            { signal },
+        )
+        courseIntervalRange.addEventListener(
+            'change',
+            () => {
+                const index = clamp(
+                    Math.round(Number(courseIntervalRange.value)),
+                    0,
+                    COURSE_INTERVALS.length - 1,
+                )
+                courseIntervalRange.value = String(index)
+                showCourseInterval(index)
+                settings = { ...settings, generationsPerCourse: COURSE_INTERVALS[index] }
+                emitSettingsChange()
             },
             { signal },
         )
@@ -351,18 +398,8 @@ export const createControlPanel = (
             { signal },
         )
     }
-    const loadChampionButton = findElement<HTMLButtonElement>(ELEMENT_IDS.buttons.loadChampion)
-    wireAction(ELEMENT_IDS.buttons.loadChampion, 'loadChampion')
     wireAction(ELEMENT_IDS.buttons.reset, 'reset')
     wireAction(ELEMENT_IDS.buttons.restart, 'restart')
     wireAction(ELEMENT_IDS.buttons.evolve, 'evolve')
     wireAction(ELEMENT_IDS.buttons.simulate, 'simulate')
-
-    return {
-        setChampionAvailable(available: boolean): void {
-            if (loadChampionButton) {
-                loadChampionButton.disabled = !available
-            }
-        },
-    }
 }

@@ -3,10 +3,12 @@ import { type Network, createNetwork } from '@core/neural-network'
 import {
     type ChampionRecord,
     type StoredSettings,
+    loadSettings,
     saveChampion,
     saveSettings,
     saveWinner,
 } from './persistence'
+import { DEFAULTS } from '@core/config'
 
 const values: Map<string, string> = new Map()
 
@@ -44,6 +46,7 @@ describe('persistence storage keys', () => {
             carsQuantity: 80,
             mutationRate: 0.1,
             hiddenLayers: [16, 12, 8],
+            generationsPerCourse: 3,
         }
 
         saveWinner(network)
@@ -53,11 +56,28 @@ describe('persistence storage keys', () => {
         expect([...values.keys()].sort()).toEqual([
             'cars-quantity',
             'champion-record',
+            'generations-per-course',
             'hidden-layers',
             'mutation-rate',
             'winner-network',
         ])
         const winnerPayload: unknown = JSON.parse(values.get('winner-network') ?? '{}')
         expect((winnerPayload as { version?: unknown }).version).toBe(9)
+    })
+
+    // "Never randomise the course" is stored as the string "Infinity", which is the one
+    // setting whose round trip is not obviously lossless.
+    it('round-trips an infinite course interval', () => {
+        saveSettings({ generationsPerCourse: Number.POSITIVE_INFINITY })
+
+        expect(loadSettings().generationsPerCourse).toBe(Number.POSITIVE_INFINITY)
+    })
+
+    // The interval is a choice from a list, so a stored value that is not on the list is
+    // not clamped to a neighbour: it never came from the slider and cannot be honoured.
+    it('falls back to the default when the stored course interval is not one of the choices', () => {
+        values.set('generations-per-course', '7')
+
+        expect(loadSettings().generationsPerCourse).toBe(DEFAULTS.generationsPerCourse)
     })
 })

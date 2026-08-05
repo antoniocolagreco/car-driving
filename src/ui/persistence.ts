@@ -1,4 +1,4 @@
-import { CARS_QUANTITY, DEFAULTS, MUTATION } from '@core/config'
+import { CARS_QUANTITY, COURSE_INTERVALS, DEFAULTS, MUTATION } from '@core/config'
 import { clamp } from '@core/math'
 import { type Network, deserializeNetwork, serializeNetwork } from '@core/neural-network'
 import type { SimulationSettings } from '@core/simulation'
@@ -16,13 +16,14 @@ import type { SimulationSettings } from '@core/simulation'
 
 const STORAGE_KEYS = {
     winner: 'winner-network',
-    /** The record holder: a network that finished the course, with the run that earned it. */
+    /** The champion: the last network to finish a course, with the run that earned it. */
     champion: 'champion-record',
     /** The veterans archive, with each member's race history. */
     veterans: 'veterans-roster',
     carsQuantity: 'cars-quantity',
     mutationRate: 'mutation-rate',
     hiddenLayers: 'hidden-layers',
+    generationsPerCourse: 'generations-per-course',
 } as const
 
 /**
@@ -74,9 +75,12 @@ export const clearWinner = (): void => {
 }
 
 /**
- * The record holder: the fastest network ever to finish the course, kept with the run
- * that earned it. Unlike the winner, this one is never overwritten by an ordinary round,
- * only by a faster finish, so it outlives Reset and every generation in between.
+ * The champion: the most recent network to clear a course, kept with the run that earned
+ * it. Unlike the winner, this one is never overwritten by an ordinary round, only by
+ * another finish, so it survives every generation in between.
+ *
+ * The seconds are a description of that run, not a qualification for the seat: a slower
+ * finish still takes it. See `onCourseFinished` in `app.ts`.
  */
 export type ChampionRecord = {
     readonly network: Network
@@ -86,7 +90,7 @@ export type ChampionRecord = {
     readonly overtakes: number
 }
 
-/** Loads the record holder, or `undefined` when nobody has finished the course yet. */
+/** Loads the champion, or `undefined` when nobody has finished a course yet. */
 export const loadChampion = (): ChampionRecord | undefined => {
     const raw = localStorage.getItem(STORAGE_KEYS.champion)
     if (!raw) {
@@ -117,7 +121,7 @@ export const loadChampion = (): ChampionRecord | undefined => {
     }
 }
 
-/** Persists `record` as the new record holder. The caller decides whether it beats the old one. */
+/** Persists `record` as the new champion, replacing whatever held the seat before it. */
 export const saveChampion = (record: ChampionRecord): void => {
     localStorage.setItem(
         STORAGE_KEYS.champion,
@@ -132,7 +136,7 @@ export const saveChampion = (record: ChampionRecord): void => {
     }
 }
 
-/** Removes the record holder, used when its architecture no longer matches the settings. */
+/** Removes the champion, used on Reset and when its architecture no longer fits the settings. */
 export const clearChampion = (): void => {
     localStorage.removeItem(STORAGE_KEYS.champion)
     for (const key of OBSOLETE_CHAMPION_KEYS) {
@@ -218,6 +222,21 @@ const readHiddenLayers = (): readonly number[] => {
 }
 
 /**
+ * The course interval is a choice from a fixed list, not a range, so it is checked for
+ * membership rather than clamped: a stored 7 is not "close enough to 5", it is a value
+ * the slider could never have produced and has to fall back to the default.
+ *
+ * Parsed here rather than through `readNumber`, which rejects anything non-finite, and
+ * `Infinity` (the "never randomise the course" setting) is exactly that. Membership in
+ * `COURSE_INTERVALS` is the whole validation this value needs.
+ */
+const readGenerationsPerCourse = (): number => {
+    const raw = localStorage.getItem(STORAGE_KEYS.generationsPerCourse)
+    const stored = raw === null ? Number.NaN : Number(raw)
+    return COURSE_INTERVALS.includes(stored) ? stored : DEFAULTS.generationsPerCourse
+}
+
+/**
  * Loads every persisted setting, each clamped through its limits in `@core/config`
  * so a hand-edited or stale `localStorage` entry can never produce an out-of-range
  * simulation. The paused state is deliberately not part of this: a fresh page load
@@ -235,6 +254,7 @@ export const loadSettings = (): StoredSettings => ({
         MUTATION.maxRate,
     ),
     hiddenLayers: readHiddenLayers(),
+    generationsPerCourse: readGenerationsPerCourse(),
 })
 
 /** Persists whichever fields of `settings` are present, leaving the rest untouched. */
@@ -247,5 +267,13 @@ export const saveSettings = (settings: Partial<StoredSettings>): void => {
     }
     if (settings.hiddenLayers !== undefined) {
         localStorage.setItem(STORAGE_KEYS.hiddenLayers, settings.hiddenLayers.join(','))
+    }
+    if (settings.generationsPerCourse !== undefined) {
+        // `String(Infinity)` is `"Infinity"`, which `Number` reads back unchanged. The
+        // "never randomise" setting therefore survives a reload like any other.
+        localStorage.setItem(
+            STORAGE_KEYS.generationsPerCourse,
+            String(settings.generationsPerCourse),
+        )
     }
 }

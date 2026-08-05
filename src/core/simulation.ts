@@ -65,6 +65,12 @@ export type SimulationSettings = {
     readonly carsQuantity: number
     readonly mutationRate: number
     readonly hiddenLayers: readonly number[]
+    /**
+     * How many consecutive generations share one course layout. `Infinity` keeps the very
+     * first layout forever, which is the one value that makes a whole run's scores
+     * comparable. See `COURSE_INTERVALS`.
+     */
+    readonly generationsPerCourse: number
 }
 
 /** Everything the render and UI layers need to draw one frame and describe the race. */
@@ -288,15 +294,12 @@ export const createSimulation = (
     /**
      * Starts a new generation. Keeps the current winner unless one is given.
      *
-     * Each generation gets its own course, seeded by the generation number: still
-     * fully reproducible for a whole run, but a different layout every time. A
-     * single fixed course looks tempting — fitness becomes directly comparable
-     * across generations — and it is a trap. Measured: with one fixed course the
-     * winner stalled at 1935 px for nine generations straight, because the
-     * population was not learning to drive, it was memorising one arrangement of
-     * obstacles and then hitting the same wall forever. Varying the course means a
-     * winner has to re-earn its place on layouts it has never seen, so what
-     * survives is the skill and not the memory.
+     * The course is seeded by the generation number divided by
+     * `settings.generationsPerCourse`, so a block of consecutive generations shares one
+     * layout and the next block draws a new one. Fully reproducible for a whole run, and
+     * varied enough that a winner has to re-earn its place on layouts it has never seen,
+     * so what survives is the skill and not the memory. `COURSE_INTERVALS` documents what
+     * both ends of that setting cost.
      */
     const restart = (winner?: Network): void => {
         // A winner handed in from outside (a restored backup) replaces the whole
@@ -309,7 +312,7 @@ export const createSimulation = (
         state.generation += 1
 
         // Recomputed every round rather than held: the ordering depends on medians that
-        // the previous round has just moved, and on who is still on probation.
+        // the previous round has just moved.
         const racingVeterans: Network[] = selectRacers(state.veterans, currentSettings.carsQuantity)
 
         const options = toPopulationOptions(
@@ -329,10 +332,13 @@ export const createSimulation = (
         manualExperiences = []
         realtimeReplayCursor = 0
         consolidation = undefined
+        // Dividing by `Infinity` is what makes the "never randomise" setting free: every
+        // generation floors to seed 0, so the course stays exactly the one the run opened on.
         state.traffic = generateTraffic(
             road,
             SIMULATION.trafficRows,
-            trafficSeed ?? Math.floor((state.generation - 1) / SIMULATION.generationsPerCourse),
+            trafficSeed ??
+                Math.floor((state.generation - 1) / currentSettings.generationsPerCourse),
         )
         state.aliveCars = state.cars
         state.activeCar = state.cars[0]

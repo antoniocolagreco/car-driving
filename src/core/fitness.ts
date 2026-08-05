@@ -131,6 +131,16 @@ export const raceScore = (stats: CarStats): number =>
  * A higher score always wins; at equal scores the car that got there first does. That is
  * the whole ranking, and it is exactly the goal: pass everybody, as soon as possible.
  * Overtake-timed-out cars and cars that scored nothing at all are excluded.
+ *
+ * Partial credit for getting CLOSE to the next traffic car was tried as a middle
+ * tie-break and measured worse, so do not reach for it again. The motivation was real:
+ * the overtake count is a staircase rather than a slope, because a row of traffic is
+ * passed whole, so on a fixed course 25 of 81 cars tied on EXACTLY 8 and the scores 3, 6
+ * and 9 never occurred at all. Ranking those ties by the smallest gap ever reached to the
+ * next traffic car dropped peak overtakes from 20/23/18 to 17/10/14 over three runs of 40
+ * races. The gap is longitudinal, so shrinking it rewards the car that charges the row
+ * head-on and dies ten pixels deeper over the car that lifts off to set up the lane
+ * change that actually passes. A deceptive gradient is worse than no gradient.
  */
 const compareRacePerformance = (left: CarStats, right: CarStats): number =>
     raceScore(right) - raceScore(left) || left.lastOvertakeAtSeconds - right.lastOvertakeAtSeconds

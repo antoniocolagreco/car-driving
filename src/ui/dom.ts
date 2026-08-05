@@ -16,8 +16,9 @@ export const ELEMENT_IDS = {
     radarState: 'radar-state',
     /** Text inside the switch that chooses what the right-hand pane shows. */
     sidePanelState: 'side-panel-state',
+    /** Reads back the course-interval slider, which has no number field of its own. */
+    courseIntervalValue: 'course-interval-value',
     buttons: {
-        loadChampion: 'load-champion-button',
         reset: 'reset-network-button',
         restart: 'restart-network-button',
         evolve: 'evolve-network-button',
@@ -34,6 +35,7 @@ export const ELEMENT_IDS = {
         mutationRateRange: 'mutation-rate-range',
         mutationRateNumber: 'mutation-rate-number',
         hiddenLayersInput: 'hidden-layers-input',
+        courseIntervalRange: 'course-interval-range',
     },
     hud: {
         networkId: 'hud-network-id',

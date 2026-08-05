@@ -12,7 +12,7 @@ import { type RadarMode } from '@render/car'
 import { createFrameLoop } from '@render/frame-loop'
 import { drawNetwork } from '@render/network'
 import { drawScene } from '@render/scene'
-import { type ControlPanel, type SidePanelView, createControlPanel } from '@ui/controls'
+import { type SidePanelView, createControlPanel } from '@ui/controls'
 import { createHud } from '@ui/hud'
 import { type ManualControlInput, createManualControls } from '@ui/keyboard'
 import {
@@ -61,6 +61,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         carsQuantity: stored.carsQuantity,
         mutationRate: stored.mutationRate,
         hiddenLayers: stored.hiddenLayers,
+        generationsPerCourse: stored.generationsPerCourse,
     }
     let lastNetworkDrawMs = 0
     /** The generation the standings on screen were built for; 0 means never painted. */
@@ -200,12 +201,19 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         champion = undefined
     }
 
+    /**
+     * The champion is the LATEST network to clear a course, not the fastest one ever to
+     * do it. Whoever finishes takes the seat, even with a worse time than the network it
+     * displaces.
+     *
+     * It used to be a record, kept only for a strictly faster finish. That made it a
+     * trophy rather than a competitor, and the champion is on the grid of every race: the
+     * seat was being held by whichever network once drew a course it happened to finish
+     * quickly, against a field that had gone on evolving past it. Clearing a course at
+     * all is the rare event here, so the most recent one is the better representative of
+     * what the population can currently do, and its time is recorded rather than compared.
+     */
     const onCourseFinished = (result: CourseResult): void => {
-        // Strictly faster: an equal time leaves the incumbent in place, so the record
-        // belongs to whoever set it first. The score is recorded, never compared.
-        if (champion && result.seconds >= champion.seconds) {
-            return
-        }
         champion = {
             network: result.network,
             seconds: result.seconds,
@@ -214,7 +222,6 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         saveChampion(champion)
         simulation.setChampion(champion.network)
         hud.showChampion(champion)
-        controlPanel.setChampionAvailable(true)
     }
 
     /**
@@ -357,7 +364,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         onIntentStart: () => simulation.beginManualDriving(),
     })
 
-    const controlPanel: ControlPanel = createControlPanel(
+    createControlPanel(
         settings,
         {
             onSettingsChange: (nextSettings) => {
@@ -365,12 +372,12 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
                 saveSettings(settings)
                 simulation.updateSettings(settings)
                 // A different architecture cannot race the stored record, so the record
-                // goes: keeping an unloadable one would leave Restore enabled and inert.
+                // goes: it could neither enter the grid nor be beaten fairly.
                 if (champion && !isCompatibleNetwork(champion.network, settings.hiddenLayers)) {
                     clearChampion()
                     champion = undefined
                     hud.showChampion(undefined)
-                    controlPanel.setChampionAvailable(false)
+                    simulation.setChampion(undefined)
                 }
             },
             onAction: (action) => {
@@ -379,28 +386,19 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
                         simulation.restart()
                         break
                     }
-                    case 'loadChampion': {
-                        // Re-read from storage rather than reusing the in-memory record:
-                        // whatever goes into the simulation gets trained and counted on,
-                        // and the record must not drift with it.
-                        const record = loadChampion()
-                        if (record && isCompatibleNetwork(record.network, settings.hiddenLayers)) {
-                            saveWinner(record.network)
-                            simulation.restart(record.network)
-                        }
-                        break
-                    }
                     case 'reset': {
-                        // The Winner and the whole archive are forgotten: "start from
-                        // random networks" means nothing evolved survives, and a hundred
-                        // remembered veterans on the grid would be the opposite of that.
-                        // The record holder does survive by design, so the fresh
-                        // population still has a time to beat, and both callbacks have to
-                        // be rewired or they would stop watching.
+                        // Everything evolved is forgotten: the winner, the whole archive
+                        // and the record holder alike. "Start from random networks" means
+                        // nothing survives, and a champion left in place would keep
+                        // entering every race and keep holding a time the fresh population
+                        // had no part in setting. The callbacks have to be rewired onto
+                        // the new simulation or they would stop watching.
                         clearWinner()
                         clearVeterans()
+                        clearChampion()
+                        champion = undefined
+                        hud.showChampion(undefined)
                         simulation = createSimulation(settings, {
-                            champion: champion?.network,
                             onGenerationEnd,
                             onCourseFinished,
                             onVeteransChanged,
@@ -454,10 +452,9 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         abortController.signal,
     )
 
-    // The panel and the champion panel start empty, so both are filled once here rather
-    // than waiting for the first finish to reveal a record that already exists.
+    // The champion panel starts empty, so it is filled once here rather than waiting for
+    // the first finish to reveal a record that already exists.
     hud.showChampion(champion)
-    controlPanel.setChampionAvailable(champion !== undefined)
 
     return {
         start(): void {

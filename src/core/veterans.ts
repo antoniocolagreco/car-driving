@@ -62,31 +62,24 @@ export const bestTime = (network: Network): number | undefined => {
     return fastest
 }
 
-/** True while a network has too few races for its median to mean anything. */
-export const isProvisional = (network: Network): boolean =>
-    raceCount(network) < VETERANS.provisionalRaces
-
 /**
- * Orders the archive: provisional members first, then by descending median.
+ * Orders the archive by descending median. That is the whole rule.
  *
- * Provisional members go first because they are the ones whose number is not yet worth
- * anything, and racing is the only thing that fixes that. It also closes the hole that
- * would otherwise sink the archive: a member that never races keeps whatever median it
- * entered with, so if the track slots always went to the current best medians, an entry
- * admitted on one lucky 40 would sit at the top untested forever while the veterans
- * that do race have their numbers honestly pulled down by hard courses.
+ * Newcomers used to be pushed to the front until they had run a few races, on the
+ * argument that a median over one race is just that race. The rule turned out to earn
+ * nothing: admission already requires finishing in a race's top three, so a newcomer
+ * arrives with a good score rather than an unknown one, and if that score was luck its
+ * median is corrected the moment it races again. One that was simply weak sinks to the
+ * bottom of the standings on its own and is evicted from there.
  *
- * Ties break on the number of races, fewest first, so nothing waits behind an equal
- * peer indefinitely.
+ * Ties break on the number of races, fewest first, so nothing waits behind an equal peer
+ * indefinitely and the least tested of two equals is the one that gets retested.
  */
 export const rankRoster = (roster: VeteranRoster): Network[] =>
-    [...roster].sort((left, right) => {
-        const leftProvisional = isProvisional(left)
-        if (leftProvisional !== isProvisional(right)) {
-            return leftProvisional ? -1 : 1
-        }
-        return medianScore(right) - medianScore(left) || raceCount(left) - raceCount(right)
-    })
+    [...roster].sort(
+        (left, right) =>
+            medianScore(right) - medianScore(left) || raceCount(left) - raceCount(right),
+    )
 
 /** The archive members that take part in a population of `quantity` cars, best first. */
 export const selectRacers = (roster: VeteranRoster, quantity: number): Network[] =>
@@ -100,13 +93,9 @@ export const selectRacers = (roster: VeteranRoster, quantity: number): Network[]
  * A fixed number larger than the number of arrivals would empty the archive at a steady
  * rate no matter how good its members were, which is the opposite of remembering them.
  *
- * Provisional members go last in the eviction order, so in normal running they are
- * never touched: they are only in the archive because nobody knows yet whether they are
- * any good, and dropping them on a median taken from one race is exactly the mistake
- * this whole mechanism exists to prevent. They are not immune, though. A population
- * small enough to offer one track slot per generation admits members faster than it can
- * put them through their probation, and a rule that refused to evict them at all would
- * let the archive grow without limit. The cap always holds.
+ * Whoever holds the lowest median leaves, with no exemption for how recently they
+ * arrived. Ties break on the number of races, fewest first: between two members equally
+ * weak on the evidence, the one with less evidence behind it is the cheaper to lose.
  */
 export const updateRoster = (roster: VeteranRoster, admitted: readonly Network[]): Network[] => {
     const next: Network[] = [...roster]
@@ -121,18 +110,14 @@ export const updateRoster = (roster: VeteranRoster, admitted: readonly Network[]
         return next
     }
 
-    // Established members ranked by their median, weakest first, then the provisional
-    // ones with the least evidence behind them. Taking from the front of that gives the
-    // archive back its size while removing the least defensible entries.
-    const established: Network[] = next
-        .filter((network) => !isProvisional(network))
-        .sort((left, right) => medianScore(left) - medianScore(right))
-    const probationers: Network[] = next
-        .filter(isProvisional)
-        .sort((left, right) => raceCount(left) - raceCount(right))
-
-    const dropped = new Set<string>(
-        [...established, ...probationers].slice(0, excess).map((network) => network.id),
+    // The exact reverse of `rankRoster`, so the member evicted first is always the one
+    // that ranked last. Taking from the front of this gives the archive back its size
+    // while removing the least defensible entries.
+    const weakestFirst: Network[] = [...next].sort(
+        (left, right) =>
+            medianScore(left) - medianScore(right) || raceCount(left) - raceCount(right),
     )
+
+    const dropped = new Set<string>(weakestFirst.slice(0, excess).map((network) => network.id))
     return next.filter((network) => !dropped.has(network.id))
 }
