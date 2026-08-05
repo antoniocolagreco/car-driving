@@ -7,6 +7,16 @@ const { class: className, id, title, ...otherProps } = Astro.props
 const tooltipId: string | undefined = title && id ? `${id}-tooltip` : undefined
 ---
 
+<!--
+    The tooltip shows on hover, and on keyboard focus only.
+
+    `:focus-visible` rather than `:focus-within`, which is what this used to use: a
+    clicked button keeps DOM focus after the click, so the tooltip stayed on screen long
+    after the pointer had left it and only went away when something else was clicked.
+    `:focus-visible` is not set by a mouse click, so hovering out now always hides it,
+    while a keyboard user tabbing onto the button still gets the description.
+-->
+
 <span class="group relative inline-flex">
     <button
         id={id}
@@ -25,7 +35,7 @@ const tooltipId: string | undefined = title && id ? `${id}-tooltip` : undefined
             <span
                 id={tooltipId}
                 role="tooltip"
-                class="pointer-events-none invisible absolute top-full left-0 z-50 mt-2 w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-sm bg-neutral-950 px-2 py-1.5 text-left text-[11px] leading-snug font-normal whitespace-normal text-white opacity-0 shadow-lg ring-1 ring-white/20 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                class="pointer-events-none invisible absolute top-full left-0 z-50 mt-2 w-max max-w-[min(20rem,calc(100vw-1rem))] rounded-sm bg-neutral-950 px-2 py-1.5 text-left text-[11px] leading-snug font-normal whitespace-normal text-white opacity-0 shadow-lg ring-1 ring-white/20 transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-has-[:focus-visible]:visible group-has-[:focus-visible]:opacity-100"
             >
                 {title}
             </span>
