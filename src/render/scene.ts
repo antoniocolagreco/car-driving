@@ -49,9 +49,7 @@ export const drawScene = (
     const previousWinner: RacingCar | undefined = state.winner
         ? state.cars.find((racingCar) => racingCar.network === state.winner)
         : undefined
-    // The car wearing the badge, which is the one in front rather than the one holding
-    // the highest score: those part company as soon as a wreck keeps what it earned.
-    const currentWinner: RacingCar | undefined = state.leadCar
+    const currentWinner: RacingCar | undefined = state.bestCar
     const manualPlayerCar: RacingCar | undefined = state.manualDriving ? state.playerCar : undefined
 
     // Membership is by network identity rather than by car: the same weights are entered

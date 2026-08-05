@@ -133,14 +133,14 @@ describe('createSimulation: collisions', () => {
     })
 })
 
-describe('createSimulation: the car in front', () => {
-    // The badge and the camera answer "who is winning the race you are watching". The
-    // round's result answers "which network gets bred", and a wreck keeps what it earned
-    // before it stopped, so the two are different cars more often than not.
-    it('badges the car in front rather than the highest score, and points the camera at it', () => {
-        const sim = createSimulation(smallSettings, { trafficSeed: 'lead-badge' })
-        const ahead = sim.state.cars[0]
-        const scorer = sim.state.cars[1]
+describe('createSimulation: the winner badge and the camera', () => {
+    // The badge marks whoever would win the round if it ended now, score and brake bonus
+    // included, and the camera is pinned to it. That is deliberately not "the car in
+    // front": a wreck keeps what it earned, so the camera can sit on a car that stopped.
+    it('badges the best score and points the camera at it, wreck or not', () => {
+        const sim = createSimulation(smallSettings, { trafficSeed: 'winner-badge' })
+        const scorer = sim.state.cars[0]
+        const ahead = sim.state.cars[1]
 
         // The scorer banked eight before hitting something and stopping where it was.
         scorer.stats.overtakes = 8
@@ -153,28 +153,25 @@ describe('createSimulation: the car in front', () => {
         sim.step(SIMULATION.stepSeconds)
 
         expect(sim.state.bestCar).toBe(scorer)
-        expect(sim.state.leadCar).toBe(ahead)
-        expect(ahead.winner).toBe(true)
-        expect(scorer.winner).toBe(false)
-        expect(sim.state.activeCar).toBe(sim.state.leadCar)
+        expect(scorer.winner).toBe(true)
+        expect(ahead.winner).toBe(false)
+        expect(sim.state.activeCar).toBe(scorer)
     })
 
-    it('hands the badge to the best result once nobody is left racing', () => {
+    // There is no winner until somebody has passed somebody, and the camera has to be
+    // pointed at something in the meantime.
+    it('follows the car furthest up the road until anyone has scored', () => {
         const sim = createSimulation(smallSettings, {
-            winner: stationaryNetwork(),
-            trafficSeed: 'lead-empty',
+            winner: straightThrottleNetwork(),
+            trafficSeed: 'winner-none-yet',
         })
-        sim.state.cars[0].stats.overtakes = 3
+        const ahead = sim.state.cars[1]
+        ahead.car.position = vec(ahead.car.position.x, ahead.car.position.y - 200)
 
-        // Nobody moves, so the idle timeout empties the field.
-        const steps = Math.ceil(SIMULATION.idleTimeoutSeconds / SIMULATION.stepSeconds) + 2
-        for (let step = 0; step < steps; step++) {
-            sim.step(SIMULATION.stepSeconds)
-        }
+        sim.step(SIMULATION.stepSeconds)
 
-        expect(sim.state.aliveCars).toEqual([])
-        expect(sim.state.leadCar).toBe(sim.state.bestCar)
-        expect(sim.state.activeCar).toBe(sim.state.bestCar)
+        expect(sim.state.bestCar).toBeUndefined()
+        expect(sim.state.activeCar).toBe(ahead)
     })
 })
 

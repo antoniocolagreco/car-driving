@@ -89,18 +89,11 @@ export type SimulationState = {
     cars: RacingCar[]
     traffic: Car[]
     aliveCars: RacingCar[]
-    /** The car the camera follows: `leadCar`, unless a human is driving their own. */
+    /** The car the camera follows: `bestCar`, unless a human is driving their own. */
     activeCar?: RacingCar
     /**
-     * The car in front: furthest along among those still racing, the winner once the
-     * course is cleared, the round's best once nobody is left. This is what wears the
-     * WINNER badge and what the camera is normally on.
-     */
-    leadCar?: RacingCar
-    /**
-     * The round's result: the highest score across the whole field, wrecks included. Not
-     * the same car as `leadCar` in general, because a wreck keeps what it earned before
-     * it crashed.
+     * The round's winner as it stands: the highest score across the whole field, wrecks
+     * included, brake bonus included. This wears the WINNER badge and the camera is on it.
      */
     bestCar?: RacingCar
     /** The player's car: always part of `cars`, driven by hand only while asked. */
@@ -294,7 +287,6 @@ export const createSimulation = (
         parents: [],
         veterans: [...(options?.veterans ?? [])],
         champion: options?.champion,
-        leadCar: undefined,
         gameOver: false,
         courseCleared: false,
         courseWinner: undefined,
@@ -377,7 +369,6 @@ export const createSimulation = (
         )
         state.aliveCars = state.cars
         state.activeCar = state.cars[0]
-        state.leadCar = undefined
         state.bestCar = undefined
         state.parents = parents
         state.winner = parents[0]
@@ -639,7 +630,6 @@ export const createSimulation = (
                 }
                 state.aliveCars = state.cars.filter((racingCar) => !racingCar.car.crashed)
                 state.bestCar = state.courseWinner
-                state.leadCar = state.courseWinner
                 state.activeCar = state.courseWinner
                 for (const racingCar of state.cars) {
                     racingCar.winner = racingCar === state.courseWinner
@@ -774,37 +764,34 @@ export const createSimulation = (
         // 5. Recompute who is still racing.
         state.aliveCars = state.cars.filter((racingCar) => !racingCar.car.crashed)
 
-        // 6. Find the best car across the WHOLE population, crashed cars
-        // included — an eligible car keeps the overtakes earned before impact. This is
-        // the RESULT of the round, the network that will be bred from, and it is not
-        // necessarily the car on screen: a wreck keeps the score it earned before it hit
-        // something, so the highest score can belong to a car that stopped long ago.
+        // 6. Find the best car across the WHOLE population, crashed cars included — an
+        // eligible car keeps the overtakes earned before impact — and flag it for the
+        // renderer and the HUD.
+        //
+        // The score decides it, brake bonus and all, so the badge answers "who is winning
+        // this round" rather than "who is physically ahead". Those are different cars
+        // whenever a wreck is still holding the best result, and the round is decided by
+        // the first question.
         state.bestCar = state.courseCleared
             ? state.courseWinner
             : selectBest(state.cars, rankingRules())
-
-        // 7. The car in front: furthest along the road among those still racing, the
-        // winner once the course is cleared, and the round's best once nobody is left.
-        //
-        // The WINNER badge marks this one rather than `bestCar`, and the camera follows
-        // it, because a badge on a car that is not on screen labels nothing. What the
-        // badge says is "this is the one you are watching, and it is in the lead", which
-        // is a claim about the race as it stands rather than about the final ranking.
-        state.leadCar =
-            state.courseCleared && state.courseWinner
-                ? state.courseWinner
-                : state.aliveCars.length > 0
-                  ? leader(state.aliveCars)
-                  : state.bestCar
         for (const racingCar of state.cars) {
-            racingCar.winner = racingCar === state.leadCar
+            racingCar.winner = racingCar === state.bestCar
         }
 
-        // While a human is driving, the camera stays on their car for as long as they are
-        // alive — the point of watching is what you are doing, not who happens to be
-        // ahead. That is the one case where the camera and the badge part company.
+        // 7. The camera follows the winner, so the badge is never off screen — including
+        // when the winner is a wreck that stopped a thousand pixels back.
+        //
+        // Until somebody has passed a traffic car there is no winner to follow, and it
+        // falls back to whoever is furthest up the road. While a human is driving it
+        // stays on their car for as long as they are alive: the point of watching then is
+        // what you are doing, not who is winning.
         const humanCar = manualControls ? state.playerCar : undefined
-        state.activeCar = humanCar && !humanCar.car.crashed ? humanCar : state.leadCar
+        state.activeCar =
+            humanCar && !humanCar.car.crashed
+                ? humanCar
+                : (state.bestCar ??
+                  (state.aliveCars.length > 0 ? leader(state.aliveCars) : undefined))
 
         // Driving decisions intentionally use the observation from the beginning of the
         // step. Rendering that same polygon after the car has moved leaves it one frame
@@ -838,7 +825,6 @@ export const createSimulation = (
                 state.courseCleared = true
                 state.courseWinner = firstAcross
                 state.bestCar = firstAcross
-                state.leadCar = firstAcross
                 for (const racingCar of state.cars) {
                     racingCar.winner = racingCar === firstAcross
                 }
