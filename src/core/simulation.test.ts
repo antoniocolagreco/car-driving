@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { vec } from '@core/geometry'
-import { PARENT_COUNT, SIMULATION, VETERANS } from '@core/config'
+import { DEFAULTS, PARENT_COUNT, SIMULATION, VETERANS } from '@core/config'
 import { SENSOR_ZONE_ORDER, sensorOrigin } from '@core/sensor'
 import { type Network, createNetwork } from './neural-network'
 import { type Controls, crash } from './car'
@@ -13,6 +13,7 @@ const smallSettings: SimulationSettings = {
     mutationRate: 0.1,
     hiddenLayers: [2],
     generationsPerCourse: 3,
+    brakeBonus: DEFAULTS.brakeBonus,
 }
 const smallArchitecture = [SENSOR_ZONE_ORDER.length + 1, ...smallSettings.hiddenLayers, 3]
 
@@ -788,6 +789,35 @@ describe('createSimulation: the player car', () => {
 
         expect(player?.network.id).not.toBe(idBeforeConsolidation)
         expect(savedRosterIds).toContain(player?.network.id)
+    })
+})
+
+describe('createSimulation: the brake bonus setting', () => {
+    // The slider exists to be moved mid-run and answered immediately, so it has to reach
+    // the ranking without waiting for a restart.
+    it('re-ranks the field as soon as the bonus changes', () => {
+        const sim = createSimulation(
+            { ...smallSettings, brakeBonus: 10 },
+            { winner: straightThrottleNetwork(), trafficSeed: 'brake-slider' },
+        )
+
+        const faster = sim.state.cars[0]
+        const braker = sim.state.cars[1]
+        for (const racingCar of sim.state.cars) {
+            racingCar.stats.usedBrake = false
+        }
+        faster.stats.overtakes = 5
+        braker.stats.overtakes = 1
+        braker.stats.usedBrake = true
+
+        sim.step(SIMULATION.stepSeconds)
+        // 1 + 10 beats 5.
+        expect(sim.state.bestCar).toBe(braker)
+
+        sim.updateSettings({ ...smallSettings, brakeBonus: 0 })
+        sim.step(SIMULATION.stepSeconds)
+
+        expect(sim.state.bestCar).toBe(faster)
     })
 })
 

@@ -1,6 +1,6 @@
 /**
  * Sparse race objective: the score is the number of traffic cars passed, one point each,
- * plus a single `BRAKE_DISCOVERY_BONUS` for a car that both braked and passed somebody,
+ * plus a single brake bonus for a car that both braked and passed somebody,
  * and doing it sooner is the only tie-breaker.
  *
  * There is nothing else. No points for progress, speed, survival, steering or for
@@ -17,7 +17,7 @@
  * followed: it pays once per race for one press, so there is no behaviour to escalate
  * into, and once every car has it the ranking is decided by overtakes again. It also
  * cannot be collected instead of racing, which is exactly what it did when it was first
- * tried without that condition. See `BRAKE_DISCOVERY_BONUS`.
+ * tried without that condition. See `BRAKE_BONUSES`.
  *
  * Crashing needs no penalty of its own. A wreck stops overtaking, and the cars that keep
  * going pass it in the only currency there is.
@@ -26,7 +26,7 @@
  * been the same integer under a second name.
  */
 
-import { BRAKE_DISCOVERY_BONUS, SIMULATION } from '@core/config'
+import { DEFAULTS, SIMULATION } from '@core/config'
 import type { Vec2 } from '@core/geometry'
 
 /** Runtime counters for one car's current race. */
@@ -43,7 +43,7 @@ export type CarStats = {
     secondsSinceLastOvertake: number
     /** A car that missed the overtake deadline cannot be selected as winner or parent. */
     overtakeTimedOut: boolean
-    /** Whether the brake was ever pressed while moving: worth `BRAKE_DISCOVERY_BONUS`, once. */
+    /** Whether the brake was ever pressed while moving: worth the brake bonus, once. */
     usedBrake: boolean
     /** Elapsed race time, needed to timestamp overtakes. */
     aliveSeconds: number
@@ -130,13 +130,18 @@ export const hasClearedCourse = (stats: CarStats, trafficCount: number): boolean
  * car that both braked and got at least one car past it. A car that never overtook
  * scores nothing, however much it braked.
  *
+ * The bonus is passed in rather than read from `config`, so that the whole of this file
+ * stays a function of its arguments: the size of that bonus is a live setting the user
+ * moves mid-run, and a module reading it directly would answer differently on Tuesday
+ * for reasons its caller could not see. See `BRAKE_BONUSES`.
+ *
  * Kept apart from `stats.overtakes`, which stays the literal number of cars passed,
  * because that count is also what decides whether the course has been cleared and what
  * the Champion record stores. Inflating it would let a car "finish" a course it never
  * drove to the end of.
  */
-export const raceScore = (stats: CarStats): number =>
-    stats.overtakes + (stats.usedBrake && stats.overtakes > 0 ? BRAKE_DISCOVERY_BONUS : 0)
+export const raceScore = (stats: CarStats, brakeBonus: number = DEFAULTS.brakeBonus): number =>
+    stats.overtakes + (stats.usedBrake && stats.overtakes > 0 ? brakeBonus : 0)
 
 /**
  * A higher score always wins; at equal scores the car that got there first does. That is
@@ -153,17 +158,22 @@ export const raceScore = (stats: CarStats): number =>
  * head-on and dies ten pixels deeper over the car that lifts off to set up the lane
  * change that actually passes. A deceptive gradient is worse than no gradient.
  */
-const compareRacePerformance = (left: CarStats, right: CarStats): number =>
-    raceScore(right) - raceScore(left) || left.lastOvertakeAtSeconds - right.lastOvertakeAtSeconds
+const compareRacePerformance = (left: CarStats, right: CarStats, brakeBonus: number): number =>
+    raceScore(right, brakeBonus) - raceScore(left, brakeBonus) ||
+    left.lastOvertakeAtSeconds - right.lastOvertakeAtSeconds
 
-const hasRaceResult = (stats: CarStats): boolean => !stats.overtakeTimedOut && raceScore(stats) > 0
+const hasRaceResult = (stats: CarStats, brakeBonus: number): boolean =>
+    !stats.overtakeTimedOut && raceScore(stats, brakeBonus) > 0
 
-export const selectBest = <T extends { stats: CarStats }>(cars: readonly T[]): T | undefined => {
+export const selectBest = <T extends { stats: CarStats }>(
+    cars: readonly T[],
+    brakeBonus: number = DEFAULTS.brakeBonus,
+): T | undefined => {
     let best: T | undefined
     for (const car of cars) {
         if (
-            hasRaceResult(car.stats) &&
-            (best === undefined || compareRacePerformance(car.stats, best.stats) < 0)
+            hasRaceResult(car.stats, brakeBonus) &&
+            (best === undefined || compareRacePerformance(car.stats, best.stats, brakeBonus) < 0)
         ) {
             best = car
         }
@@ -175,10 +185,11 @@ export const selectBest = <T extends { stats: CarStats }>(cars: readonly T[]): T
 export const selectParents = <T extends { stats: CarStats }>(
     cars: readonly T[],
     count: number,
+    brakeBonus: number = DEFAULTS.brakeBonus,
 ): T[] =>
     cars
-        .filter((car) => hasRaceResult(car.stats))
-        .sort((left, right) => compareRacePerformance(left.stats, right.stats))
+        .filter((car) => hasRaceResult(car.stats, brakeBonus))
+        .sort((left, right) => compareRacePerformance(left.stats, right.stats, brakeBonus))
         .slice(0, count)
 
 /** True when the car has not covered enough ground within the idle deadline. */

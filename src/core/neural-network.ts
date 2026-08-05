@@ -50,7 +50,7 @@ export type Layer = {
 /**
  * One finished race, as remembered by the network that drove it.
  *
- * `overtakes` is the RAW count, with no bonuses added. `BRAKE_DISCOVERY_BONUS` is an
+ * `overtakes` is the RAW count, with no bonuses added. The brake bonus is an
  * ignition for one generation's ranking, not an achievement: letting it into a
  * permanent record would leave a network that brakes and drives badly carrying a
  * free +10 for the rest of its life.

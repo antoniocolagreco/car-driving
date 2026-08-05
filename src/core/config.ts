@@ -5,7 +5,7 @@
  * be unit tested and, in principle, run without a browser at all.
  *
  * Evolution uses a deliberately sparse objective: overtakes earn points, plus the one
- * bootstrapping bonus in `BRAKE_DISCOVERY_BONUS`.
+ * bootstrapping bonus in `BRAKE_BONUSES`.
  */
 
 /**
@@ -32,8 +32,17 @@
  *
  * It never counts towards clearing the course, which still means passing every traffic
  * car for real, and pressing the brake at a standstill earns nothing.
+ *
+ * The size of it is a real question rather than a settled one, which is why it is a
+ * slider. Measured over 40 races at 10, the bonus handed the generation to a car with
+ * fewer overtakes than the best in the field 4 times, once to a car that had passed 1
+ * against a field best of 10, while 53% of the field was already braking. That is the
+ * whole trade in one sentence: high enough to be discovered, high enough to be worth
+ * more than the race itself. `0` turns it off and ranks on overtakes alone; `1` makes it
+ * a tie-break between equal overtakes rather than an override; the middle values sit
+ * between an ignition and a policy.
  */
-export const BRAKE_DISCOVERY_BONUS = 10;
+export const BRAKE_BONUSES: readonly number[] = [0, 1, 3, 5, 10];
 
 /** Physics runs on a fixed step so the simulation behaves identically on any display. */
 export const SIMULATION = {
@@ -294,6 +303,12 @@ export const DEFAULTS = {
 	 * a course it has memorised. Must be one of `COURSE_INTERVALS`.
 	 */
 	generationsPerCourse: 3,
+	/**
+	 * The value the bonus was measured at for most of this project's life, kept as the
+	 * default so a run started today is comparable with the ones already recorded.
+	 * Must be one of `BRAKE_BONUSES`.
+	 */
+	brakeBonus: 10,
 	/**
 	 * Hidden layers only; the fixed perception contributes eleven readings plus speed.
 	 *

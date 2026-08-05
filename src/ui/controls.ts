@@ -1,4 +1,4 @@
-import { COURSE_INTERVALS, DEFAULTS } from '@core/config'
+import { BRAKE_BONUSES, COURSE_INTERVALS, DEFAULTS } from '@core/config'
 import { clamp } from '@core/math'
 import type { SimulationSettings } from '@core/simulation'
 import type { RadarMode } from '@render/car'
@@ -93,6 +93,7 @@ export const createControlPanel = (
         mutationRate: initial.mutationRate,
         hiddenLayers: initial.hiddenLayers,
         generationsPerCourse: initial.generationsPerCourse,
+        brakeBonus: initial.brakeBonus,
     }
 
     const emitSettingsChange = (): void => {
@@ -249,6 +250,49 @@ export const createControlPanel = (
                 courseIntervalRange.value = String(index)
                 showCourseInterval(index)
                 settings = { ...settings, generationsPerCourse: COURSE_INTERVALS[index] }
+                emitSettingsChange()
+            },
+            { signal },
+        )
+    }
+
+    // --- Brake bonus -----------------------------------------------------------
+    // The same index-into-a-list slider as the course interval: 0, 1, 3, 5 and 10 are the
+    // sizes worth telling apart, and the ones in between say nothing new. It applies
+    // immediately, including to the round on screen, because it changes nothing about the
+    // world and everything about how the field is ranked.
+    const brakeBonusRange = findElement<HTMLInputElement>(ELEMENT_IDS.inputs.brakeBonusRange)
+    const brakeBonusValue = findElement<HTMLSpanElement>(ELEMENT_IDS.brakeBonusValue)
+
+    const showBrakeBonus = (index: number): void => {
+        if (brakeBonusValue) {
+            brakeBonusValue.textContent = String(BRAKE_BONUSES[index])
+        }
+    }
+
+    if (brakeBonusRange) {
+        const storedIndex = BRAKE_BONUSES.indexOf(settings.brakeBonus)
+        const initialIndex =
+            storedIndex === -1 ? BRAKE_BONUSES.indexOf(DEFAULTS.brakeBonus) : storedIndex
+        brakeBonusRange.value = String(Math.max(0, initialIndex))
+        showBrakeBonus(Math.max(0, initialIndex))
+
+        brakeBonusRange.addEventListener(
+            'input',
+            () => showBrakeBonus(Number(brakeBonusRange.value)),
+            { signal },
+        )
+        brakeBonusRange.addEventListener(
+            'change',
+            () => {
+                const index = clamp(
+                    Math.round(Number(brakeBonusRange.value)),
+                    0,
+                    BRAKE_BONUSES.length - 1,
+                )
+                brakeBonusRange.value = String(index)
+                showBrakeBonus(index)
+                settings = { ...settings, brakeBonus: BRAKE_BONUSES[index] }
                 emitSettingsChange()
             },
             { signal },

@@ -47,6 +47,7 @@ describe('persistence storage keys', () => {
             mutationRate: 0.1,
             hiddenLayers: [16, 12, 8],
             generationsPerCourse: 3,
+            brakeBonus: 10,
         }
 
         saveWinner(network)
@@ -54,6 +55,7 @@ describe('persistence storage keys', () => {
         saveSettings(settings)
 
         expect([...values.keys()].sort()).toEqual([
+            'brake-bonus',
             'cars-quantity',
             'champion-record',
             'generations-per-course',
@@ -71,6 +73,20 @@ describe('persistence storage keys', () => {
         saveSettings({ generationsPerCourse: Number.POSITIVE_INFINITY })
 
         expect(loadSettings().generationsPerCourse).toBe(Number.POSITIVE_INFINITY)
+    })
+
+    // Zero is a legitimate choice and a falsy one, so it is the value most likely to be
+    // read back as "nothing stored" by a careless parser.
+    it('round-trips a brake bonus of zero', () => {
+        saveSettings({ brakeBonus: 0 })
+
+        expect(loadSettings().brakeBonus).toBe(0)
+    })
+
+    it('falls back to the default when the stored brake bonus is not one of the choices', () => {
+        values.set('brake-bonus', '7')
+
+        expect(loadSettings().brakeBonus).toBe(DEFAULTS.brakeBonus)
     })
 
     // The interval is a choice from a list, so a stored value that is not on the list is

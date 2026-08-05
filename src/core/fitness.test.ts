@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BRAKE_DISCOVERY_BONUS, SIMULATION } from './config'
+import { DEFAULTS, SIMULATION } from './config'
 import { vec } from './geometry'
 import {
     createStats,
@@ -181,7 +181,35 @@ describe('selection', () => {
         // 1 + 10 beats 9. That is the ignition working as intended for as long as the
         // brake is still a rarity in the field.
         expect(selectBest([dry, braked])).toBe(braked)
-        expect(raceScore(braked.stats)).toBe(1 + BRAKE_DISCOVERY_BONUS)
+        expect(raceScore(braked.stats)).toBe(1 + DEFAULTS.brakeBonus)
+    })
+
+    // The size of the ignition is a slider, so the same pair has to rank both ways
+    // depending on what the caller says a brake press is worth.
+    it('ranks on overtakes alone when the bonus is turned off', () => {
+        const braked: { stats: CarStats } = { stats: createStats(START) }
+        const dry: { stats: CarStats } = { stats: createStats(START) }
+        braked.stats.overtakes = 1
+        braked.stats.usedBrake = true
+        dry.stats.overtakes = 9
+
+        expect(raceScore(braked.stats, 0)).toBe(1)
+        expect(selectBest([dry, braked], 0)).toBe(dry)
+        expect(selectParents([dry, braked], 2, 0)).toEqual([dry, braked])
+    })
+
+    it('turns the bonus into a tie-break between equal overtakes when it is worth 1', () => {
+        const braked: { stats: CarStats } = { stats: createStats(START) }
+        const dry: { stats: CarStats } = { stats: createStats(START) }
+        braked.stats.overtakes = 9
+        braked.stats.usedBrake = true
+        dry.stats.overtakes = 9
+
+        expect(selectBest([dry, braked], 1)).toBe(braked)
+        // One overtake is still worth more than the whole bonus, which is the difference
+        // between a tie-break and an override.
+        dry.stats.overtakes = 10
+        expect(selectBest([dry, braked], 1)).toBe(dry)
     })
 
     it('stops deciding anything once both cars have braked', () => {
@@ -202,7 +230,7 @@ describe('selection', () => {
 
         drive(stats, 1, 30, (step) => sample(START.y - 100 * step, 1, 1))
 
-        expect(raceScore(stats)).toBe(1 + BRAKE_DISCOVERY_BONUS)
+        expect(raceScore(stats)).toBe(1 + DEFAULTS.brakeBonus)
     })
 
     it('pays nothing to a car that braked but never passed anybody', () => {

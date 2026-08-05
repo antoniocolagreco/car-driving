@@ -66,6 +66,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         mutationRate: stored.mutationRate,
         hiddenLayers: stored.hiddenLayers,
         generationsPerCourse: stored.generationsPerCourse,
+        brakeBonus: stored.brakeBonus,
     }
     let lastNetworkDrawMs = 0
     /** The generation the standings on screen were built for; 0 means never painted. */

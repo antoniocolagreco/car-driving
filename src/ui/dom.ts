@@ -18,6 +18,8 @@ export const ELEMENT_IDS = {
     sidePanelState: 'side-panel-state',
     /** Reads back the course-interval slider, which has no number field of its own. */
     courseIntervalValue: 'course-interval-value',
+    /** Reads back the brake-bonus slider, likewise a list rather than a range. */
+    brakeBonusValue: 'brake-bonus-value',
     buttons: {
         reset: 'reset-network-button',
         restart: 'restart-network-button',
@@ -36,6 +38,7 @@ export const ELEMENT_IDS = {
         mutationRateNumber: 'mutation-rate-number',
         hiddenLayersInput: 'hidden-layers-input',
         courseIntervalRange: 'course-interval-range',
+        brakeBonusRange: 'brake-bonus-range',
     },
     hud: {
         networkId: 'hud-network-id',

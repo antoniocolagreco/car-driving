@@ -72,6 +72,14 @@ export type SimulationSettings = {
      * comparable. See `COURSE_INTERVALS`.
      */
     readonly generationsPerCourse: number
+    /**
+     * What one brake press is worth, counted in overtakes, to a car that also passed
+     * somebody. Unlike everything else here it takes effect immediately rather than at the
+     * next restart: it decides only how the field is RANKED, so applying it to the round
+     * being watched costs nothing and answers the question the slider was moved to ask.
+     * See `BRAKE_BONUSES`.
+     */
+    readonly brakeBonus: number
 }
 
 /** Everything the render and UI layers need to draw one frame and describe the race. */
@@ -463,9 +471,11 @@ export const createSimulation = (
             })
         }
 
-        const admitted: Network[] = selectParents(state.cars, VETERANS.admittedPerRace).map(
-            (car) => car.network,
-        )
+        const admitted: Network[] = selectParents(
+            state.cars,
+            VETERANS.admittedPerRace,
+            currentSettings.brakeBonus,
+        ).map((car) => car.network)
         state.veterans = rankRoster(updateRoster(state.veterans, admitted))
         onVeteransChanged?.(state.veterans)
     }
@@ -498,9 +508,11 @@ export const createSimulation = (
             // working lineages on the strength of one lap somebody drove by hand; winning
             // already makes it `parents[0]`, which is elitism plus the entire refining
             // band, and that is what "the next generation is bred from your driving" means.
-            const ranked: Network[] = selectParents(state.cars, PARENT_COUNT).map(
-                (car) => car.network,
-            )
+            const ranked: Network[] = selectParents(
+                state.cars,
+                PARENT_COUNT,
+                currentSettings.brakeBonus,
+            ).map((car) => car.network)
 
             // The head of the pool is whoever the round crowned, and when the course was
             // cleared that is the first car across the line rather than the highest score.
@@ -743,7 +755,9 @@ export const createSimulation = (
         // 6. Find the best car across the WHOLE population, crashed cars
         // included — an eligible car keeps the overtakes earned before impact — and
         // flag it for the renderer/HUD.
-        state.bestCar = state.courseCleared ? state.courseWinner : selectBest(state.cars)
+        state.bestCar = state.courseCleared
+            ? state.courseWinner
+            : selectBest(state.cars, currentSettings.brakeBonus)
         for (const racingCar of state.cars) {
             racingCar.winner = racingCar === state.bestCar
         }

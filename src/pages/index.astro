@@ -8,7 +8,7 @@ import {
     TrashIcon,
 } from '@lucide/astro'
 import type { HTMLAttributes } from 'astro/types'
-import { CARS_QUANTITY, COURSE_INTERVALS, DEFAULTS, MUTATION } from '@core/config'
+import { BRAKE_BONUSES, CARS_QUANTITY, COURSE_INTERVALS, DEFAULTS, MUTATION } from '@core/config'
 import { ELEMENT_IDS } from '@ui/dom'
 import Button from '@components/button.astro'
 import Field from '@components/field.astro'
@@ -36,6 +36,10 @@ const courseIntervalIndex = COURSE_INTERVALS.indexOf(DEFAULTS.generationsPerCour
 const courseIntervalLabels = COURSE_INTERVALS.map((interval) =>
     Number.isFinite(interval) ? String(interval) : '∞',
 ).join(', ')
+
+// Same shape again: the slider carries an index into `BRAKE_BONUSES`.
+const brakeBonusIndex = BRAKE_BONUSES.indexOf(DEFAULTS.brakeBonus)
+const brakeBonusLabels = BRAKE_BONUSES.join(', ')
 
 const iconSize = 15
 ---
@@ -237,6 +241,26 @@ const iconSize = 15
                         id={ELEMENT_IDS.courseIntervalValue}
                         class="w-6 text-center tabular-nums"
                         aria-hidden="true">{DEFAULTS.generationsPerCourse}</span
+                    >
+                </Field>
+                <Field
+                    label="Brake bonus"
+                    for={ELEMENT_IDS.inputs.brakeBonusRange}
+                    title={`What one brake press is worth, in overtakes, to a car that also passed somebody: ${brakeBonusLabels}. It is an ignition rather than a reward, paid once per race, to make evolution find a pedal that pays nothing on the first touch. At 10 it outranks a whole typical race, so a braking car can win a round it drove worse; at 0 the ranking is overtakes alone. Applies immediately, to this round too`}
+                >
+                    <Range
+                        id={ELEMENT_IDS.inputs.brakeBonusRange}
+                        class="w-20"
+                        min="0"
+                        max={BRAKE_BONUSES.length - 1}
+                        step="1"
+                        value={brakeBonusIndex}
+                        aria-label="Brake discovery bonus"
+                    />
+                    <span
+                        id={ELEMENT_IDS.brakeBonusValue}
+                        class="w-6 text-center tabular-nums"
+                        aria-hidden="true">{DEFAULTS.brakeBonus}</span
                     >
                 </Field>
             </div>

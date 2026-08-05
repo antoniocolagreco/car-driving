@@ -1,4 +1,4 @@
-import { CARS_QUANTITY, COURSE_INTERVALS, DEFAULTS, MUTATION } from '@core/config'
+import { BRAKE_BONUSES, CARS_QUANTITY, COURSE_INTERVALS, DEFAULTS, MUTATION } from '@core/config'
 import { clamp } from '@core/math'
 import { type Network, deserializeNetwork, serializeNetwork } from '@core/neural-network'
 import type { SimulationSettings } from '@core/simulation'
@@ -24,6 +24,7 @@ const STORAGE_KEYS = {
     mutationRate: 'mutation-rate',
     hiddenLayers: 'hidden-layers',
     generationsPerCourse: 'generations-per-course',
+    brakeBonus: 'brake-bonus',
 } as const
 
 /**
@@ -236,6 +237,13 @@ const readGenerationsPerCourse = (): number => {
     return COURSE_INTERVALS.includes(stored) ? stored : DEFAULTS.generationsPerCourse
 }
 
+/** Also a choice from a list rather than a range, and validated the same way. */
+const readBrakeBonus = (): number => {
+    const raw = localStorage.getItem(STORAGE_KEYS.brakeBonus)
+    const stored = raw === null ? Number.NaN : Number(raw)
+    return BRAKE_BONUSES.includes(stored) ? stored : DEFAULTS.brakeBonus
+}
+
 /**
  * Loads every persisted setting, each clamped through its limits in `@core/config`
  * so a hand-edited or stale `localStorage` entry can never produce an out-of-range
@@ -255,6 +263,7 @@ export const loadSettings = (): StoredSettings => ({
     ),
     hiddenLayers: readHiddenLayers(),
     generationsPerCourse: readGenerationsPerCourse(),
+    brakeBonus: readBrakeBonus(),
 })
 
 /** Persists whichever fields of `settings` are present, leaving the rest untouched. */
@@ -275,5 +284,8 @@ export const saveSettings = (settings: Partial<StoredSettings>): void => {
             STORAGE_KEYS.generationsPerCourse,
             String(settings.generationsPerCourse),
         )
+    }
+    if (settings.brakeBonus !== undefined) {
+        localStorage.setItem(STORAGE_KEYS.brakeBonus, String(settings.brakeBonus))
     }
 }
