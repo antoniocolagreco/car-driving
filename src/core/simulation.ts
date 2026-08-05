@@ -27,7 +27,6 @@ import {
     hasMissedOvertakeDeadline,
     isStuck,
     recordOvertakeTimeout,
-    recordRetirement,
     selectBest,
     selectParents,
     updateStats,
@@ -289,17 +288,6 @@ export const createSimulation = (
     const hasFinished = (racingCar: RacingCar): boolean =>
         hasClearedCourse(racingCar.stats, state.traffic.length)
 
-    /**
-     * Takes a car out of the race by its own fault, which is what separates a wreck from a
-     * car that was simply still driving when the round ended. Only these three call sites
-     * are retirements; the round's time ceiling and the end of the victory parade stop cars
-     * without holding it against them.
-     */
-    const retire = (racingCar: RacingCar): void => {
-        recordRetirement(racingCar.stats)
-        crash(racingCar.car)
-    }
-
     const currentObstacleSegments = (): Segment[] => {
         const segments: Segment[] = [...state.road.borders]
         for (const trafficCar of state.traffic) {
@@ -463,20 +451,15 @@ export const createSimulation = (
      * holding the race that earned it, rather than with an empty record and a median of
      * zero that would place it below everybody on the way in.
      *
-     * Survival is written here for the same reason: the flag is only true of a car that
-     * was never retired, and by this point every car has either crossed the line, run out
-     * of race or been taken out of it, so the answer cannot change afterwards.
+     * The time is what records the finish, and every finisher gets one rather than only
+     * the car that got there first. The last overtake of a cleared course IS the last
+     * traffic car, so that timestamp is the finish line; second across it still crossed it.
      */
     const recordRaceResults = (): void => {
         for (const racingCar of state.cars) {
-            // Every finisher carries a time, not only the one that got there first. The
-            // last overtake of a cleared course IS the last traffic car, so that timestamp
-            // is the finish line; second across it still crossed it.
-            const finished: boolean = hasFinished(racingCar)
             recordRace(racingCar.network, {
                 overtakes: racingCar.stats.overtakes,
-                survived: !racingCar.stats.retired,
-                seconds: finished ? racingCar.stats.lastOvertakeAtSeconds : undefined,
+                seconds: hasFinished(racingCar) ? racingCar.stats.lastOvertakeAtSeconds : undefined,
             })
         }
 
@@ -515,7 +498,21 @@ export const createSimulation = (
             // working lineages on the strength of one lap somebody drove by hand; winning
             // already makes it `parents[0]`, which is elitism plus the entire refining
             // band, and that is what "the next generation is bred from your driving" means.
-            state.parents = selectParents(state.cars, PARENT_COUNT).map((car) => car.network)
+            const ranked: Network[] = selectParents(state.cars, PARENT_COUNT).map(
+                (car) => car.network,
+            )
+
+            // The head of the pool is whoever the round crowned, and when the course was
+            // cleared that is the first car across the line rather than the highest score.
+            // The two can disagree: every finisher passed the same traffic, so the round
+            // score separates them only by the brake bonus, and a later finisher that
+            // happened to touch the brake must not displace the car that got there first.
+            // Below the head, the ordinary ranking. When nobody cleared the course the
+            // round winner already leads that ranking and this changes nothing.
+            state.parents = [
+                roundWinner.network,
+                ...ranked.filter((network) => network !== roundWinner.network),
+            ].slice(0, PARENT_COUNT)
             state.winner = state.parents[0]
         }
 
@@ -706,12 +703,12 @@ export const createSimulation = (
             // A crash costs nothing beyond what it takes away by itself: the wreck stops
             // overtaking, and everyone still driving passes it in the only currency there is.
             if (collided && !finished) {
-                retire(racingCar)
+                crash(car)
             }
 
             // Retire cars that fail the independent minimum-progress timeout.
             if (!finished && isStuck(stats)) {
-                retire(racingCar)
+                crash(car)
             }
 
             // A car must keep overtaking, not merely moving. Missing the deadline retires it
@@ -719,7 +716,7 @@ export const createSimulation = (
             // overtakes it had banked before it stopped racing.
             if (!finished && hasMissedOvertakeDeadline(stats)) {
                 recordOvertakeTimeout(stats)
-                retire(racingCar)
+                crash(car)
             }
         }
 
@@ -772,18 +769,37 @@ export const createSimulation = (
         // final poses here.
         refreshFollowedSensors()
 
-        // 8. Somebody passed every traffic car: remember the first winner and begin a
+        // 8. Somebody passed every traffic car: remember who crossed first and begin a
         // five-second celebration. The field keeps running during it, and even if every
         // car stops first, the generation cannot close before the banner has had its time.
-        if (
-            !state.courseCleared &&
-            state.traffic.length > 0 &&
-            state.bestCar &&
-            state.bestCar.stats.overtakes >= state.traffic.length
-        ) {
-            state.courseCleared = true
-            state.courseWinner = state.bestCar
-            state.victorySeconds = 0
+        //
+        // Crossing the line is what is looked for here, rather than the round's best score.
+        // The two are not the same question: the brake bonus is worth ten overtakes, so it
+        // can lift a car that stopped one short of the finish above a car that actually
+        // finished, which would both crown the wrong winner and hide the finish entirely.
+        // Whoever passed the last traffic car earliest is the winner, and that is all.
+        if (!state.courseCleared) {
+            let firstAcross: RacingCar | undefined
+            for (const racingCar of state.cars) {
+                if (!hasFinished(racingCar)) {
+                    continue
+                }
+                if (
+                    firstAcross === undefined ||
+                    racingCar.stats.lastOvertakeAtSeconds < firstAcross.stats.lastOvertakeAtSeconds
+                ) {
+                    firstAcross = racingCar
+                }
+            }
+            if (firstAcross) {
+                state.courseCleared = true
+                state.courseWinner = firstAcross
+                state.bestCar = firstAcross
+                for (const racingCar of state.cars) {
+                    racingCar.winner = racingCar === firstAcross
+                }
+                state.victorySeconds = 0
+            }
         }
 
         // 9. Outside a victory celebration, an empty field closes immediately.

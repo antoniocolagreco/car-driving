@@ -47,27 +47,20 @@ export const worstScore = (network: Network): number =>
         : network.history.reduce((worst, record) => Math.min(worst, record.overtakes), Infinity)
 
 /**
- * The share of races this network came through without being retired, from 0 to 1, or 0
- * when nothing on record says either way.
+ * The share of its races this network finished, from 0 to 1, or 0 for a network that has
+ * never raced.
  *
- * Only the races that carry the flag are counted, top and bottom. Races recorded before
- * survival was measured cannot answer the question, and reading their silence as a wreck
- * would bury every network that was already in the archive under every network admitted
- * after it.
+ * A finish is a recorded time, since only a car that passed every traffic car gets one.
+ * That is also why this needs no new field and works on archives saved by older builds:
+ * the times were always there, and what changed is that every finisher now gets one
+ * instead of only the first across the line.
  */
-export const survivalRate = (network: Network): number => {
-    let measured = 0
-    let survived = 0
-    for (const record of network.history) {
-        if (record.survived === undefined) {
-            continue
-        }
-        measured += 1
-        if (record.survived) {
-            survived += 1
-        }
+export const completionRate = (network: Network): number => {
+    if (network.history.length === 0) {
+        return 0
     }
-    return measured === 0 ? 0 : survived / measured
+    const finished = network.history.filter((record) => record.seconds !== undefined).length
+    return finished / network.history.length
 }
 
 /**
@@ -87,18 +80,18 @@ export const bestTime = (network: Network): number | undefined => {
 }
 
 /**
- * Orders the archive by descending survival rate, then by descending median.
+ * Orders the archive by descending completion rate, then by descending median.
  *
- * Survival comes first because finishing is the goal and overtakes are only the way
- * there: a network that comes through nine races out of ten is closer to clearing a
- * course than one that passes more traffic and wrecks half the time. Surviving cannot be
- * done by hiding, either, since the overtake deadline retires a car that stops making
- * progress, so the only way to stay in a race is to keep racing it.
+ * Completion comes first because it is the goal itself, and overtakes are only the way
+ * there: a network that clears three courses in ten has done the whole task three times,
+ * while one with a higher median may never have finished anything. Ranking on the goal
+ * cannot be gamed by a network that is merely careful, either, since the only way to
+ * raise the rate is to pass every car on the course.
  *
- * The median settles what survival cannot see, which is how much of the course was
- * actually covered. It fires less often than a tie-break usually does: a rate over a
- * handful of races is a coarse fraction, so equal rates are common early and rare later,
- * and the ordering is survival-led by design rather than by accident.
+ * The median settles what completion cannot see, and early on that is nearly everything:
+ * until a network finishes something its rate is 0, so a whole archive of them is ordered
+ * by median exactly as it was before. The rate takes over as soon as anybody starts
+ * finishing races, which is the point at which it becomes the more useful question.
  *
  * Newcomers used to be pushed to the front until they had run a few races, on the
  * argument that a median over one race is just that race. The rule turned out to earn
@@ -113,7 +106,7 @@ export const bestTime = (network: Network): number | undefined => {
 export const rankRoster = (roster: VeteranRoster): Network[] =>
     [...roster].sort(
         (left, right) =>
-            survivalRate(right) - survivalRate(left) ||
+            completionRate(right) - completionRate(left) ||
             medianScore(right) - medianScore(left) ||
             raceCount(left) - raceCount(right),
     )
@@ -153,7 +146,7 @@ export const updateRoster = (roster: VeteranRoster, admitted: readonly Network[]
     // while removing the least defensible entries.
     const weakestFirst: Network[] = [...next].sort(
         (left, right) =>
-            survivalRate(left) - survivalRate(right) ||
+            completionRate(left) - completionRate(right) ||
             medianScore(left) - medianScore(right) ||
             raceCount(left) - raceCount(right),
     )

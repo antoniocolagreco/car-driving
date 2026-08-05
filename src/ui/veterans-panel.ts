@@ -2,9 +2,9 @@ import { type Network, shortNetworkId } from '@core/neural-network'
 import {
     bestScore,
     bestTime,
+    completionRate,
     medianScore,
     raceCount,
-    survivalRate,
     worstScore,
 } from '@core/veterans'
 
@@ -66,9 +66,9 @@ const COLUMNS: readonly Column[] = [
     {
         key: 'survival',
         label: 'Survival',
-        title: 'Share of its races it came through without wrecking or timing out. This is what the archive ranks on first',
-        value: survivalRate,
-        text: (network) => formatPercentage(survivalRate(network)),
+        title: 'Share of its races it finished, passing every traffic car on the course. This is what the archive ranks on first',
+        value: completionRate,
+        text: (network) => formatPercentage(completionRate(network)),
         numeric: true,
     },
     {
@@ -90,7 +90,7 @@ const COLUMNS: readonly Column[] = [
     {
         key: 'median',
         label: 'Median',
-        title: 'Middle result across every race. The archive ranks on this once survival rates are equal',
+        title: 'Middle result across every race. The archive ranks on this once survival rates are equal, which early on is always',
         value: medianScore,
         text: (network) => String(medianScore(network)),
         numeric: true,
@@ -169,8 +169,9 @@ export const createVeteransPanel = (container: HTMLElement, signal: AbortSignal)
     const headRow = document.createElement('tr')
     const body = document.createElement('tbody')
 
-    // Opens on the archive's own primary key, and since the roster arrives already ranked
-    // a stable sort leaves equal survival rates in exactly the order the archive holds them.
+    // Opens on the archive's own primary key. The roster arrives already ranked, so a
+    // stable sort leaves equal rates in exactly the order the archive holds them, which
+    // is how a panel full of networks that have never finished still reads as a standing.
     let sort: SortState = { key: 'survival', ascending: false }
     let lastRoster: readonly Network[] = []
     let lastRacingIds: ReadonlySet<string> = new Set()

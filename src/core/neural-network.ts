@@ -58,18 +58,14 @@ export type Layer = {
 export type RaceRecord = {
     /** Traffic cars this network passed in that race. */
     readonly overtakes: number
-    /** Race seconds to the finish, present only when the course was actually cleared. */
-    readonly seconds?: number
     /**
-     * Whether the car came through the race without ever being retired: it either crossed
-     * the finish line or was still driving when the round closed around it. A wreck, an
-     * idle timeout and a missed overtake deadline are all the opposite.
+     * Race seconds to the finish, present only when the course was actually cleared.
      *
-     * Optional because races recorded before survival was measured cannot answer the
-     * question, and answering it for them either way would be an invention.
-     * `survivalRate` counts only the races that carry the flag.
+     * Its presence is therefore the record of the finish itself, and there is deliberately
+     * no separate flag saying so: a time and a completed course are the same event, and
+     * two fields for one fact can disagree.
      */
-    readonly survived?: boolean
+    readonly seconds?: number
 }
 
 /** A full network: one `Layer` per transition between consecutive architecture sizes. */
@@ -551,14 +547,11 @@ export const serializeNetwork = (network: Network): SerializedNetwork => ({
     architecture: [...network.architecture],
     generation: network.generation,
     color: network.color,
-    // Absent fields are left absent rather than written as `undefined`: a hundred networks
-    // holding a hundred races each is the one payload where a key nobody reads is worth
-    // omitting, and `deserializeHistory` reads a missing key as "not recorded" anyway.
-    history: network.history.map((record) => ({
-        overtakes: record.overtakes,
-        ...(record.seconds === undefined ? {} : { seconds: rounded(record.seconds) }),
-        ...(record.survived === undefined ? {} : { survived: record.survived }),
-    })),
+    history: network.history.map((record) =>
+        record.seconds === undefined
+            ? { overtakes: record.overtakes }
+            : { overtakes: record.overtakes, seconds: rounded(record.seconds) },
+    ),
     layers: network.layers.map((layer) => ({
         weights: layer.weights.map((row) => row.map(rounded)),
         biases: layer.biases.map(rounded),
@@ -587,19 +580,15 @@ const deserializeHistory = (value: unknown): RaceRecord[] => {
         if (typeof entry !== 'object' || entry === null) {
             continue
         }
-        const { overtakes, seconds, survived } = entry as {
-            overtakes?: unknown
-            seconds?: unknown
-            survived?: unknown
-        }
+        const { overtakes, seconds } = entry as { overtakes?: unknown; seconds?: unknown }
         if (typeof overtakes !== 'number' || !Number.isFinite(overtakes)) {
             continue
         }
-        history.push({
-            overtakes,
-            ...(typeof seconds === 'number' && Number.isFinite(seconds) ? { seconds } : {}),
-            ...(typeof survived === 'boolean' ? { survived } : {}),
-        })
+        history.push(
+            typeof seconds === 'number' && Number.isFinite(seconds)
+                ? { overtakes, seconds }
+                : { overtakes },
+        )
     }
     return history.slice(-VETERANS.historyLimit)
 }
