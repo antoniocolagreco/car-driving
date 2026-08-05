@@ -1,4 +1,4 @@
-import type { Network } from '@core/neural-network'
+import { type Network, shortNetworkId } from '@core/neural-network'
 import { bestScore, bestTime, medianScore, raceCount, worstScore } from '@core/veterans'
 
 /**
@@ -36,22 +36,19 @@ type Column = {
 const formatSeconds = (seconds: number | undefined): string =>
     seconds === undefined ? '' : `${seconds.toFixed(1)}s`
 
-/** Ids are long random strings; the head of one is enough to tell two rows apart. */
-const shortId = (id: string): string => id.slice(0, 8)
-
 const COLUMNS: readonly Column[] = [
     {
         key: 'network',
         label: 'Network',
         title: 'Network identifier, in the colour its car wears on the track',
         value: (network) => network.id,
-        text: (network) => shortId(network.id),
+        text: (network) => shortNetworkId(network.id),
         numeric: false,
     },
     {
         key: 'races',
         label: 'Races',
-        title: 'Races this network has on record. Under three it is still on probation',
+        title: 'Races this network has on record. The more there are, the more its median is worth',
         value: raceCount,
         text: (network) => String(raceCount(network)),
         numeric: true,

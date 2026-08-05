@@ -1,5 +1,6 @@
 import { SIMULATION } from '@core/config'
 import type { SimulationState } from '@core/simulation'
+import { shortNetworkId } from '@core/neural-network'
 import { ELEMENT_IDS, findElement } from './dom'
 import type { ChampionRecord } from './persistence'
 
@@ -103,6 +104,10 @@ const formatCountdown = (value: number | undefined): string =>
  * rather than only how far off it is. Rounded before the sign is read, so a hair to the
  * left of straight reads `0.0°` instead of `-0.0°`.
  */
+/** An absent network reads as a dash, like every other empty field in the panel. */
+const formatNetworkId = (id: string | undefined): string =>
+    id === undefined ? '–' : shortNetworkId(id)
+
 const formatDegrees = (value: number | undefined): string => {
     if (value === undefined) {
         return '–'
@@ -154,7 +159,7 @@ export const createHud = (): Hud => {
         const activeCar = state.activeCar
         const stats = activeCar?.stats
 
-        setText(elements.networkId, activeCar?.network.id ?? '–')
+        setText(elements.networkId, formatNetworkId(activeCar?.network.id))
         setText(elements.generation, String(state.generation))
         setText(elements.aliveCars, `${state.aliveCars.length} / ${state.cars.length}`)
         setText(elements.overtakes, stats ? String(stats.overtakes) : '–')
@@ -196,7 +201,7 @@ export const createHud = (): Hud => {
 
     const showChampion = (record: ChampionRecord | undefined): void => {
         if (championElements.networkId) {
-            setText(championElements.networkId, record?.network.id ?? '–')
+            setText(championElements.networkId, formatNetworkId(record?.network.id))
         }
         if (championElements.seconds) {
             setText(championElements.seconds, record ? `${record.seconds.toFixed(2)} s` : '–')

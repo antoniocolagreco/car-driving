@@ -58,18 +58,6 @@ export const createRandom = (seed: string | number): Random => {
 /** Uniform random value in [-1, 1), used to initialize and mutate network weights/biases. */
 export const randomSymmetric = (): number => Math.random() * 2 - 1
 
-const ID_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-const ID_LENGTH = 8
-
-/** Generates an 8-character A-Z0-9 id, used to identify a network across generations. */
-export const randomId = (): string => {
-    let id = ''
-    for (let i = 0; i < ID_LENGTH; i++) {
-        id += ID_CHARACTERS.charAt(Math.floor(Math.random() * ID_CHARACTERS.length))
-    }
-    return id
-}
-
 /** Tailwind-derived color palette used to tell traffic cars apart at a glance. */
 export const PALETTE = {
     red: '#dc2626',

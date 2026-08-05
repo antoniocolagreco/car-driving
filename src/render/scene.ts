@@ -1,4 +1,5 @@
 import { SIMULATION } from '@core/config'
+import { shortNetworkId } from '@core/neural-network'
 import { PLAYER_COLOR, type RacingCar } from '@core/population'
 import type { SimulationState } from '@core/simulation'
 import type { CanvasLayer } from './canvas'
@@ -252,7 +253,7 @@ export const drawGameOver = (layer: CanvasLayer, state: SimulationState): void =
         ctx.fillStyle = state.courseCleared ? '#22c55e' : '#fff'
         ctx.strokeStyle = 'black'
 
-        const idLine = state.bestCar.network.id
+        const idLine = shortNetworkId(state.bestCar.network.id)
         const winsLine = state.courseCleared ? 'CLEARS THE COURSE' : 'WINS'
         const overtakes = state.bestCar.stats.overtakes
         const scoreLine = `${overtakes} overtake${overtakes === 1 ? '' : 's'} in ${state.bestCar.stats.lastOvertakeAtSeconds.toFixed(1)} s`

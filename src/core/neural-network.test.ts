@@ -340,15 +340,42 @@ describe('serializeNetwork / deserializeNetwork', () => {
         expect(restored?.history).toEqual([{ overtakes: 12 }, { overtakes: 40, seconds: 31.5 }])
     })
 
-    it('gives a mutated child its own identity, with none of the parent record', () => {
+    it('gives a mutated child a new identity and none of the parent record', () => {
         const parent = createNetwork(ARCHITECTURE)
         recordRace(parent, { overtakes: 30 })
 
-        const child = mutate(parent, 0)
+        const child = mutate(parent, 1)
 
         expect(child.id).not.toBe(parent.id)
         expect(child.history).toEqual([])
         expect(parent.history).toHaveLength(1)
+    })
+
+    // The identity is the weights. An exact clone is therefore the SAME network, and has
+    // to say so: this is what stops the player's car, built as `mutate(elite, 0)` every
+    // race, from entering the veterans archive as a second copy of the elite.
+    it('gives an exact clone the identity of the network it was cloned from', () => {
+        const parent = createNetwork(ARCHITECTURE)
+
+        expect(mutate(parent, 0).id).toBe(parent.id)
+    })
+
+    it('gives two networks with identical weights the same id', () => {
+        const network = createNetwork(ARCHITECTURE)
+        const twin = deserializeNetwork(serializeNetwork(network))
+
+        expect(twin?.id).toBe(network.id)
+    })
+
+    // Training moves weights in place, so an id computed once at construction would go
+    // stale and keep claiming to be the untrained network.
+    it('re-derives the id when training changes the weights', () => {
+        const network = createNetwork(ARCHITECTURE)
+        const before = network.id
+
+        trainBatch(network, [{ inputs: new Array(ARCHITECTURE[0]).fill(1), targets: [1, 1, 1] }], 1)
+
+        expect(network.id).not.toBe(before)
     })
 
     it('keeps only the most recent races once the history cap is reached', () => {

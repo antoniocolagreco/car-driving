@@ -1,5 +1,5 @@
 import { clamp, tanh } from '@core/math'
-import { randomColor, randomId, randomSymmetric } from '@core/random'
+import { randomColor, randomSymmetric } from '@core/random'
 import { MUTATION, VETERANS } from '@core/config'
 
 /**
@@ -64,6 +64,16 @@ export type RaceRecord = {
 
 /** A full network: one `Layer` per transition between consecutive architecture sizes. */
 export type Network = {
+    /**
+     * A hash of the parameters, NOT a random label: see `networkId`. Two networks with
+     * the same weights carry the same id and are the same driver, which is what lets the
+     * archive deduplicate by content without ever comparing 540 numbers itself.
+     *
+     * Derived, so it has to be reassigned whenever the weights change. They change in
+     * exactly two places: a new network is built (`createNetwork`, `mutate`,
+     * `deserializeNetwork`), or a human's driving is trained into one
+     * (`applyAverageGradients`). Both reassign it.
+     */
     id: string
     /** Neuron count per layer, input layer first. Always `[12, ..., 3]`. */
     architecture: readonly number[]
@@ -80,9 +90,10 @@ export type Network = {
     /**
      * Every race this exact network has run, oldest first, capped at `VETERANS.historyLimit`.
      *
-     * A mutated child is a different network with a different `id` and an empty history:
-     * the point of the record is to describe one fixed set of weights across many courses,
-     * and weights that changed have not driven any of those races.
+     * A mutated child starts empty: the point of the record is to describe one fixed set
+     * of weights across many courses, and weights that changed have not driven any of
+     * those races. History is deliberately NOT part of `id`, so the same weights met
+     * twice are one network with one record rather than two rival accounts of one driver.
      */
     history: RaceRecord[]
 }
@@ -131,6 +142,89 @@ const STORED_DECIMALS = 2
 
 const rounded = (value: number): number => Number(value.toFixed(STORED_DECIMALS))
 
+/**
+ * The identity of a network: a hash of its architecture, weights and biases.
+ *
+ * Identity used to be a random 8-character label, which made two networks with byte for
+ * byte the same weights two different networks as far as every `id` comparison was
+ * concerned. That is not a theoretical worry: the player's car is built as `mutate(elite,
+ * 0)`, an exact clone, so measured over 45 races it was an exact copy of the elite in 44
+ * of them and was admitted to the veterans archive as a separate member in 12. After 45
+ * races, 12 of 92 archive slots held weights that were already in the archive, each
+ * accumulating its own separate history and its own separate median. The archive exists
+ * to say what ONE set of weights does across many courses, and splitting that evidence
+ * between duplicates is the one thing it must not do.
+ *
+ * With identity derived from the parameters, `updateRoster`'s dedupe by id becomes a
+ * dedupe by content and the duplicates cannot be created in the first place.
+ *
+ * Two details make it correct rather than merely plausible:
+ *
+ * Parameters are hashed through `rounded`, the SAME quantisation `serializeNetwork`
+ * writes with. `rounded` is idempotent, so a network that round-trips through
+ * localStorage keeps the id it had before it was saved. Hashing full precision instead
+ * would rename every member of the archive on every reload.
+ *
+ * The accumulator is 64 bits, as two independent 32-bit FNV-1a lanes. A collision would
+ * silently merge two genuinely different networks into one archive entry, so 32 bits
+ * (roughly one chance in a million over a full roster) was not enough; at 64 the odds are
+ * around 3e-16 and the cost is one extra multiply per parameter.
+ */
+export const networkId = (
+    architecture: readonly number[],
+    layers: readonly { weights: number[][]; biases: number[] }[],
+): string => {
+    let low = 0x811c9dc5
+    let high = 0x01000193
+
+    const absorb = (value: number): void => {
+        // Rounded first, then scaled to an exact integer: hashing the decimal text would
+        // have to care about "-0.00" and about float formatting, and this cannot.
+        const quantised = Math.round(rounded(value) * 10 ** STORED_DECIMALS)
+        low = Math.imul(low ^ quantised, 0x01000193)
+        high = Math.imul(high ^ (quantised + 0x9e3779b9), 0x85ebca6b)
+    }
+
+    for (const size of architecture) {
+        absorb(size)
+    }
+    for (const layer of layers) {
+        for (const row of layer.weights) {
+            for (const weight of row) {
+                absorb(weight)
+            }
+        }
+        for (const bias of layer.biases) {
+            absorb(bias)
+        }
+    }
+
+    const text = (value: number): string => (value >>> 0).toString(36).padStart(7, '0')
+    return `${text(low)}${text(high)}`.toUpperCase()
+}
+
+/** The id `network` should be carrying right now, from the parameters it holds right now. */
+const idOf = (network: Pick<Network, 'architecture' | 'layers'>): string =>
+    networkId(network.architecture, network.layers)
+
+/**
+ * How an id is written wherever one is shown to a human: its head, not the whole hash.
+ *
+ * The single place that decision is made, which is the point. It used to be made twice:
+ * the live stats printed the whole id and the veterans standings printed the first eight
+ * characters, so the same network appeared under two different names and the two panels
+ * could not be read against each other. Both were self-consistent, and neither knew about
+ * the other.
+ *
+ * It lives here, next to `networkId`, because it is a property of the id format rather
+ * than of any one panel, and because the game-over banner in `render/` needs it too and
+ * cannot import from `ui/`.
+ *
+ * Eight base36 characters tell a hundred archive members apart by eye comfortably. The
+ * full fourteen stay the identity used for every comparison; this is only the label.
+ */
+export const shortNetworkId = (id: string): string => id.slice(0, 8)
+
 /** JSON-safe shape of a `Network`, used for localStorage persistence. */
 export type SerializedNetwork = {
     version: typeof NETWORK_FORMAT_VERSION
@@ -178,7 +272,7 @@ export const createNetwork = (architecture: readonly number[]): Network => {
     }
 
     return {
-        id: randomId(),
+        id: networkId(architecture, layers),
         architecture,
         layers,
         generation: 0,
@@ -274,15 +368,21 @@ const mutateLayer = (layer: Layer, rate: number): Layer => {
  */
 export const mutate = (network: Network, rate: number): Network => {
     const clampedRate = clamp(rate, 0, 1)
+    const layers = network.layers.map((layer) => mutateLayer(layer, clampedRate))
 
-    // A new identity in every sense: new id, new colour, and no history at all. The
-    // parent's record describes weights this network does not have, and inheriting it
-    // would credit a child with races it never drove. An exact clone (rate 0) is treated
-    // the same way on purpose, because it goes on to be scored as its own competitor.
+    // A fresh colour and no history at all: the parent's record describes weights this
+    // network does not have, and inheriting it would credit a child with races it never
+    // drove.
+    //
+    // The id, though, follows the weights. A mutation that changed at least one parameter
+    // yields a different id, which is the normal case; one that changed nothing (rate 0,
+    // or a draw that missed every parameter) yields the parent's id, which is correct,
+    // because it IS the parent as far as anything that compares networks can tell. That
+    // is what stops exact clones from entering the archive twice.
     return {
-        id: randomId(),
+        id: networkId(network.architecture, layers),
         architecture: network.architecture,
-        layers: network.layers.map((layer) => mutateLayer(layer, clampedRate)),
+        layers,
         generation: 0,
         color: randomColor(),
         history: [],
@@ -414,6 +514,11 @@ export const applyAverageGradients = (
             }
         }
     }
+
+    // The weights just moved, so the identity derived from them has to move with them.
+    // This is the only place parameters change outside of network construction, and
+    // `trainBatch` funnels through it, so one line here covers both training paths.
+    network.id = idOf(network)
 }
 
 /** Trains once on the exact average gradient of `examples`; order cannot affect the update. */
@@ -498,9 +603,6 @@ export const deserializeNetwork = (data: unknown): Network | undefined => {
     if (payload.version !== NETWORK_FORMAT_VERSION) {
         return undefined
     }
-    if (typeof payload.id !== 'string') {
-        return undefined
-    }
     if (!isNumberArray(payload.architecture) || payload.architecture.length < 2) {
         return undefined
     }
@@ -548,7 +650,13 @@ export const deserializeNetwork = (data: unknown): Network | undefined => {
     }
 
     return {
-        id: payload.id,
+        // Recomputed rather than read back. The stored id is still written, because it
+        // makes the JSON readable by eye, but trusting it would let a hand-edited or
+        // stale file carry an identity its weights do not match, and the whole point of
+        // deriving it is that the two can never disagree. Since the weights were stored
+        // through the same quantisation the hash uses, this reproduces the id the network
+        // had when it was saved.
+        id: networkId(architecture, layers),
         architecture,
         layers,
         generation: payload.generation,
