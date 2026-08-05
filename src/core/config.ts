@@ -59,8 +59,14 @@ export const SIMULATION = {
      * the world is not: a car that survives past the last traffic row would otherwise
      * drive down an empty road for minutes on end, and the generation could not end
      * until it did. Whoever is still alive at the ceiling is retired, not penalised.
+     *
+     * It has to be read against the length of the course. Traffic runs at half the racing
+     * cars' top speed, so the gap closes at 5 px/step at best, and 20 rows 800 px apart is
+     * 16000 px of closing: 3200 steps, or 53 seconds flat out. At 60 this ceiling was the
+     * binding constraint, forcing an average above 8 and leaving no room to lift off for a
+     * difficult row. At 120 there is roughly a minute of slack to spend on manoeuvring.
      */
-    maxRoundSeconds: 60,
+    maxRoundSeconds: 120,
     /**
      * A car that has not covered `idleProgressThreshold` px in this many seconds is
      * considered stuck and dies.
@@ -79,8 +85,23 @@ export const SIMULATION = {
     cameraHeightRatio: 0.7,
     /** How many traffic rows the course is made of. */
     trafficRows: 20,
-    /** Vertical spacing between two traffic rows, in pixels. */
-    trafficRowSpacing: 500,
+    /**
+     * Vertical spacing between two traffic rows, in pixels.
+     *
+     * This is the room a car has to complete a manoeuvre, and the manoeuvre has a price
+     * that can be worked out rather than guessed. Steering power is
+     * `0.000444v² - 0.007667v + 0.037222` rad per step, so at a cruising 8.5 the lateral
+     * offset builds as `v · s · N² / 2`: 67 steps to cross one lane, 95 to cross two. The
+     * gap to the row ahead closes at `v - 5`, which at 8.5 is 3.5 px/step, so those 95
+     * steps eat 333 px.
+     *
+     * At 500 that was two thirds of everything available, with the steering held hard over
+     * from the instant the previous row was cleared. The rows that demand two lanes, the
+     * stairs and the L shapes, were therefore at the edge of what the car can physically
+     * do, and a tenth of a second late was a head-on crash. At 800 the same manoeuvre
+     * takes 42% of the gap, which is margin rather than a limit.
+     */
+    trafficRowSpacing: 800,
 } as const
 
 /** The world is a very tall corridor; the road sits inside it. */
