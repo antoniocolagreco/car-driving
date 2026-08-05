@@ -1,22 +1,40 @@
 import { describe, expect, it } from 'vitest'
 import { VETERANS } from '@core/config'
-import type { Network } from './neural-network'
+import type { Network, RaceRecord } from './neural-network'
 import {
     bestScore,
     bestTime,
     medianScore,
     rankRoster,
     selectRacers,
+    survivalRate,
     updateRoster,
     worstScore,
 } from './veterans'
 
-/** A network stripped to what the archive actually reads: an identity and a record. */
+/**
+ * A network stripped to what the archive actually reads: an identity and a record.
+ *
+ * The races carry no survival either way, which is what an archive saved before survival
+ * was measured looks like. Every ranking test built on this one is therefore a test of
+ * what happens once survival has nothing to say.
+ */
 const networkWith = (id: string, scores: readonly number[]): Network =>
     ({
         id,
         history: scores.map((overtakes) => ({ overtakes })),
     }) as unknown as Network
+
+/** A network whose races are given in full, survival included. */
+const networkWithRaces = (id: string, history: readonly RaceRecord[]): Network =>
+    ({ id, history: [...history] }) as unknown as Network
+
+/** `count` races, `survivedCount` of which were survived, all scoring `overtakes`. */
+const races = (count: number, survivedCount: number, overtakes: number): RaceRecord[] =>
+    Array.from({ length: count }, (_, index) => ({
+        overtakes,
+        survived: index < survivedCount,
+    }))
 
 const idsOf = (roster: readonly Network[]): string[] => roster.map((network) => network.id)
 
@@ -46,7 +64,68 @@ describe('medianScore', () => {
     })
 })
 
+describe('survivalRate', () => {
+    it('is 0 for a network that has never raced', () => {
+        expect(survivalRate(networkWith('fresh', []))).toBe(0)
+    })
+
+    it('is the share of measured races that were survived', () => {
+        expect(survivalRate(networkWithRaces('mixed', races(4, 3, 20)))).toBe(0.75)
+    })
+
+    // Races recorded before survival was measured are left out of the fraction entirely.
+    // Counting their silence as a wreck would bury a long-standing archive under whatever
+    // was admitted to it after the change.
+    it('ignores the races that never recorded whether the car came through', () => {
+        const network = networkWithRaces('legacy', [
+            { overtakes: 20 },
+            { overtakes: 20 },
+            { overtakes: 20, survived: true },
+            { overtakes: 20, survived: false },
+        ])
+
+        expect(survivalRate(network)).toBe(0.5)
+    })
+
+    it('is 0 when nothing on record says either way', () => {
+        expect(survivalRate(networkWith('legacy-only', [20, 20, 20]))).toBe(0)
+    })
+})
+
 describe('rankRoster', () => {
+    // The whole point of the criterion: finishing is the goal, and overtakes are only the
+    // way there. A network that comes through nine races in ten is closer to clearing a
+    // course than one that passes more traffic and wrecks half the time.
+    it('puts the better survivor first, whatever the medians say', () => {
+        const roster = [
+            networkWithRaces('reckless', races(10, 5, 30)),
+            networkWithRaces('reliable', races(10, 9, 12)),
+        ]
+
+        expect(idsOf(rankRoster(roster))).toEqual(['reliable', 'reckless'])
+    })
+
+    // The cost of the rule, written down rather than discovered later: an archive saved
+    // before survival was measured has a rate of 0, so its members rank below anything
+    // that has been measured at all and are the first to be evicted.
+    it('ranks a member with nothing measured below one that survived a single race', () => {
+        const roster = [
+            networkWith('unmeasured', [40, 40, 40, 40]),
+            networkWithRaces('measured', races(1, 1, 4)),
+        ]
+
+        expect(idsOf(rankRoster(roster))).toEqual(['measured', 'unmeasured'])
+    })
+
+    it('falls back to the median between equal survivors', () => {
+        const roster = [
+            networkWithRaces('lower', races(10, 8, 12)),
+            networkWithRaces('higher', races(10, 8, 30)),
+        ]
+
+        expect(idsOf(rankRoster(roster))).toEqual(['higher', 'lower'])
+    })
+
     it('orders by descending median', () => {
         const roster = [
             networkWith('weak', [10, 10, 10]),
@@ -123,6 +202,24 @@ describe('updateRoster', () => {
         const unlucky = networkWith('unlucky', [0])
 
         expect(idsOf(updateRoster(full, [unlucky]))).not.toContain('unlucky')
+    })
+
+    // Eviction runs on the same criterion as the racing selection, so the member that
+    // wrecks most is the one the archive stops keeping, however high its median is.
+    it('drops the worst survivor before a lower median that comes through its races', () => {
+        const measured = Array.from({ length: VETERANS.rosterSize - 2 }, (_, index) =>
+            networkWithRaces(`filler-${index}`, races(10, 7, 20)),
+        )
+        const full = [
+            ...measured,
+            networkWithRaces('reckless', races(10, 2, 40)),
+            networkWithRaces('reliable', races(10, 9, 8)),
+        ]
+
+        const kept = idsOf(updateRoster(full, [networkWithRaces('newcomer', races(1, 1, 22))]))
+
+        expect(kept).toContain('reliable')
+        expect(kept).not.toContain('reckless')
     })
 
     // Eviction has to be the exact reverse of the ranking, or a member could be dropped

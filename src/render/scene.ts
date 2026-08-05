@@ -1,4 +1,5 @@
 import { SIMULATION } from '@core/config'
+import { hasClearedCourse } from '@core/fitness'
 import { shortNetworkId } from '@core/neural-network'
 import { PLAYER_COLOR, type RacingCar } from '@core/population'
 import type { SimulationState } from '@core/simulation'
@@ -225,8 +226,16 @@ export const drawVictory = (layer: CanvasLayer, state: SimulationState): void =>
     ctx.strokeText('VICTORY!', centerX, centerY - 40)
     ctx.fillText('VICTORY!', centerX, centerY - 40)
 
+    // Counted live: the parade keeps running, so cars still on the road can cross the line
+    // during it and the banner has to say so while it happens.
+    const finishers: number = state.cars.filter((racingCar) =>
+        hasClearedCourse(racingCar.stats, state.traffic.length),
+    ).length
+
     ctx.font = 'bold 20px monospace'
-    const detail = `Course cleared — closing in ${secondsLeft}s`
+    const cleared: string =
+        finishers > 1 ? `${finishers} cars cleared the course` : 'Course cleared'
+    const detail = `${cleared}, closing in ${secondsLeft}s`
     ctx.strokeText(detail, centerX, centerY)
     ctx.fillText(detail, centerX, centerY)
     ctx.restore()

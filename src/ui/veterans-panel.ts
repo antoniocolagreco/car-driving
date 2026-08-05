@@ -1,5 +1,12 @@
 import { type Network, shortNetworkId } from '@core/neural-network'
-import { bestScore, bestTime, medianScore, raceCount, worstScore } from '@core/veterans'
+import {
+    bestScore,
+    bestTime,
+    medianScore,
+    raceCount,
+    survivalRate,
+    worstScore,
+} from '@core/veterans'
 
 /**
  * The veterans standings: one row per archive member, sortable by any column, shown in
@@ -15,7 +22,7 @@ import { bestScore, bestTime, medianScore, raceCount, worstScore } from '@core/v
  */
 
 /** What a column sorts by, and how it is rendered. */
-type ColumnKey = 'network' | 'races' | 'best' | 'worst' | 'median' | 'time'
+type ColumnKey = 'network' | 'races' | 'survival' | 'best' | 'worst' | 'median' | 'time'
 
 type Column = {
     readonly key: ColumnKey
@@ -36,6 +43,9 @@ type Column = {
 const formatSeconds = (seconds: number | undefined): string =>
     seconds === undefined ? '' : `${seconds.toFixed(1)}s`
 
+/** A rate in [0, 1] as a percentage with two decimals, which is the resolution of a hundred races. */
+const formatPercentage = (rate: number): string => `${(rate * 100).toFixed(2)}%`
+
 const COLUMNS: readonly Column[] = [
     {
         key: 'network',
@@ -51,6 +61,14 @@ const COLUMNS: readonly Column[] = [
         title: 'Races this network has on record. The more there are, the more its median is worth',
         value: raceCount,
         text: (network) => String(raceCount(network)),
+        numeric: true,
+    },
+    {
+        key: 'survival',
+        label: 'Survival',
+        title: 'Share of its races it came through without wrecking or timing out. This is what the archive ranks on first',
+        value: survivalRate,
+        text: (network) => formatPercentage(survivalRate(network)),
         numeric: true,
     },
     {
@@ -72,7 +90,7 @@ const COLUMNS: readonly Column[] = [
     {
         key: 'median',
         label: 'Median',
-        title: 'Middle result across every race. This is what the archive ranks on',
+        title: 'Middle result across every race. The archive ranks on this once survival rates are equal',
         value: medianScore,
         text: (network) => String(medianScore(network)),
         numeric: true,
@@ -151,7 +169,9 @@ export const createVeteransPanel = (container: HTMLElement, signal: AbortSignal)
     const headRow = document.createElement('tr')
     const body = document.createElement('tbody')
 
-    let sort: SortState = { key: 'median', ascending: false }
+    // Opens on the archive's own primary key, and since the roster arrives already ranked
+    // a stable sort leaves equal survival rates in exactly the order the archive holds them.
+    let sort: SortState = { key: 'survival', ascending: false }
     let lastRoster: readonly Network[] = []
     let lastRacingIds: ReadonlySet<string> = new Set()
 

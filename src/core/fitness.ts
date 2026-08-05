@@ -43,6 +43,12 @@ export type CarStats = {
     secondsSinceLastOvertake: number
     /** A car that missed the overtake deadline cannot be selected as winner or parent. */
     overtakeTimedOut: boolean
+    /**
+     * Taken out of the race by its own driving: a wreck, the idle timeout or the overtake
+     * deadline. Being stopped because the round ended is not this, and neither is crossing
+     * the finish line, so `!retired` is exactly what "survived the race" means.
+     */
+    retired: boolean
     /** Whether the brake was ever pressed while moving: worth `BRAKE_DISCOVERY_BONUS`, once. */
     usedBrake: boolean
     /** Elapsed race time, needed to timestamp overtakes. */
@@ -70,6 +76,7 @@ export const createStats = (startPosition: Vec2): CarStats => ({
     lastOvertakeAtSeconds: 0,
     secondsSinceLastOvertake: 0,
     overtakeTimedOut: false,
+    retired: false,
     usedBrake: false,
     aliveSeconds: 0,
     idleSeconds: 0,
@@ -113,6 +120,22 @@ export const updateStats = (stats: CarStats, sample: FitnessSample, dt: number):
 export const recordOvertakeTimeout = (stats: CarStats): void => {
     stats.overtakeTimedOut = true
 }
+
+/** Marks a car as taken out of the race by its own driving. See `CarStats.retired`. */
+export const recordRetirement = (stats: CarStats): void => {
+    stats.retired = true
+}
+
+/**
+ * True once a car has passed every traffic car on the course.
+ *
+ * The finish line is a count, not a place on the road: there is nothing beyond the last
+ * traffic row but empty tarmac, so having nobody left to pass IS the finish. An empty
+ * course has no finish line at all, which is why a zero traffic count answers false
+ * rather than true for everybody at once.
+ */
+export const hasClearedCourse = (stats: CarStats, trafficCount: number): boolean =>
+    trafficCount > 0 && stats.overtakes >= trafficCount
 
 /**
  * What the ranking compares: traffic cars passed, plus the one-off brake bonus for a

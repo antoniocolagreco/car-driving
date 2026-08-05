@@ -23,9 +23,11 @@ import { rankRoster, selectRacers, updateRoster } from './veterans'
 import { castSensors } from './sensor'
 import {
     type FitnessSample,
+    hasClearedCourse,
     hasMissedOvertakeDeadline,
     isStuck,
     recordOvertakeTimeout,
+    recordRetirement,
     selectBest,
     selectParents,
     updateStats,
@@ -283,6 +285,21 @@ export const createSimulation = (
         manualDriving: false,
     }
 
+    /** True once `racingCar` has passed the last traffic car of the current course. */
+    const hasFinished = (racingCar: RacingCar): boolean =>
+        hasClearedCourse(racingCar.stats, state.traffic.length)
+
+    /**
+     * Takes a car out of the race by its own fault, which is what separates a wreck from a
+     * car that was simply still driving when the round ended. Only these three call sites
+     * are retirements; the round's time ceiling and the end of the victory parade stop cars
+     * without holding it against them.
+     */
+    const retire = (racingCar: RacingCar): void => {
+        recordRetirement(racingCar.stats)
+        crash(racingCar.car)
+    }
+
     const currentObstacleSegments = (): Segment[] => {
         const segments: Segment[] = [...state.road.borders]
         for (const trafficCar of state.traffic) {
@@ -445,18 +462,21 @@ export const createSimulation = (
      * Recording comes before admission so a newly admitted network arrives already
      * holding the race that earned it, rather than with an empty record and a median of
      * zero that would place it below everybody on the way in.
+     *
+     * Survival is written here for the same reason: the flag is only true of a car that
+     * was never retired, and by this point every car has either crossed the line, run out
+     * of race or been taken out of it, so the answer cannot change afterwards.
      */
     const recordRaceResults = (): void => {
-        const clearedBy: Network | undefined = state.courseCleared
-            ? state.courseWinner?.network
-            : undefined
         for (const racingCar of state.cars) {
+            // Every finisher carries a time, not only the one that got there first. The
+            // last overtake of a cleared course IS the last traffic car, so that timestamp
+            // is the finish line; second across it still crossed it.
+            const finished: boolean = hasFinished(racingCar)
             recordRace(racingCar.network, {
                 overtakes: racingCar.stats.overtakes,
-                seconds:
-                    racingCar.network === clearedBy
-                        ? racingCar.stats.lastOvertakeAtSeconds
-                        : undefined,
+                survived: !racingCar.stats.retired,
+                seconds: finished ? racingCar.stats.lastOvertakeAtSeconds : undefined,
             })
         }
 
@@ -578,12 +598,16 @@ export const createSimulation = (
                 processConsolidation(examplesPerStep)
             }
             if (state.victorySeconds >= SIMULATION.victoryCelebrationSeconds) {
+                // Everybody who did not make it is stopped where they stand, and stopped
+                // is all it is: the race ended around them rather than under them, so no
+                // retirement is recorded against them. Every car that crossed the line
+                // drives on, however many of them there are.
                 for (const racingCar of state.aliveCars) {
-                    if (racingCar !== state.courseWinner) {
+                    if (!hasFinished(racingCar)) {
                         crash(racingCar.car)
                     }
                 }
-                state.aliveCars = state.courseWinner ? [state.courseWinner] : []
+                state.aliveCars = state.cars.filter((racingCar) => !racingCar.car.crashed)
                 state.bestCar = state.courseWinner
                 state.activeCar = state.courseWinner
                 for (const racingCar of state.cars) {
@@ -617,8 +641,6 @@ export const createSimulation = (
         // — never cast a second time, which is what the old scoring code did.
         for (const racingCar of state.aliveCars) {
             const { car, network, stats } = racingCar
-            const isCelebratingWinner: boolean =
-                state.courseCleared && racingCar === state.courseWinner
 
             const nearbyObstacles = obstacles.filter((segment) =>
                 isWithinRange(segment, car.position),
@@ -675,23 +697,29 @@ export const createSimulation = (
             }
             updateStats(stats, sample, dt)
 
+            // Read after the stats are updated, so a car is protected from the very step
+            // on which it passes the last traffic car rather than from the next one. A
+            // finished race cannot be taken back: whoever crossed the line keeps driving,
+            // exempt from all three retirements, until the round closes.
+            const finished: boolean = hasFinished(racingCar)
+
             // A crash costs nothing beyond what it takes away by itself: the wreck stops
             // overtaking, and everyone still driving passes it in the only currency there is.
-            if (collided && !isCelebratingWinner) {
-                crash(car)
+            if (collided && !finished) {
+                retire(racingCar)
             }
 
             // Retire cars that fail the independent minimum-progress timeout.
-            if (!isCelebratingWinner && isStuck(stats)) {
-                crash(car)
+            if (!finished && isStuck(stats)) {
+                retire(racingCar)
             }
 
             // A car must keep overtaking, not merely moving. Missing the deadline retires it
             // AND marks the result ineligible, so it cannot win or reproduce however many
             // overtakes it had banked before it stopped racing.
-            if (!isCelebratingWinner && hasMissedOvertakeDeadline(stats)) {
+            if (!finished && hasMissedOvertakeDeadline(stats)) {
                 recordOvertakeTimeout(stats)
-                crash(car)
+                retire(racingCar)
             }
         }
 

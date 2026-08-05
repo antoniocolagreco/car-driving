@@ -47,6 +47,30 @@ export const worstScore = (network: Network): number =>
         : network.history.reduce((worst, record) => Math.min(worst, record.overtakes), Infinity)
 
 /**
+ * The share of races this network came through without being retired, from 0 to 1, or 0
+ * when nothing on record says either way.
+ *
+ * Only the races that carry the flag are counted, top and bottom. Races recorded before
+ * survival was measured cannot answer the question, and reading their silence as a wreck
+ * would bury every network that was already in the archive under every network admitted
+ * after it.
+ */
+export const survivalRate = (network: Network): number => {
+    let measured = 0
+    let survived = 0
+    for (const record of network.history) {
+        if (record.survived === undefined) {
+            continue
+        }
+        measured += 1
+        if (record.survived) {
+            survived += 1
+        }
+    }
+    return measured === 0 ? 0 : survived / measured
+}
+
+/**
  * The fastest course this network ever cleared, or `undefined` if it never has.
  *
  * Only a cleared course carries a time, so this is also the answer to "has it ever
@@ -63,7 +87,18 @@ export const bestTime = (network: Network): number | undefined => {
 }
 
 /**
- * Orders the archive by descending median. That is the whole rule.
+ * Orders the archive by descending survival rate, then by descending median.
+ *
+ * Survival comes first because finishing is the goal and overtakes are only the way
+ * there: a network that comes through nine races out of ten is closer to clearing a
+ * course than one that passes more traffic and wrecks half the time. Surviving cannot be
+ * done by hiding, either, since the overtake deadline retires a car that stops making
+ * progress, so the only way to stay in a race is to keep racing it.
+ *
+ * The median settles what survival cannot see, which is how much of the course was
+ * actually covered. It fires less often than a tie-break usually does: a rate over a
+ * handful of races is a coarse fraction, so equal rates are common early and rare later,
+ * and the ordering is survival-led by design rather than by accident.
  *
  * Newcomers used to be pushed to the front until they had run a few races, on the
  * argument that a median over one race is just that race. The rule turned out to earn
@@ -78,7 +113,9 @@ export const bestTime = (network: Network): number | undefined => {
 export const rankRoster = (roster: VeteranRoster): Network[] =>
     [...roster].sort(
         (left, right) =>
-            medianScore(right) - medianScore(left) || raceCount(left) - raceCount(right),
+            survivalRate(right) - survivalRate(left) ||
+            medianScore(right) - medianScore(left) ||
+            raceCount(left) - raceCount(right),
     )
 
 /** The archive members that take part in a population of `quantity` cars, best first. */
@@ -93,9 +130,10 @@ export const selectRacers = (roster: VeteranRoster, quantity: number): Network[]
  * A fixed number larger than the number of arrivals would empty the archive at a steady
  * rate no matter how good its members were, which is the opposite of remembering them.
  *
- * Whoever holds the lowest median leaves, with no exemption for how recently they
- * arrived. Ties break on the number of races, fewest first: between two members equally
- * weak on the evidence, the one with less evidence behind it is the cheaper to lose.
+ * Whoever ranks last leaves, with no exemption for how recently they arrived: the archive
+ * keeps what it would enter in a race, so it drops on the same criterion it races on.
+ * Ties break on the number of races, fewest first: between two members equally weak on
+ * the evidence, the one with less evidence behind it is the cheaper to lose.
  */
 export const updateRoster = (roster: VeteranRoster, admitted: readonly Network[]): Network[] => {
     const next: Network[] = [...roster]
@@ -115,7 +153,9 @@ export const updateRoster = (roster: VeteranRoster, admitted: readonly Network[]
     // while removing the least defensible entries.
     const weakestFirst: Network[] = [...next].sort(
         (left, right) =>
-            medianScore(left) - medianScore(right) || raceCount(left) - raceCount(right),
+            survivalRate(left) - survivalRate(right) ||
+            medianScore(left) - medianScore(right) ||
+            raceCount(left) - raceCount(right),
     )
 
     const dropped = new Set<string>(weakestFirst.slice(0, excess).map((network) => network.id))

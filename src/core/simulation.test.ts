@@ -306,7 +306,9 @@ describe('createSimulation: clearing the course', () => {
 
         expect(sim.state.gameOver).toBe(true)
         expect(clearer?.car.crashed).toBe(false)
-        expect(sim.state.aliveCars).toEqual(clearer ? [clearer] : [])
+        // The single traffic car was behind the whole grid, so the whole grid cleared the
+        // course and the whole grid comes out of the parade still driving.
+        expect(sim.state.aliveCars).toEqual(sim.state.cars)
         expect(sim.state.bestCar).toBe(clearer)
         // The winner's network is the one the next generation is bred from.
         expect(sim.state.winner).toBe(clearer?.network)
@@ -342,6 +344,93 @@ describe('createSimulation: clearing the course', () => {
         // clearer keeps driving for five more seconds and its time must not grow with it.
         expect(finishes[0].seconds).toBe(clearer?.stats.lastOvertakeAtSeconds)
         expect(finishes[0].seconds).toBeLessThan(SIMULATION.victoryCelebrationSeconds)
+    })
+
+    // Crossing the line is not a race for one seat. Everybody who gets there has finished,
+    // and the parade ending is not a reason to take that back.
+    it('stops the cars that never finished and leaves every finisher driving', () => {
+        const sim = createSimulation(smallSettings, {
+            winner: straightThrottleNetwork(),
+            trafficSeed: 'many-finishers',
+        })
+
+        // The one traffic car sits far up the road, out of reach of the whole round, so
+        // the only finishers are the two set by hand here.
+        const unreachable = sim.state.traffic[0]
+        unreachable.position = vec(unreachable.position.x, sim.state.cars[0].car.position.y - 5000)
+        sim.state.traffic = [unreachable]
+
+        const finishers = [sim.state.cars[0], sim.state.cars[1]]
+        for (const finisher of finishers) {
+            finisher.stats.overtakes = 1
+        }
+        const others = sim.state.cars.filter((racingCar) => !finishers.includes(racingCar))
+
+        sim.step(SIMULATION.stepSeconds)
+        expect(sim.state.courseCleared).toBe(true)
+        expect(finishers).toContain(sim.state.courseWinner)
+
+        const celebrationSteps = Math.ceil(
+            SIMULATION.victoryCelebrationSeconds / SIMULATION.stepSeconds,
+        )
+        for (let step = 0; step <= celebrationSteps; step++) {
+            sim.step(SIMULATION.stepSeconds)
+        }
+
+        expect(sim.state.gameOver).toBe(true)
+        for (const finisher of finishers) {
+            expect(finisher.car.crashed).toBe(false)
+            expect(sim.state.aliveCars).toContain(finisher)
+            // A time in the record is what "finished" means once the race is over, and
+            // the runner up has one as much as the winner does.
+            expect(finisher.network.history.at(-1)?.seconds).toBeDefined()
+            expect(finisher.network.history.at(-1)?.survived).toBe(true)
+        }
+        for (const other of others) {
+            expect(other.car.crashed).toBe(true)
+            expect(other.network.history.at(-1)?.seconds).toBeUndefined()
+        }
+    })
+
+    it('records a car taken out by a timeout as not having survived', () => {
+        const sim = createSimulation(smallSettings, {
+            winner: stationaryNetwork(),
+            trafficSeed: 'retired',
+        })
+
+        // Nobody moves, so the idle timeout takes the whole field out one car at a time.
+        const steps = Math.ceil(SIMULATION.idleTimeoutSeconds / SIMULATION.stepSeconds) + 2
+        for (let step = 0; step < steps; step++) {
+            sim.step(SIMULATION.stepSeconds)
+        }
+
+        expect(sim.state.gameOver).toBe(true)
+        for (const racingCar of sim.state.cars) {
+            expect(racingCar.stats.retired).toBe(true)
+            expect(racingCar.network.history.at(-1)?.survived).toBe(false)
+        }
+    })
+
+    // The round's time ceiling is not a verdict on anybody: a car still driving when the
+    // clock runs out was never beaten, it simply ran out of race.
+    it('records a car still driving at the round ceiling as having survived', () => {
+        const sim = createSimulation(smallSettings, {
+            winner: straightThrottleNetwork(),
+            trafficSeed: 'ceiling',
+        })
+        // The clock is wound to one step short of the ceiling after a single step of real
+        // driving, so no timeout has had the time to retire anybody and the ceiling is the
+        // only thing that can end this round.
+        sim.step(SIMULATION.stepSeconds)
+        sim.state.elapsedSeconds = SIMULATION.maxRoundSeconds - SIMULATION.stepSeconds
+        sim.step(SIMULATION.stepSeconds)
+
+        expect(sim.state.gameOver).toBe(true)
+        for (const racingCar of sim.state.cars) {
+            expect(racingCar.car.crashed).toBe(true)
+            expect(racingCar.stats.retired).toBe(false)
+            expect(racingCar.network.history.at(-1)?.survived).toBe(true)
+        }
     })
 
     it('reports nothing when the round ends without the course being beaten', () => {
