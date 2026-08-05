@@ -1,14 +1,15 @@
 /**
  * Sparse race objective: the score is the number of traffic cars passed, one point each,
- * plus a single brake bonus for a car that both braked and passed somebody,
- * and doing it sooner is the only tie-breaker.
+ * plus a single brake bonus for a car that both braked and passed somebody. Time enters
+ * only between cars that cleared the course, and below that nothing breaks a tie at all.
  *
  * There is nothing else. No points for progress, speed, survival, steering or for
  * crashing gently, and no malus for crashing at all. Every knob of that kind that has
  * been tried here was found and exploited within a few dozen generations: paying per
  * frame for braking near an obstacle produced cars that tucked in behind traffic and
- * pumped the brake forever, and discounting the crash malus at traffic pace produced
- * cars that deliberately bumped the wall sideways at exactly that speed. A reward is an
+ * pumped the brake forever; discounting the crash malus at traffic pace produced cars
+ * that deliberately bumped the wall sideways at exactly that speed; and scaling a malus
+ * by impact speed produced cars that had learned to crash gently. A reward is an
  * instruction, and the population always follows the instruction rather than the
  * intention behind it, so the only safe instruction is the goal itself: pass every
  * traffic car, and get there first.
@@ -143,37 +144,68 @@ export const hasClearedCourse = (stats: CarStats, trafficCount: number): boolean
 export const raceScore = (stats: CarStats, brakeBonus: number = DEFAULTS.brakeBonus): number =>
     stats.overtakes + (stats.usedBrake && stats.overtakes > 0 ? brakeBonus : 0)
 
+/** Everything the ranking needs beyond the cars themselves. */
+export type RankingRules = {
+    /** What one brake press is worth, in overtakes. See `BRAKE_BONUSES`. */
+    readonly brakeBonus: number
+    /** Traffic cars on this course, which is what tells a finisher from a wreck. */
+    readonly trafficCount: number
+}
+
 /**
- * A higher score always wins; at equal scores the car that got there first does. That is
- * the whole ranking, and it is exactly the goal: pass everybody, as soon as possible.
- * Overtake-timed-out cars and cars that scored nothing at all are excluded.
+ * A higher score always wins. Among equal scores a car that cleared the course beats one
+ * that did not, and between two that cleared it the faster one wins. Overtake-timed-out
+ * cars and cars that scored nothing at all are excluded.
  *
- * Partial credit for getting CLOSE to the next traffic car was tried as a middle
- * tie-break and measured worse, so do not reach for it again. The motivation was real:
- * the overtake count is a staircase rather than a slope, because a row of traffic is
- * passed whole, so on a fixed course 25 of 81 cars tied on EXACTLY 8 and the scores 3, 6
- * and 9 never occurred at all. Ranking those ties by the smallest gap ever reached to the
- * next traffic car dropped peak overtakes from 20/23/18 to 17/10/14 over three runs of 40
- * races. The gap is longitudinal, so shrinking it rewards the car that charges the row
- * head-on and dies ten pixels deeper over the car that lifts off to set up the lane
- * change that actually passes. A deceptive gradient is worse than no gradient.
+ * Below a finish there is no tie-break at all, and that absence is the point. The time
+ * used to decide every tie, which is harmless while cars are dying at different rows and
+ * ruinous the moment they stop: at a row the population cannot pass, the whole top of the
+ * field ties on overtakes, and "who got there first" becomes "who drove fastest into the
+ * wall". Speed is exactly what makes such a row impassable, twice over. Steering power is
+ * `0.000444v² - 0.007667v + 0.037222`, so a car at full speed turns at half the rate of
+ * one at 5; and since traffic moves at 5, a car at 10 closes the 500 px between rows in
+ * 100 steps where a car at 7 gets 250. Arriving slower is worth roughly 2.7 times the
+ * lateral room. The old tie-break selected against all of it, every generation, and the
+ * harder the row the harder it pushed. That is not a plateau, it is a downhill gradient
+ * with no way out.
+ *
+ * Nothing replaces it below a finish, deliberately. Ranking equal wrecks by how far they
+ * got was tried as partial credit for getting CLOSE to the next traffic car, and measured
+ * worse: peak overtakes dropped from 20/23/18 to 17/10/14 over three runs of 40 races,
+ * because the gap is longitudinal and shrinking it rewards the car that charges the row
+ * head-on and dies ten pixels deeper over the car that lifts off to set up the lane change
+ * that actually passes. A deceptive gradient is worse than no gradient.
  */
-const compareRacePerformance = (left: CarStats, right: CarStats, brakeBonus: number): number =>
-    raceScore(right, brakeBonus) - raceScore(left, brakeBonus) ||
-    left.lastOvertakeAtSeconds - right.lastOvertakeAtSeconds
+const compareRacePerformance = (left: CarStats, right: CarStats, rules: RankingRules): number => {
+    const byScore: number = raceScore(right, rules.brakeBonus) - raceScore(left, rules.brakeBonus)
+    if (byScore !== 0) {
+        return byScore
+    }
+
+    // Equal scores can still mean very different races, because the brake bonus is worth
+    // ten overtakes: a car that stopped short with the bonus can tie a car that finished
+    // without it. The one that finished takes it.
+    const leftFinished: boolean = hasClearedCourse(left, rules.trafficCount)
+    const rightFinished: boolean = hasClearedCourse(right, rules.trafficCount)
+    if (leftFinished !== rightFinished) {
+        return leftFinished ? -1 : 1
+    }
+
+    return leftFinished ? left.lastOvertakeAtSeconds - right.lastOvertakeAtSeconds : 0
+}
 
 const hasRaceResult = (stats: CarStats, brakeBonus: number): boolean =>
     !stats.overtakeTimedOut && raceScore(stats, brakeBonus) > 0
 
 export const selectBest = <T extends { stats: CarStats }>(
     cars: readonly T[],
-    brakeBonus: number = DEFAULTS.brakeBonus,
+    rules: RankingRules,
 ): T | undefined => {
     let best: T | undefined
     for (const car of cars) {
         if (
-            hasRaceResult(car.stats, brakeBonus) &&
-            (best === undefined || compareRacePerformance(car.stats, best.stats, brakeBonus) < 0)
+            hasRaceResult(car.stats, rules.brakeBonus) &&
+            (best === undefined || compareRacePerformance(car.stats, best.stats, rules) < 0)
         ) {
             best = car
         }
@@ -181,15 +213,21 @@ export const selectBest = <T extends { stats: CarStats }>(
     return best
 }
 
-/** Returns the best eligible overtake results, best first. */
+/**
+ * Returns the best eligible overtake results, best first.
+ *
+ * The sort is stable, which is what "no tie-break below a finish" leaves the ordering to:
+ * cars that cannot be told apart keep the order they were given, and since the elite is
+ * car 0 that means an unbeaten incumbent stays at the head of its own tie.
+ */
 export const selectParents = <T extends { stats: CarStats }>(
     cars: readonly T[],
     count: number,
-    brakeBonus: number = DEFAULTS.brakeBonus,
+    rules: RankingRules,
 ): T[] =>
     cars
-        .filter((car) => hasRaceResult(car.stats, brakeBonus))
-        .sort((left, right) => compareRacePerformance(left.stats, right.stats, brakeBonus))
+        .filter((car) => hasRaceResult(car.stats, rules.brakeBonus))
+        .sort((left, right) => compareRacePerformance(left.stats, right.stats, rules))
         .slice(0, count)
 
 /** True when the car has not covered enough ground within the idle deadline. */

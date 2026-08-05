@@ -11,9 +11,19 @@ import {
     selectParents,
     updateStats,
 } from './fitness'
-import type { CarStats, FitnessSample } from './fitness'
+import type { CarStats, FitnessSample, RankingRules } from './fitness'
 
 const START = vec(0, 10_000)
+
+/**
+ * A course nobody in these fixtures finishes, which is the ordinary case: `trafficCount`
+ * is what tells the ranking whether a car crossed the line, and a count nothing reaches
+ * means every comparison below is between two unfinished races.
+ */
+const rules = (trafficCount = 1_000, brakeBonus: number = DEFAULTS.brakeBonus): RankingRules => ({
+    brakeBonus,
+    trafficCount,
+})
 
 const sample = (y: number, overtakes = 0, brake = 0, speed = 10): FitnessSample => ({
     position: vec(0, y),
@@ -126,10 +136,10 @@ describe('selection', () => {
         follower.stats.groundProgress = 100_000
         follower.stats.aliveSeconds = 100
 
-        expect(selectBest([follower, leader])).toBe(leader)
+        expect(selectBest([follower, leader], rules())).toBe(leader)
     })
 
-    it('uses earlier overtake time only to break an equal-count tie', () => {
+    it('breaks a tie between two finishers on who got there first', () => {
         const faster: { stats: CarStats } = { stats: createStats(START) }
         const slower: { stats: CarStats } = { stats: createStats(START) }
         faster.stats.overtakes = 4
@@ -137,20 +147,54 @@ describe('selection', () => {
         slower.stats.overtakes = 4
         slower.stats.lastOvertakeAtSeconds = 12
 
-        expect(selectBest([slower, faster])).toBe(faster)
+        // A four-car course: both cleared it, so the race was to the finish line and the
+        // faster of the two won it.
+        expect(selectBest([slower, faster], rules(4))).toBe(faster)
     })
 
-    it('ignores everything except overtakes and the time they took', () => {
+    // The heart of it: at a row the population cannot pass, everybody ties, and ranking
+    // that tie by time selects for driving faster into the wall, which is precisely what
+    // makes the wall impassable. See `compareRacePerformance`.
+    it('does not break a tie between two wrecks on who died sooner', () => {
+        const early: { stats: CarStats } = { stats: createStats(START) }
+        const late: { stats: CarStats } = { stats: createStats(START) }
+        early.stats.overtakes = 4
+        early.stats.lastOvertakeAtSeconds = 8
+        late.stats.overtakes = 4
+        late.stats.lastOvertakeAtSeconds = 12
+
+        // Neither reached the end of a forty-car course, so the order they were given is
+        // the order they keep: whoever leads a tie is not displaced by it.
+        expect(selectBest([late, early], rules(40))).toBe(late)
+        expect(selectBest([early, late], rules(40))).toBe(early)
+    })
+
+    // The bonus is worth ten overtakes, so it can tie a car that stopped short with one
+    // that drove the whole course. Finishing is not something a bonus can draw level with.
+    it('puts a finisher above a wreck that tied it on points', () => {
+        const finisher: { stats: CarStats } = { stats: createStats(START) }
+        const braker: { stats: CarStats } = { stats: createStats(START) }
+        finisher.stats.overtakes = 20
+        finisher.stats.lastOvertakeAtSeconds = 40
+        braker.stats.overtakes = 10
+        braker.stats.usedBrake = true
+        braker.stats.lastOvertakeAtSeconds = 5
+
+        expect(raceScore(braker.stats)).toBe(raceScore(finisher.stats))
+        expect(selectBest([braker, finisher], rules(20))).toBe(finisher)
+    })
+
+    it('ignores everything except overtakes', () => {
         const slowSurvivor: { stats: CarStats } = { stats: createStats(START) }
         const fastWreck: { stats: CarStats } = { stats: createStats(START) }
         updateStats(slowSurvivor.stats, sample(START.y - 100, 4), 10)
-        updateStats(fastWreck.stats, sample(START.y - 100, 4), 5)
+        updateStats(fastWreck.stats, sample(START.y - 100, 5), 5)
         slowSurvivor.stats.groundProgress = 100_000
         slowSurvivor.stats.aliveSeconds = 100
 
-        // Same four overtakes. How the round ended, how far either drove and how long
-        // either lasted are not part of the comparison: only who got there first is.
-        expect(selectBest([slowSurvivor, fastWreck])).toBe(fastWreck)
+        // How the round ended, how far either drove and how long either lasted are not
+        // part of the comparison. One more car passed is.
+        expect(selectBest([slowSurvivor, fastWreck], rules())).toBe(fastWreck)
     })
 
     it('does not select a car that made zero overtakes', () => {
@@ -158,7 +202,7 @@ describe('selection', () => {
         car.stats.groundProgress = 100_000
         car.stats.aliveSeconds = 100
 
-        expect(selectBest([car])).toBeUndefined()
+        expect(selectBest([car], rules())).toBeUndefined()
     })
 
     it('excludes timed-out cars even when they have more overtakes', () => {
@@ -168,7 +212,7 @@ describe('selection', () => {
         timedOut.stats.overtakes = 5
         timedOut.stats.overtakeTimedOut = true
 
-        expect(selectBest([timedOut, valid])).toBe(valid)
+        expect(selectBest([timedOut, valid], rules())).toBe(valid)
     })
 
     it('outranks a better driver that never braked, once, by the bonus', () => {
@@ -180,7 +224,7 @@ describe('selection', () => {
 
         // 1 + 10 beats 9. That is the ignition working as intended for as long as the
         // brake is still a rarity in the field.
-        expect(selectBest([dry, braked])).toBe(braked)
+        expect(selectBest([dry, braked], rules())).toBe(braked)
         expect(raceScore(braked.stats)).toBe(1 + DEFAULTS.brakeBonus)
     })
 
@@ -194,8 +238,8 @@ describe('selection', () => {
         dry.stats.overtakes = 9
 
         expect(raceScore(braked.stats, 0)).toBe(1)
-        expect(selectBest([dry, braked], 0)).toBe(dry)
-        expect(selectParents([dry, braked], 2, 0)).toEqual([dry, braked])
+        expect(selectBest([dry, braked], rules(1_000, 0))).toBe(dry)
+        expect(selectParents([dry, braked], 2, rules(1_000, 0))).toEqual([dry, braked])
     })
 
     it('turns the bonus into a tie-break between equal overtakes when it is worth 1', () => {
@@ -205,11 +249,11 @@ describe('selection', () => {
         braked.stats.usedBrake = true
         dry.stats.overtakes = 9
 
-        expect(selectBest([dry, braked], 1)).toBe(braked)
+        expect(selectBest([dry, braked], rules(1_000, 1))).toBe(braked)
         // One overtake is still worth more than the whole bonus, which is the difference
         // between a tie-break and an override.
         dry.stats.overtakes = 10
-        expect(selectBest([dry, braked], 1)).toBe(dry)
+        expect(selectBest([dry, braked], rules(1_000, 1))).toBe(dry)
     })
 
     it('stops deciding anything once both cars have braked', () => {
@@ -222,7 +266,7 @@ describe('selection', () => {
 
         // The bonus is the same constant on both sides, so it cancels and the ranking is
         // back to being overtakes alone. This is why it is safe to make it large.
-        expect(selectBest([worse, better])).toBe(better)
+        expect(selectBest([worse, better], rules())).toBe(better)
     })
 
     it('pays the bonus once, however long the brake is held', () => {
@@ -265,17 +309,24 @@ describe('selection', () => {
     })
 
     it('uses the same sparse ordering for the parent pool', () => {
-        const faster: { stats: CarStats } = { stats: createStats(START) }
-        const slower: { stats: CarStats } = { stats: createStats(START) }
+        const first: { stats: CarStats } = { stats: createStats(START) }
+        const second: { stats: CarStats } = { stats: createStats(START) }
         const fewer: { stats: CarStats } = { stats: createStats(START) }
         const none: { stats: CarStats } = { stats: createStats(START) }
-        faster.stats.overtakes = 3
-        faster.stats.lastOvertakeAtSeconds = 5
-        slower.stats.overtakes = 3
-        slower.stats.lastOvertakeAtSeconds = 7
+        first.stats.overtakes = 3
+        first.stats.lastOvertakeAtSeconds = 7
+        second.stats.overtakes = 3
+        second.stats.lastOvertakeAtSeconds = 5
         fewer.stats.overtakes = 2
         fewer.stats.lastOvertakeAtSeconds = 2
 
-        expect(selectParents([fewer, slower, none, faster], 4)).toEqual([faster, slower, fewer])
+        // Three beats two, and the two threes are indistinguishable however long either
+        // took, so the sort leaves them where it found them. The one that scored nothing
+        // is not in the pool at all.
+        expect(selectParents([first, second, none, fewer], 4, rules())).toEqual([
+            first,
+            second,
+            fewer,
+        ])
     })
 })

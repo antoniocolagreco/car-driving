@@ -23,6 +23,7 @@ import { rankRoster, selectRacers, updateRoster } from './veterans'
 import { castSensors } from './sensor'
 import {
     type FitnessSample,
+    type RankingRules,
     hasClearedCourse,
     hasMissedOvertakeDeadline,
     isStuck,
@@ -292,6 +293,15 @@ export const createSimulation = (
         manualDriving: false,
     }
 
+    /**
+     * How the field is ranked right now: the live brake bonus, and the size of the course
+     * so the ranking can tell a car that finished from one that merely tied on points.
+     */
+    const rankingRules = (): RankingRules => ({
+        brakeBonus: currentSettings.brakeBonus,
+        trafficCount: state.traffic.length,
+    })
+
     /** True once `racingCar` has passed the last traffic car of the current course. */
     const hasFinished = (racingCar: RacingCar): boolean =>
         hasClearedCourse(racingCar.stats, state.traffic.length)
@@ -474,7 +484,7 @@ export const createSimulation = (
         const admitted: Network[] = selectParents(
             state.cars,
             VETERANS.admittedPerRace,
-            currentSettings.brakeBonus,
+            rankingRules(),
         ).map((car) => car.network)
         state.veterans = rankRoster(updateRoster(state.veterans, admitted))
         onVeteransChanged?.(state.veterans)
@@ -508,11 +518,9 @@ export const createSimulation = (
             // working lineages on the strength of one lap somebody drove by hand; winning
             // already makes it `parents[0]`, which is elitism plus the entire refining
             // band, and that is what "the next generation is bred from your driving" means.
-            const ranked: Network[] = selectParents(
-                state.cars,
-                PARENT_COUNT,
-                currentSettings.brakeBonus,
-            ).map((car) => car.network)
+            const ranked: Network[] = selectParents(state.cars, PARENT_COUNT, rankingRules()).map(
+                (car) => car.network,
+            )
 
             // The head of the pool is whoever the round crowned, and when the course was
             // cleared that is the first car across the line rather than the highest score.
@@ -757,7 +765,7 @@ export const createSimulation = (
         // flag it for the renderer/HUD.
         state.bestCar = state.courseCleared
             ? state.courseWinner
-            : selectBest(state.cars, currentSettings.brakeBonus)
+            : selectBest(state.cars, rankingRules())
         for (const racingCar of state.cars) {
             racingCar.winner = racingCar === state.bestCar
         }
