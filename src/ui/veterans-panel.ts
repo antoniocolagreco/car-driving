@@ -238,10 +238,17 @@ export const createVeteransPanel = (container: HTMLElement, signal: AbortSignal)
             body.appendChild(row)
         }
 
+        // Counted against the roster, not taken from the size of `lastRacingIds`: that set
+        // holds every network on the grid, which is nearly the whole population, and
+        // reporting it here read as "the entire archive is racing" when a tenth of it was.
+        const racingCount: number = lastRoster.filter((network) =>
+            lastRacingIds.has(network.id),
+        ).length
+
         caption.textContent =
             lastRoster.length === 0
                 ? 'No veterans yet. The best of each race are admitted to the archive as it runs.'
-                : `${lastRoster.length} networks remembered, ${lastRacingIds.size} of them racing now. Click a column to sort.`
+                : `${lastRoster.length} networks remembered, ${racingCount} of them racing now. Click a column to sort.`
     }
 
     const rankHeader = document.createElement('th')
