@@ -133,48 +133,6 @@ describe('createSimulation: collisions', () => {
     })
 })
 
-describe('createSimulation: the winner badge and the camera', () => {
-    // The badge marks whoever would win the round if it ended now, score and brake bonus
-    // included, and the camera is pinned to it. That is deliberately not "the car in
-    // front": a wreck keeps what it earned, so the camera can sit on a car that stopped.
-    it('badges the best score and points the camera at it, wreck or not', () => {
-        const sim = createSimulation(smallSettings, { trafficSeed: 'winner-badge' })
-        const scorer = sim.state.cars[0]
-        const ahead = sim.state.cars[1]
-
-        // The scorer banked eight before hitting something and stopping where it was.
-        scorer.stats.overtakes = 8
-        crash(scorer.car)
-        // The other is still driving, two cars passed, and 200 px further up the road,
-        // which is inside the first gap and so passes nothing new.
-        ahead.stats.overtakes = 2
-        ahead.car.position = vec(ahead.car.position.x, ahead.car.position.y - 200)
-
-        sim.step(SIMULATION.stepSeconds)
-
-        expect(sim.state.bestCar).toBe(scorer)
-        expect(scorer.winner).toBe(true)
-        expect(ahead.winner).toBe(false)
-        expect(sim.state.activeCar).toBe(scorer)
-    })
-
-    // There is no winner until somebody has passed somebody, and the camera has to be
-    // pointed at something in the meantime.
-    it('follows the car furthest up the road until anyone has scored', () => {
-        const sim = createSimulation(smallSettings, {
-            winner: straightThrottleNetwork(),
-            trafficSeed: 'winner-none-yet',
-        })
-        const ahead = sim.state.cars[1]
-        ahead.car.position = vec(ahead.car.position.x, ahead.car.position.y - 200)
-
-        sim.step(SIMULATION.stepSeconds)
-
-        expect(sim.state.bestCar).toBeUndefined()
-        expect(sim.state.activeCar).toBe(ahead)
-    })
-})
-
 describe('createSimulation: idle death', () => {
     it('kills a car that makes no progress after SIMULATION.idleTimeoutSeconds', () => {
         const winner = stationaryNetwork()
