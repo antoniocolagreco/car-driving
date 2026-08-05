@@ -51,6 +51,10 @@ export type SimulationApp = {
 /** How often the (expensive) network visualization redraws, independent of the 60fps simulation. */
 const NETWORK_DRAW_INTERVAL_MS = 1000 / 8
 
+/** Two hidden-layer lists describe the same architecture when they match neuron for neuron. */
+const sameLayers = (a: readonly number[], b: readonly number[]): boolean =>
+    a.length === b.length && a.every((count, index) => count === b[index])
+
 /** Builds the app: two canvas layers inside `container`, the simulation loop, the HUD and the controls. */
 export const createSimulationApp = (container: HTMLElement): SimulationApp => {
     const stored = loadSettings()
@@ -292,6 +296,32 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
 
     const hud = createHud()
 
+    /**
+     * Forgets everything evolved so far and starts again from random networks: the winner,
+     * the whole archive and the record holder alike. A champion left in place would keep
+     * entering every race and keep holding a time the fresh population had no part in
+     * setting, so it goes with the rest.
+     *
+     * The simulation is rebuilt rather than restarted, because `restart` always keeps the
+     * in-memory winner unless it is handed another one, and the callbacks have to be
+     * rewired onto the new instance or they would stop watching.
+     */
+    const resetEverything = (): void => {
+        clearWinner()
+        clearVeterans()
+        clearChampion()
+        champion = undefined
+        hud.showChampion(undefined)
+        simulation = createSimulation(settings, {
+            onGenerationEnd,
+            onCourseFinished,
+            onVeteransChanged,
+        })
+        // The standings are otherwise repainted once per race, which would leave the old
+        // archive on screen until the new population finished its first one.
+        refreshVeterans()
+    }
+
     const accumulator = { seconds: 0 }
 
     const drawNetworkThrottled = (nowMs: number): void => {
@@ -368,17 +398,23 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         settings,
         {
             onSettingsChange: (nextSettings) => {
+                const architectureChanged: boolean = !sameLayers(
+                    settings.hiddenLayers,
+                    nextSettings.hiddenLayers,
+                )
                 settings = nextSettings
                 saveSettings(settings)
-                simulation.updateSettings(settings)
-                // A different architecture cannot race the stored record, so the record
-                // goes: it could neither enter the grid nor be beaten fairly.
-                if (champion && !isCompatibleNetwork(champion.network, settings.hiddenLayers)) {
-                    clearChampion()
-                    champion = undefined
-                    hud.showChampion(undefined)
-                    simulation.setChampion(undefined)
+
+                // A new architecture is a new species. Not one network evolved so far can
+                // even feed forward through it, so the winner, the archive and the record
+                // would all sit there unusable while the standings still listed them.
+                // Changing the layers is starting over, and it says so by doing it.
+                if (architectureChanged) {
+                    resetEverything()
+                    return
                 }
+
+                simulation.updateSettings(settings)
             },
             onAction: (action) => {
                 switch (action) {
@@ -387,22 +423,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
                         break
                     }
                     case 'reset': {
-                        // Everything evolved is forgotten: the winner, the whole archive
-                        // and the record holder alike. "Start from random networks" means
-                        // nothing survives, and a champion left in place would keep
-                        // entering every race and keep holding a time the fresh population
-                        // had no part in setting. The callbacks have to be rewired onto
-                        // the new simulation or they would stop watching.
-                        clearWinner()
-                        clearVeterans()
-                        clearChampion()
-                        champion = undefined
-                        hud.showChampion(undefined)
-                        simulation = createSimulation(settings, {
-                            onGenerationEnd,
-                            onCourseFinished,
-                            onVeteransChanged,
-                        })
+                        resetEverything()
                         break
                     }
                     case 'evolve': {
