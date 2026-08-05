@@ -86,22 +86,22 @@ export const SIMULATION = {
     /** How many traffic rows the course is made of. */
     trafficRows: 20,
     /**
-     * Vertical spacing between two traffic rows, in pixels.
+     * Clear road between one traffic row and the next, in pixels: measured from the
+     * DEEPEST car of a row, not from its row line. See `generateTraffic`.
      *
      * This is the room a car has to complete a manoeuvre, and the manoeuvre has a price
      * that can be worked out rather than guessed. Steering power is
      * `0.000444v² - 0.007667v + 0.037222` rad per step, so at a cruising 8.5 the lateral
      * offset builds as `v · s · N² / 2`: 67 steps to cross one lane, 95 to cross two. The
      * gap to the row ahead closes at `v - 5`, which at 8.5 is 3.5 px/step, so those 95
-     * steps eat 333 px.
+     * steps eat 333 px, two thirds of what is here.
      *
-     * At 500 that was two thirds of everything available, with the steering held hard over
-     * from the instant the previous row was cleared. The rows that demand two lanes, the
-     * stairs and the L shapes, were therefore at the edge of what the car can physically
-     * do, and a tenth of a second late was a head-on crash. At 800 the same manoeuvre
-     * takes 42% of the gap, which is margin rather than a limit.
+     * That is tight, and it is meant to be: this is the number that makes the course hard.
+     * What it must not do is be tighter for the rows that need it most, which is what
+     * happened while rows sat on a fixed pitch and a staggered one ate its own depth out
+     * of the gap behind it.
      */
-    trafficRowSpacing: 800,
+    trafficRowSpacing: 500,
 } as const
 
 /** The world is a very tall corridor; the road sits inside it. */

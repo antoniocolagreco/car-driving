@@ -18,27 +18,32 @@ const nearestLane = (road: Road, x: number): number => {
 }
 
 /**
- * Re-derives which `TrafficPattern` produced each row of generated traffic, purely
- * from car positions. Row spacing (500px) is more than twice any pattern's internal
- * stagger (at most 200px), so a row index and each car's offset within it can be
- * recovered unambiguously — a stagger of half the row spacing could not.
+ * Re-derives which `TrafficPattern` produced each row of generated traffic, purely from
+ * car positions.
+ *
+ * Rows are found by clustering rather than by dividing through a fixed pitch, because
+ * there is no fixed pitch: `generateTraffic` measures its gaps from the deepest car of
+ * each row, so a staggered row pushes the next one further away. A row spans at most
+ * 120 px of its own while the clear road between rows is 500, so any gap over 300
+ * separates two rows and nothing else can.
  */
-const identifyPatternPerRow = (
-    road: Road,
-    traffic: ReturnType<typeof generateTraffic>,
-    rows: number,
-) => {
-    const base = lanePosition(road, 0, 0).y
-    const rowsOfCars: { lane: number; offset: number }[][] = Array.from({ length: rows }, () => [])
+const identifyPatternPerRow = (road: Road, traffic: ReturnType<typeof generateTraffic>) => {
+    const ROW_GAP_THRESHOLD = 300
+    // Nearest the start line first: forward is -y, so that is descending y.
+    const byDepth = [...traffic].sort((a, b) => b.position.y - a.position.y)
 
-    for (const car of traffic) {
-        const rowIndexPlusOne = Math.round((base - car.position.y) / SIMULATION.trafficRowSpacing)
-        const rowIndex = rowIndexPlusOne - 1
-        const rowOffsetBase = base - SIMULATION.trafficRowSpacing * rowIndexPlusOne
-        const relativeOffset = Math.round(car.position.y - rowOffsetBase)
-        rowsOfCars[rowIndex]?.push({
+    const rowsOfCars: { lane: number; offset: number }[][] = []
+    let rowLine = 0
+
+    for (const car of byDepth) {
+        const current = rowsOfCars[rowsOfCars.length - 1]
+        if (!current || rowLine - car.position.y > ROW_GAP_THRESHOLD) {
+            rowLine = car.position.y
+            rowsOfCars.push([])
+        }
+        rowsOfCars[rowsOfCars.length - 1].push({
             lane: nearestLane(road, car.position.x),
-            offset: relativeOffset,
+            offset: Math.round(car.position.y - rowLine),
         })
     }
 
@@ -83,6 +88,33 @@ describe('generateTraffic', () => {
         expect(b.map((car) => car.position)).not.toEqual(a.map((car) => car.position))
     })
 
+    // The rule the whole layout rests on: what a car is given is CLEAR ROAD, and a row
+    // that stands two cars deep must not pay for its own depth out of the gap behind it.
+    it('leaves the same clear road after a staggered row as after a flat one', () => {
+        const road = createRoad()
+        const traffic = generateTraffic(road, 20, 'staggered-gaps')
+
+        // Nearest the start line first, one entry per distinct depth.
+        const depths = [...new Set(traffic.map((car) => Math.round(car.position.y)))].sort(
+            (a, b) => b - a,
+        )
+
+        // A row spans at most 120 px of its own and the gap between rows is 500, so any
+        // step larger than that threshold is the boundary between two rows.
+        const gaps: number[] = []
+        for (let index = 1; index < depths.length; index++) {
+            const step = depths[index - 1] - depths[index]
+            if (step > 300) {
+                gaps.push(step)
+            }
+        }
+
+        expect(gaps.length).toBeGreaterThan(10)
+        for (const gap of gaps) {
+            expect(gap).toBe(SIMULATION.trafficRowSpacing)
+        }
+    })
+
     it('gives two patterns the same kind exactly when they leave the same lanes open', () => {
         // The whole generation rule rests on this: a kind stands for the gap a row
         // leaves, so "a different kind than the row before" means "a different gap".
@@ -110,7 +142,7 @@ describe('generateTraffic', () => {
 
         for (let seed = 0; seed < 100; seed++) {
             const traffic = generateTraffic(road, rows, `no-repeat-${seed}`)
-            const kinds = identifyPatternPerRow(road, traffic, rows).map(kindOf)
+            const kinds = identifyPatternPerRow(road, traffic).map(kindOf)
 
             for (let row = 1; row < kinds.length; row++) {
                 expect({ seed, row, kind: kinds[row] }).not.toEqual({
@@ -212,7 +244,7 @@ describe('generateTraffic', () => {
 
         for (let seed = 0; seed < 50; seed++) {
             const traffic = generateTraffic(road, rows, `ramp-${seed}`)
-            const perRow = identifyPatternPerRow(road, traffic, rows)
+            const perRow = identifyPatternPerRow(road, traffic)
 
             perRow.forEach((name, row) => {
                 const section = Math.floor(row / sectionSize)
@@ -235,7 +267,7 @@ describe('generateTraffic', () => {
 
         for (let seed = 0; seed < 50; seed++) {
             const traffic = generateTraffic(road, rows, `coverage-${seed}`)
-            const used = new Set(identifyPatternPerRow(road, traffic, rows))
+            const used = new Set(identifyPatternPerRow(road, traffic))
 
             for (const pattern of TRAFFIC_PATTERNS) {
                 expect({ seed, name: pattern.name, used: used.has(pattern.name) }).toEqual({

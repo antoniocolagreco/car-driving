@@ -208,11 +208,30 @@ const buildCourse = (random: Random, rows: number): TrafficPattern[] => {
 }
 
 /**
- * Generates the traffic course ahead of the start line: `rows` rows of the road,
- * each filled by a pattern picked as described by `buildCourse`, spaced
- * `SIMULATION.trafficRowSpacing` px apart. Deterministic for a given `road` and
- * `seed` — the same seed always produces cars in the same positions, which is
+ * How far beyond its own row line a pattern reaches, in pixels: 0 for the rows whose
+ * cars all sit on the line, and the deepest stagger for the ones that do not.
+ *
+ * Offsets are negative because forward is -y, so the deepest car is the largest `-offset`.
+ */
+export const patternDepth = (pattern: TrafficPattern): number =>
+    pattern.cars.reduce((deepest, spot) => Math.max(deepest, -spot.offset), 0)
+
+/**
+ * Generates the traffic course ahead of the start line: `rows` rows of the road, each
+ * filled by a pattern picked as described by `buildCourse`. Deterministic for a given
+ * `road` and `seed` — the same seed always produces cars in the same positions, which is
  * what makes fitness comparable across a generation and across runs.
+ *
+ * `SIMULATION.trafficRowSpacing` is the CLEAR ROAD between rows, not the pitch of the row
+ * lines: each row is placed that far beyond the deepest car of the one before it. A row
+ * that stands two cars deep therefore pushes the next one further away by exactly the
+ * depth it occupies.
+ *
+ * The distinction is the whole difference between a course a car can drive and one it
+ * cannot. Placing rows on a fixed pitch meant a staggered row ate its own stagger out of
+ * the gap that followed it: a 120 px L left 380 px of road to complete a manoeuvre that
+ * needs 333, while a single car on the line left the full 500. The rows that demand the
+ * most were the ones given the least room to do it in.
  *
  * Traffic rolls forward at a constant speed, full throttle and no steering: these
  * are moving obstacles, not parked ones. What matters is HOW FAST relative to the
@@ -231,16 +250,22 @@ export const generateTraffic = (
     const course = buildCourse(random, rows)
     const traffic: Car[] = []
 
-    course.forEach((pattern, rowIndex) => {
-        const rowOffset = -SIMULATION.trafficRowSpacing * (rowIndex + 1)
+    // Tracks the deepest point of the course so far, which is where the next gap is
+    // measured from: the start line to begin with, then the last car of each row placed.
+    let deepest = 0
+
+    for (const pattern of course) {
+        const rowLine = deepest - SIMULATION.trafficRowSpacing
 
         for (const spot of pattern.cars) {
-            const position = lanePosition(road, spot.lane, rowOffset + spot.offset)
+            const position = lanePosition(road, spot.lane, rowLine + spot.offset)
             const car = createCar(position, TRAFFIC_CAR_SPEC, TRAFFIC_COLOR)
             car.controls.throttle = 1
             traffic.push(car)
         }
-    })
+
+        deepest = rowLine - patternDepth(pattern)
+    }
 
     return traffic
 }
