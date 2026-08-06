@@ -2,11 +2,7 @@
 import { ELEMENT_IDS } from '@ui/dom'
 import type { HTMLAttributes } from 'astro/types'
 
-/**
- * The champion: the most recent network to clear a course. It sits inside the live stats
- * panel but is not live at all, so it is kept as its own titled block rather than as
- * three more rows among numbers that change sixty times a second.
- */
+/** Latest finisher, separate from per-frame live stats. */
 
 type Props = HTMLAttributes<'div'>
 const { class: className, ...otherProps } = Astro.props

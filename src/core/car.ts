@@ -2,14 +2,8 @@ import { type Polygon, type Size, type Vec2, carPolygon, vec } from '@core/geome
 import { normalizeWithThreshold } from '@core/math'
 import { RACING_CAR, SIMULATION, TRAFFIC_CAR } from '@core/config'
 
-/**
- * Car state and physics. A `Car` is a mutable record: its fields are reassigned in
- * place every step rather than reallocating the whole object, because hundreds of
- * them get stepped 60 times a second. `Vec2` fields are still replaced wholesale,
- * never mutated in place.
- */
+/** Mutable car state and fixed-step physics. `Vec2` values remain immutable. */
 
-/** Driving inputs for one step, either from a human or from a network's outputs. */
 export type Controls = {
     /** [-1, 1], negative = reverse. */
     throttle: number
@@ -19,7 +13,6 @@ export type Controls = {
     steering: number
 }
 
-/** Physical characteristics that make a racing car and a traffic car handle differently. */
 export type CarSpec = {
     readonly maxSpeed: number
     readonly acceleration: number
@@ -43,7 +36,6 @@ export type Car = {
     headingDegrees: number
 }
 
-/** Spec for the AI-driven car under evolution. */
 export const RACING_CAR_SPEC: CarSpec = {
     maxSpeed: RACING_CAR.maxSpeed,
     acceleration: RACING_CAR.acceleration,
@@ -52,7 +44,6 @@ export const RACING_CAR_SPEC: CarSpec = {
     size: { width: RACING_CAR.width, height: RACING_CAR.height },
 }
 
-/** Spec for traffic cars, which only ever drive straight ahead at full throttle. */
 export const TRAFFIC_CAR_SPEC: CarSpec = {
     maxSpeed: TRAFFIC_CAR.maxSpeed,
     acceleration: TRAFFIC_CAR.acceleration,
@@ -61,16 +52,10 @@ export const TRAFFIC_CAR_SPEC: CarSpec = {
     size: { width: TRAFFIC_CAR.width, height: TRAFFIC_CAR.height },
 }
 
-/**
- * How fast a car with no throttle and no brake coasts back down to a standstill,
- * per step at 60 Hz. It used to be 0.01, which meant a car at top speed needed
- * about sixteen seconds to roll to a stop: lifting off did nothing you could see,
- * so the brake was the only way to lose speed at all. At 0.04 — the same order as
- * `acceleration` — easing off the throttle is itself a way to modulate speed.
- */
+/** Coasting deceleration per 60 Hz step; high enough for throttle lift-off to matter. */
 const NATURAL_DECELERATION = 0.04
 
-/** Builds a car at rest, facing up the road (heading 0), with no input applied yet. */
+/** Builds a stationary car facing up the road. */
 export const createCar = (position: Vec2, spec: CarSpec, color: string): Car => ({
     position,
     heading: 0,
@@ -83,16 +68,7 @@ export const createCar = (position: Vec2, spec: CarSpec, color: string): Car => 
     headingDegrees: 0,
 })
 
-/**
- * Folds a heading in radians to a SIGNED deviation from the road axis in degrees,
- * within (-180, 180]: 0 points straight up the road, positive leans right, negative
- * leans left.
- *
- * The sign is flipped on purpose. Forward is -y and +x is right, so a right turn
- * decreases `heading` (see the rotation in `stepCar`), and a raw reading would show
- * a right-hand steering input as a negative angle. Reporting it the other way round
- * makes the number agree with `Controls.steering`, where positive is right.
- */
+/** Signed road-axis deviation in degrees; positive matches right steering. */
 const headingDeviationDegrees = (heading: number): number => {
     const degrees = (-heading * (180 / Math.PI)) % 360
     const normalized = (degrees + 360) % 360
@@ -100,19 +76,8 @@ const headingDeviationDegrees = (heading: number): number => {
 }
 
 /**
- * Advances the car by one physics step of `dt` seconds. Mutates `car` in place.
- *
- * The tuning constants in `CarSpec`/config were authored assuming a fixed 60 Hz
- * step (`SIMULATION.stepSeconds`), the way the original per-frame code ran. To
- * keep that same feel at any `dt`, every increment below is scaled by
- * `dt / SIMULATION.stepSeconds` — equivalently `dt * 60` — so one step at half the
- * rate applies exactly twice the change of one step at the full rate.
- *
- * Position is integrated from the AVERAGE of the speed before and after this step
- * (trapezoidal rule), not just the post-step speed. Under constant acceleration —
- * the normal case — this makes the result the same regardless of how a given
- * span of time is split into steps, which is what frame-rate independence means
- * in practice (see the test that steps once at dt=1/30 vs twice at dt=1/60).
+ * Advances a car in place. Tuning is scaled from the 60 Hz baseline, and position uses
+ * average pre/post speed so constant acceleration is independent of step subdivision.
  */
 export const stepCar = (car: Car, dt: number): void => {
     const scale = dt / SIMULATION.stepSeconds
@@ -120,15 +85,13 @@ export const stepCar = (car: Car, dt: number): void => {
     const { throttle, brake, steering } = car.controls
     const speedBefore = car.speed
 
-    // Forward/reverse acceleration under analog throttle.
     if (throttle > 0 && car.speed < spec.maxSpeed) {
         car.speed = Math.min(spec.maxSpeed, car.speed + spec.acceleration * throttle * scale)
     } else if (throttle < 0 && car.speed > -spec.maxReverse) {
         car.speed = Math.max(-spec.maxReverse, car.speed + spec.acceleration * throttle * scale)
     }
 
-    // Braking always pulls speed towards 0 from whichever side it is on, scaled by
-    // how hard the brake is pressed, and never overshoots past 0 into the opposite sign.
+    // Braking approaches zero without crossing into the opposite direction.
     if (brake > 0) {
         const braking = spec.brakePower * brake * scale
         if (car.speed > 0) {
@@ -138,8 +101,6 @@ export const stepCar = (car: Car, dt: number): void => {
         }
     }
 
-    // Natural deceleration when coasting: same shape as braking, gentler rate, so
-    // an untouched car settles to exactly 0 rather than drifting forever.
     if (throttle === 0 && brake === 0) {
         if (car.speed > 0) {
             car.speed = Math.max(0, car.speed - NATURAL_DECELERATION * scale)
@@ -148,17 +109,13 @@ export const stepCar = (car: Car, dt: number): void => {
         }
     }
 
-    // Empirical curve, ported as-is from the original model: steering is sluggish
-    // at low speed and sharpens up around cruising speed (the quadratic branch).
-    // It is not derived from any physical model, it was tuned by feel.
+    // Empirical steering curve retained from the original model.
     const steeringPower =
         car.speed > 1
             ? 0.000444 * car.speed ** 2 - 0.007667 * car.speed + 0.037222
             : 0.03 * car.speed - 0.003
 
-    // Positive steering turns RIGHT, matching the `Controls` contract and the keyboard.
-    // The minus sign is not a fudge: forward is -y and +x is right, so `position.x` moves
-    // by `-sin(heading)` — a right turn is therefore a DECREASE in heading.
+    // Forward is -y, so positive/right steering decreases heading.
     if (Math.abs(car.speed) > 0) {
         const rotation = -steeringPower * steering * scale
         car.heading += rotation
@@ -176,36 +133,25 @@ export const stepCar = (car: Car, dt: number): void => {
     car.headingDegrees = headingDeviationDegrees(car.heading)
 }
 
-/** The car's collision polygon in world space, for collision checks and rendering. */
 export const carShape = (car: Car): Polygon => carPolygon(car.position, car.spec.size, car.heading)
 
-/** Marks the car as crashed and brings it to a full stop. Mutates `car`. */
 export const crash = (car: Car): void => {
     car.crashed = true
     car.speed = 0
 }
 
 const BRAKE_OUTPUT_INDEX = 1
-/** The original autopilot contract: the brake is off through 0.5 and fully on above it. */
+/** Neural brake is off through 0.5 and fully on above it. */
 const BRAKE_OUTPUT_THRESHOLD = 0.5
 
-/**
- * Turns network outputs into controls: `[throttle, brake, steering]`.
- *
- * Throttle and steering use the bipolar [-1, 1] range directly (negative = reverse /
- * left). Brake is a binary decision: its physical pressure is 0 through the threshold
- * and 1 as soon as the activation exceeds it.
- */
+/** Maps `[throttle, brake, steering]`; only brake is thresholded to a binary command. */
 export const controlsFromOutputs = (outputs: readonly number[]): Controls => ({
     throttle: outputs[0],
     brake: outputs[BRAKE_OUTPUT_INDEX] > BRAKE_OUTPUT_THRESHOLD ? 1 : 0,
     steering: outputs[2],
 })
 
-/**
- * Builds the network input vector: eleven spatial readings followed by the car's speed,
- * normalized to [-1, 1] around zero.
- */
+/** Appends normalized speed to the eleven ordered sensor readings. */
 export const networkInputs = (car: Car, readings: readonly number[]): number[] => {
     const normalizedSpeed = normalizeWithThreshold(
         car.speed,

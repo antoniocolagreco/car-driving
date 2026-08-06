@@ -1,14 +1,7 @@
 ---
 import type { HTMLAttributes } from 'astro/types'
 
-/**
- * The typed half of a numeric setting: the value the slider beside it shows, but
- * editable. Sliders are good for sweeping a range and hopeless for entering "37", so
- * every numeric setting offers both, wired to the same value in `ui/controls.ts`.
- *
- * `min`/`max`/`step` come from the caller (ultimately from `@core/config`), so the
- * field cannot offer a value the simulation would refuse.
- */
+/** Typed counterpart to a numeric slider; limits come from core config. */
 
 type Props = HTMLAttributes<'input'>
 

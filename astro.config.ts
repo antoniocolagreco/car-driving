@@ -1,7 +1,6 @@
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'astro/config'
 
-// https://astro.build/config
 const config = defineConfig({
     vite: {
         plugins: [tailwindcss()],

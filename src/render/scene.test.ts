@@ -22,8 +22,6 @@ const activeCar: RacingCar = {
     car: { position: { x: 0, y: 200 } } as Car,
     network: { id: 'active' },
     sensorState: {},
-    // The victory banner counts how many cars cleared the course, so a scene fixture
-    // needs a score even when the test is about paint order.
     stats: { overtakes: 0 },
 } as unknown as RacingCar
 

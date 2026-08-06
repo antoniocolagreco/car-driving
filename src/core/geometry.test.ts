@@ -19,7 +19,6 @@ describe('segmentIntersection', () => {
 
         const hit = segmentIntersection(a, b)
 
-        // The crossing is at x=5, halfway along a segment going from x=0 to x=10.
         expect(hit?.offset).toBeCloseTo(0.5)
     })
 
@@ -77,7 +76,6 @@ describe('carPolygon', () => {
 
         for (const heading of [0, Math.PI / 4, Math.PI / 2, Math.PI, 2.3]) {
             const polygon = carPolygon(vec(3, -7), size, heading)
-            // topLeft and bottomRight are opposite corners.
             const diagonal = distance(polygon[0], polygon[2])
             expect(diagonal).toBeCloseTo(expectedDiagonal)
         }

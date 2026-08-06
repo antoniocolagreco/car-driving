@@ -8,7 +8,6 @@ import { cameraTranslation } from './camera'
 import { drawGround, drawRoad } from './world'
 import { type RadarMode, drawCar, drawSensors } from './car'
 
-/** Options that affect only what is painted in the current frame. */
 export type SceneOptions = {
     /** Whether black traffic cars are drawn. Simulation state is always unchanged. */
     readonly trafficVisible?: boolean
@@ -16,14 +15,7 @@ export type SceneOptions = {
     readonly radarMode?: RadarMode
 }
 
-/**
- * Draws one full frame of the race. Racing cars have an explicit paint priority:
- * ordinary population, previous winner, current winner, then manually driven player.
- * A car that belongs to multiple categories is painted once at its highest-priority layer.
- *
- * Pure with respect to the simulation: reads `state`, draws onto `layer`,
- * mutates neither.
- */
+/** Draws one frame without mutating state; special cars are painted once at highest priority. */
 export const drawScene = (
     layer: CanvasLayer,
     state: SimulationState,
@@ -34,9 +26,7 @@ export const drawScene = (
     const radarMode: RadarMode = options.radarMode ?? 'hull'
     layer.clear()
 
-    // Fall back to the first traffic car when nothing is being followed (an
-    // empty population), so the camera still lands somewhere on the course
-    // instead of at the world origin.
+    // Empty populations still center the camera on the course.
     const followY = state.activeCar?.car.position.y ?? state.traffic[0]?.position.y ?? 0
     const translation = cameraTranslation(layer, followY)
 
@@ -52,8 +42,7 @@ export const drawScene = (
     const currentWinner: RacingCar | undefined = state.bestCar
     const manualPlayerCar: RacingCar | undefined = state.manualDriving ? state.playerCar : undefined
 
-    // Membership is by network identity rather than by car: the same weights are entered
-    // as one competitor, and it is the network that holds the record or the archive seat.
+    // Champion and veteran membership belongs to network identity, not a car body.
     const veteranIds = new Set<string>(state.veterans.map((network) => network.id))
     const championId: string | undefined = state.champion?.id
     const marksFor = (racingCar: RacingCar): { champion: boolean; veteran: boolean } => ({
@@ -61,15 +50,12 @@ export const drawScene = (
         veteran: veteranIds.has(racingCar.network.id),
     })
 
-    // Perception belongs below every car body, so it never paints sensor colour across
-    // either the followed racer or the traffic obstacles.
+    // Radar stays below all physical bodies.
     if (radarMode !== 'off' && state.activeCar) {
         drawSensors(ctx, state.activeCar.sensorState, radarMode)
     }
 
-    // 1. Ordinary evolved cars: always the lowest racing-car layer. A network-driven
-    // player belongs here too. The camera target remains opaque so the followed car
-    // never disappears into the translucent population.
+    // 1. Ordinary racers; keep the camera target opaque.
     for (const racingCar of state.cars) {
         if (
             racingCar === previousWinner ||
@@ -85,7 +71,7 @@ export const drawScene = (
         })
     }
 
-    // 2. Previous winner, painted at its real world position with no display offset.
+    // 2. Previous winner.
     if (previousWinner && previousWinner !== currentWinner && previousWinner !== manualPlayerCar) {
         drawCar(ctx, previousWinner.car, {
             winner: previousWinner.winner,
@@ -101,7 +87,7 @@ export const drawScene = (
         })
     }
 
-    // 4. Only a manually driven player gets the dedicated blue, topmost layer.
+    // 4. Manually driven player.
     if (manualPlayerCar) {
         drawCar(ctx, manualPlayerCar.car, {
             color: PLAYER_COLOR,
@@ -110,8 +96,7 @@ export const drawScene = (
         })
     }
 
-    // 5. Traffic obstacles are deliberately last: their physical bodies must remain
-    // visually solid even when sensor areas or racing cars overlap them.
+    // 5. Traffic remains visually solid above racers and radar.
     if (trafficVisible) {
         for (const trafficCar of state.traffic) {
             drawCar(ctx, trafficCar)
@@ -147,7 +132,7 @@ const FIREWORK_CYCLE_SECONDS = 2
 const FIREWORK_EXPLOSION_SECONDS = 1.6
 const FIREWORK_PARTICLES = 20
 
-/** Deterministic screen-space fireworks: smooth animation without mutable particle state. */
+/** Deterministic fireworks without mutable particle state. */
 const drawFireworks = (
     ctx: CanvasRenderingContext2D,
     width: number,
@@ -204,7 +189,6 @@ const drawFireworks = (
     ctx.restore()
 }
 
-/** Draws fireworks and the green banner over the live five-second victory parade. */
 export const drawVictory = (layer: CanvasLayer, state: SimulationState): void => {
     const ctx = layer.context
     const centerX = layer.width / 2
@@ -226,8 +210,7 @@ export const drawVictory = (layer: CanvasLayer, state: SimulationState): void =>
     ctx.strokeText('VICTORY!', centerX, centerY - 40)
     ctx.fillText('VICTORY!', centerX, centerY - 40)
 
-    // Counted live: the parade keeps running, so cars still on the road can cross the line
-    // during it and the banner has to say so while it happens.
+    // Count live because other cars may finish during the parade.
     const finishers: number = state.cars.filter((racingCar) =>
         hasClearedCourse(racingCar.stats, state.traffic.length),
     ).length
@@ -241,11 +224,7 @@ export const drawVictory = (layer: CanvasLayer, state: SimulationState): void =>
     ctx.restore()
 }
 
-/**
- * Draws the end-of-round overlay: the winning network's id and fitness, or a
- * fallback message for the (rare, empty-population) case where nobody was
- * ever scored.
- */
+/** Draws the winner summary or an empty-population fallback. */
 export const drawGameOver = (layer: CanvasLayer, state: SimulationState): void => {
     const ctx = layer.context
     const centerX = layer.width / 2
@@ -274,9 +253,7 @@ export const drawGameOver = (layer: CanvasLayer, state: SimulationState): void =
         ctx.strokeText(scoreLine, centerX, centerY)
         ctx.fillText(scoreLine, centerX, centerY)
     } else {
-        // The population was empty: nobody ran, so nobody could be scored.
-        // With the current fitness system this is the only way a generation
-        // can end without a winner.
+        // An empty population is the only round without a scored winner.
         ctx.fillStyle = '#ff6b6b'
         ctx.strokeStyle = 'darkred'
 

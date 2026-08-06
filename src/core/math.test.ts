@@ -49,12 +49,10 @@ describe('normalizeWithThreshold', () => {
     })
 
     it('maps a negative value between fromMin and the threshold into [toMin, 0]', () => {
-        // Halfway between fromMin=-5 and threshold=0 should land halfway between toMin=-1 and 0.
         expect(normalizeWithThreshold(-2.5, -5, 10, -1, 1, 0)).toBeCloseTo(-0.5)
     })
 
     it('maps a positive value between the threshold and fromMax into [0, toMax]', () => {
-        // Halfway between threshold=0 and fromMax=10 should land halfway between 0 and toMax=1.
         expect(normalizeWithThreshold(5, -5, 10, -1, 1, 0)).toBeCloseTo(0.5)
     })
 })
@@ -65,17 +63,15 @@ describe('toHexDualColorRange', () => {
     })
 
     it('returns a shade of red for negative values', () => {
-        // -10 is the extreme of the range and maps to intensity 0, so use a
-        // mid-range negative value to get a non-zero red channel.
         const color = toHexDualColorRange(-5, -10, 10)
         expect(color.startsWith('#')).toBe(true)
-        expect(color.slice(1, 3)).not.toBe('00') // red channel
-        expect(color.slice(3, 5)).toBe('00') // green channel
+        expect(color.slice(1, 3)).not.toBe('00')
+        expect(color.slice(3, 5)).toBe('00')
     })
 
     it('returns a shade of green for positive values', () => {
         const color = toHexDualColorRange(5, -10, 10)
-        expect(color.slice(1, 3)).toBe('00') // red channel
-        expect(color.slice(3, 5)).not.toBe('00') // green channel
+        expect(color.slice(1, 3)).toBe('00')
+        expect(color.slice(3, 5)).not.toBe('00')
     })
 })

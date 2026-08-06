@@ -207,16 +207,12 @@ describe('drawSensors', () => {
 
         drawSensors(context, sensor, 'zones')
 
-        // Each area is traced from its own first vertex, rather than through the markers.
         expect(context.moveTo).toHaveBeenCalledWith(0, 0)
         expect(context.moveTo).toHaveBeenCalledWith(-21, 0)
-        // The clear triangle keeps its full 700 px; the front rectangle stops at the
-        // obstacle 140 px away instead of running on behind it.
         expect(context.lineTo).toHaveBeenCalledWith(-100, -700)
         expect(context.lineTo).toHaveBeenCalledWith(21, -140)
         expect(context.lineTo).toHaveBeenCalledWith(-21, -140)
         expect(context.lineTo).not.toHaveBeenCalledWith(21, -700)
-        // Free space is yellow in both views; red is reserved for the contact marker.
         expect(strokeColors).toEqual(['#facc15', '#facc15'])
         expect(context.arc).toHaveBeenCalledWith(5, -140, 3, 0, Math.PI * 2)
     })

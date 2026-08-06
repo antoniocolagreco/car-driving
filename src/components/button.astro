@@ -7,15 +7,7 @@ const { class: className, id, title, ...otherProps } = Astro.props
 const tooltipId: string | undefined = title && id ? `${id}-tooltip` : undefined
 ---
 
-<!--
-    The tooltip shows on hover, and on keyboard focus only.
-
-    `:focus-visible` rather than `:focus-within`, which is what this used to use: a
-    clicked button keeps DOM focus after the click, so the tooltip stayed on screen long
-    after the pointer had left it and only went away when something else was clicked.
-    `:focus-visible` is not set by a mouse click, so hovering out now always hides it,
-    while a keyboard user tabbing onto the button still gets the description.
--->
+<!-- `focus-visible` shows tooltips for keyboard focus without leaving them after a click. -->
 
 <span class="group relative inline-flex">
     <button

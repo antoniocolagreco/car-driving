@@ -1,33 +1,16 @@
-/**
- * Drives a `requestAnimationFrame` loop and reports each frame's delta time in
- * seconds, plus a once-per-second FPS count.
- *
- * This loop does not own a fixed-timestep accumulator or a target frame rate:
- * it reports the real delta between frames and lets the caller (`app.ts`)
- * decide how many physics steps that delta is worth. It also never throttles
- * itself by returning early without calling `requestAnimationFrame` again for
- * a "skipped" frame, the way the original loop did while it waited for its
- * target interval to pass.
- */
+/** Reports animation-frame deltas and a once-per-second FPS count; physics stays in `app.ts`. */
 
-/** Safety valve: a backgrounded tab resuming after minutes away must not report a multi-second delta. */
+/** Caps the first delta after a backgrounded tab resumes. */
 const MAX_DELTA_SECONDS = 0.1
 
 export type FrameLoop = {
-    /** Starts (or resumes) calling `onFrame` every animation frame. */
     start(): void
-    /** Stops calling `onFrame`. Safe to call when already stopped. */
     stop(): void
-    /** Frames counted in the last full second, updated once per second. */
     readonly fps: number
-    /** Stops the loop. There is nothing else to release. */
     destroy(): void
 }
 
-/**
- * Builds a `FrameLoop` that calls `onFrame(deltaSeconds, fps)` on every
- * animation frame, `deltaSeconds` clamped to `MAX_DELTA_SECONDS`.
- */
+/** Calls `onFrame` for every animation frame with a capped delta. */
 export const createFrameLoop = (
     onFrame: (deltaSeconds: number, fps: number) => void,
 ): FrameLoop => {
@@ -66,8 +49,7 @@ export const createFrameLoop = (
         if (animationId !== undefined) {
             return
         }
-        // A fresh start should not report the elapsed time spent stopped as
-        // one giant frame, so forget where we were.
+        // Do not report paused time as one frame on resume.
         lastTimestamp = undefined
         animationId = requestAnimationFrame(tick)
     }

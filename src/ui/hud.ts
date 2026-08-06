@@ -4,28 +4,14 @@ import { shortNetworkId } from '@core/neural-network'
 import { ELEMENT_IDS, findElement } from './dom'
 import type { ChampionRecord } from './persistence'
 
-/**
- * The didactic centrepiece: shows which car the camera follows, how the
- * generation is going and the sparse overtake reward while it runs.
- *
- * Every element reference is resolved ONCE, in `createHud`, and every update
- * writes `textContent` only (never `innerHTML`) — the original HUD re-ran
- * ~15 `querySelector` calls and rebuilt markup with `innerHTML` every single
- * frame. Numeric fields are throttled to ~10 Hz; nobody can read digits changing
- * faster than that anyway, and it is one less thing competing with the frame loop.
- */
+/** Live stats HUD. Elements are resolved once and numeric updates are throttled to 10 Hz. */
 
 export type Hud = {
-    /** Call once per rendered frame; internally throttled. */
     update(state: SimulationState, fps: number): void
-    /**
-     * Fills the record holder's panel. Called only when the record changes, not per
-     * frame: the champion lives in localStorage, not in `SimulationState`.
-     */
+    /** Updates the champion panel when its persisted record changes. */
     showChampion(record: ChampionRecord | undefined): void
 }
 
-/** Numeric fields refresh at most this often. */
 const UPDATE_INTERVAL_MS = 100
 
 type HudElements = {
@@ -42,7 +28,7 @@ type HudElements = {
     statusRegion: HTMLElement | undefined
 }
 
-/** Resolves every HUD element once; `undefined` when a required one is missing from the page. */
+/** Resolves required HUD elements once. */
 const resolveElements = (): HudElements | undefined => {
     const ids = ELEMENT_IDS.hud
     const networkId = findElement(ids.networkId)
@@ -86,7 +72,6 @@ const resolveElements = (): HudElements | undefined => {
     }
 }
 
-/** Writes `text` only when it actually changed, so the DOM is not touched needlessly. */
 const setText = (element: HTMLElement, text: string): void => {
     if (element.textContent !== text) {
         element.textContent = text
@@ -99,12 +84,8 @@ const formatNumber = (value: number | undefined, decimals = 1): string =>
 const formatCountdown = (value: number | undefined): string =>
     value === undefined ? '–' : `${value.toFixed(1)} s`
 
-/**
- * Heading as an explicitly signed angle, so the panel says which way the car is pointing
- * rather than only how far off it is. Rounded before the sign is read, so a hair to the
- * left of straight reads `0.0°` instead of `-0.0°`.
- */
-/** An absent network reads as a dash, like every other empty field in the panel. */
+/** Avoids displaying negative zero after rounding. */
+/** Displays absent network ids consistently with other empty fields. */
 const formatNetworkId = (id: string | undefined): string =>
     id === undefined ? '–' : shortNetworkId(id)
 
@@ -116,7 +97,6 @@ const formatDegrees = (value: number | undefined): string => {
     return `${rounded > 0 ? '+' : ''}${rounded.toFixed(1)}°`
 }
 
-/** Builds the HUD, resolving its DOM elements once. Missing elements make `update` a no-op. */
 export const createHud = (): Hud => {
     const elements = resolveElements()
     let lastUpdateMs = 0
@@ -146,8 +126,7 @@ export const createHud = (): Hud => {
             return
         }
 
-        // Generation/game-over transitions are rare, so they are announced on
-        // every call regardless of the throttle below.
+        // Announcements are not subject to the numeric refresh throttle.
         announce(state)
 
         const now = performance.now()
@@ -163,8 +142,7 @@ export const createHud = (): Hud => {
         setText(elements.generation, String(state.generation))
         setText(elements.aliveCars, `${state.aliveCars.length} / ${state.cars.length}`)
         setText(elements.overtakes, stats ? String(stats.overtakes) : '–')
-        // The round clock, not the followed car's own: it is what the champion's time is
-        // measured on, so the two numbers can be read against each other while racing.
+        // Champion records use this round clock too.
         setText(elements.raceTime, `${state.elapsedSeconds.toFixed(1)} s`)
         setText(
             elements.idleTimeout,
@@ -191,8 +169,7 @@ export const createHud = (): Hud => {
         setText(elements.fps, formatNumber(fps, 0))
     }
 
-    // Resolved separately from `resolveElements`: the champion panel is optional, and a
-    // page without it must still show the live stats rather than nothing at all.
+    // Champion elements are optional; live stats are not.
     const championElements = {
         networkId: findElement(ELEMENT_IDS.champion.networkId),
         seconds: findElement(ELEMENT_IDS.champion.seconds),

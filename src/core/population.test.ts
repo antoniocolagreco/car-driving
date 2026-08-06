@@ -8,9 +8,7 @@ import { createRoad, lanePosition } from './road'
 describe('mutationRateForIndex', () => {
     const quantity = 100
     const baseRate = 0.1
-    // A fixed midpoint keeps band-membership assertions deterministic: this
-    // test only cares which band an index falls into, not exactly where
-    // within the band the random draw lands.
+    // Fixed midpoint isolates band membership from random position within a band.
     const midpoint = (): number => 0.5
 
     it('puts exactly the minimal share of the population in the lowest band, at MUTATION.lowRateFloor', () => {
@@ -95,10 +93,6 @@ describe('createPopulation', () => {
         expect(cars[0].network.layers).toEqual(winner.layers)
     })
 
-    // `mutationRate` is a probability per parameter, and the near-clone band mutates at
-    // `MUTATION.lowRateFloor` whatever the requested rate, so a child legitimately comes
-    // out numerically identical to its parent. What must never happen is a child SHARING
-    // the winner's arrays, which would let it rewrite its own parent.
     it('gives every other car its own copy of the winner, never a shared one', () => {
         const road = createRoad()
         const winner = createNetwork(architecture)
@@ -127,9 +121,6 @@ describe('createPopulation', () => {
         const middle = lanePosition(road, Math.floor(road.laneCount / 2))
         const cars = createPopulation(road, baseOptions)
 
-        // One start line for everybody is what makes two scores in a generation
-        // comparable: these networks drive a trajectory, so a different start lane is a
-        // different task, and the elite would be re-run somewhere it never won.
         for (const racingCar of cars) {
             expect(racingCar.car.position).toEqual(middle)
         }
@@ -163,8 +154,7 @@ describe('createPopulation with an archive', () => {
         const cars = createPopulation(road, { ...baseOptions, champion, veterans })
         const entered = cars.map((racingCar) => racingCar.network)
 
-        // Not clones: the identical object, so the race it runs is written into the
-        // history the archive ranks it on.
+        // Fixed entrants must update the exact archived objects they represent.
         for (const network of [champion, ...veterans]) {
             expect(entered).toContain(network)
         }
@@ -195,9 +185,6 @@ describe('createPopulation with an archive', () => {
         expect(cars[0].network).toBe(winner)
     })
 
-    // The overlap is the normal case rather than an edge one: the champion is usually in
-    // the archive, and the elite is usually the network just admitted to it. Two cars
-    // sharing one network would put two results from a single race into one history.
     it('enters a network once even when it is the elite, the champion and a veteran at once', () => {
         const road = createRoad()
         const network = createNetwork(architecture)

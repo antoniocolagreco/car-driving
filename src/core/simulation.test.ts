@@ -17,8 +17,7 @@ const smallSettings: SimulationSettings = {
 }
 const smallArchitecture = [SENSOR_ZONE_ORDER.length + 1, ...smallSettings.hiddenLayers, 3]
 
-/** A network whose output is constant regardless of input: every weight is 0, so
- * only the output layer's biases (tuned below per test) decide its behaviour. */
+/** Zero weights make output-layer biases the only behavior input. */
 const constantOutputNetwork = (biases: readonly [number, number, number]): Network => {
     const network = createNetwork(smallArchitecture)
     for (const layer of network.layers) {
@@ -29,13 +28,11 @@ const constantOutputNetwork = (biases: readonly [number, number, number]): Netwo
     return network
 }
 
-/** Never accelerates, never brakes, never steers: stays exactly where it started. */
 const stationaryNetwork = (): Network => constantOutputNetwork([0, -10, 0])
 
-/** Full throttle, no brake, no steering: drives straight ahead as fast as it can. */
 const straightThrottleNetwork = (): Network => constantOutputNetwork([10, -10, 0])
 
-/** Advances `sim` until `gameOverSeconds` (plus a small safety margin) has elapsed, so any pending restart fires. */
+/** Advances through the pending game-over restart. */
 const runThroughGameOver = (sim: ReturnType<typeof createSimulation>): void => {
     const steps = Math.ceil(SIMULATION.gameOverSeconds / SIMULATION.stepSeconds) + 2
     for (let i = 0; i < steps; i++) {
@@ -43,7 +40,6 @@ const runThroughGameOver = (sim: ReturnType<typeof createSimulation>): void => {
     }
 }
 
-/** Ends the current round with exact overtake counts, without another physics sample. */
 const finishRoundWithOvertakes = (
     sim: ReturnType<typeof createSimulation>,
     overtakes: readonly number[],
@@ -77,13 +73,10 @@ describe('createSimulation: determinism', () => {
         expect(layout()).toEqual(first)
         sim.restart()
         expect(layout()).toEqual(first)
-        // Fourth generation, so the block boundary is crossed.
         sim.restart()
         expect(layout()).not.toEqual(first)
     })
 
-    // The "never randomise" end of the slider. Every generation floors to seed 0, which
-    // is the whole mechanism: no branch, just a division by infinity.
     it('never changes the course when the interval is infinite', () => {
         const sim = createSimulation({
             ...smallSettings,
@@ -128,7 +121,6 @@ describe('createSimulation: collisions', () => {
 
         expect(target.car.crashed).toBe(true)
         expect(sim.state.aliveCars).not.toContain(target)
-        // The wreck keeps whatever it had earned: crashing costs nothing by itself.
         expect(target.stats.overtakes).toBe(0)
     })
 })
@@ -137,9 +129,8 @@ describe('createSimulation: idle death', () => {
     it('kills a car that makes no progress after SIMULATION.idleTimeoutSeconds', () => {
         const winner = stationaryNetwork()
         const sim = createSimulation(smallSettings, { winner, trafficSeed: 'idle-timeout' })
-        const target = sim.state.cars[0] // elite: exactly the stationary network
-        // Traffic can now legitimately enter the full front rectangle before the idle
-        // deadline. Remove it here so this test isolates the idle rule itself.
+        const target = sim.state.cars[0]
+        // Isolate idle detection from traffic entering the long front sensor.
         sim.state.traffic = []
 
         const steps = Math.ceil(SIMULATION.idleTimeoutSeconds / SIMULATION.stepSeconds) + 5
@@ -148,9 +139,28 @@ describe('createSimulation: idle death', () => {
         }
 
         expect(target.car.crashed).toBe(true)
+        expect(target.stats.eliminated).toBe(true)
         expect(target.stats.idleSeconds).toBeGreaterThanOrEqual(
             SIMULATION.idleTimeoutSeconds - SIMULATION.stepSeconds,
         )
+    })
+
+    it('takes the score from a car that banked overtakes and then stopped moving', () => {
+        const winner = straightThrottleNetwork()
+        const sim = createSimulation(smallSettings, { winner, trafficSeed: 'idle-forfeit' })
+        const target = sim.state.cars[0]
+        const rival = sim.state.cars[1]
+        target.stats.overtakes = 5
+        target.stats.usedBrake = true
+        target.stats.idleSeconds = SIMULATION.idleTimeoutSeconds - SIMULATION.stepSeconds / 2
+        target.stats.progressAtIdleReset = target.stats.groundProgress
+        rival.stats.overtakes = 1
+
+        sim.step(SIMULATION.stepSeconds)
+
+        expect(target.stats.eliminated).toBe(true)
+        expect(raceScore(target.stats, smallSettings.brakeBonus)).toBe(0)
+        expect(sim.state.bestCar).toBe(rival)
     })
 })
 
@@ -165,7 +175,7 @@ describe('createSimulation: overtake death timeout', () => {
         sim.step(SIMULATION.stepSeconds)
 
         expect(target.car.crashed).toBe(true)
-        expect(target.stats.overtakeTimedOut).toBe(true)
+        expect(target.stats.eliminated).toBe(true)
         expect(target.stats.overtakes).toBe(0)
         expect(sim.state.aliveCars).not.toContain(target)
         expect(sim.state.bestCar).not.toBe(target)
@@ -180,8 +190,7 @@ describe('createSimulation: generation lifecycle', () => {
             onGenerationEnd: (winner) => events.push(winner),
         })
 
-        // Force the whole population onto the left border so it crashes on the
-        // very first step, without depending on network behaviour at all.
+        // Force a first-step crash independent of network behavior.
         for (const racingCar of sim.state.cars) {
             racingCar.car.position = vec(sim.state.road.left, racingCar.car.position.y)
         }
@@ -192,10 +201,6 @@ describe('createSimulation: generation lifecycle', () => {
         expect(sim.state.aliveCars).toHaveLength(0)
         expect(sim.state.gameOver).toBe(true)
         expect(events).toHaveLength(1)
-        // Everybody crashed on the first step, so this round produced nothing worth
-        // carrying forward: whether a wreck clears zero by the single frame of survival
-        // it banked is a crumb either way, and the winner reported out is whatever the
-        // simulation started with — never a network talked up by a round nobody drove.
         expect(sim.state.bestCar?.stats.overtakes ?? 0).toBe(0)
 
         runThroughGameOver(sim)
@@ -278,8 +283,7 @@ describe('createSimulation: clearing the course', () => {
         const winner = straightThrottleNetwork()
         const sim = createSimulation(smallSettings, { winner, trafficSeed: 'cleared' })
 
-        // One traffic car, already behind the field: the very next step makes whoever is
-        // leading a car that has passed everything there is to pass.
+        // Put the only traffic car behind the field to trigger an immediate finish.
         const single = sim.state.traffic[0]
         single.position = vec(single.position.x, sim.state.cars[0].car.position.y + 500)
         sim.state.traffic = [single]
@@ -308,14 +312,10 @@ describe('createSimulation: clearing the course', () => {
 
         expect(sim.state.gameOver).toBe(true)
         expect(clearer?.car.crashed).toBe(false)
-        // The single traffic car was behind the whole grid, so the whole grid cleared the
-        // course and the whole grid comes out of the parade still driving.
         expect(sim.state.aliveCars).toEqual(sim.state.cars)
         expect(sim.state.bestCar).toBe(clearer)
-        // The winner's network is the one the next generation is bred from.
         expect(sim.state.winner).toBe(clearer?.network)
 
-        // Finishing the race is worth exactly the traffic it passed: one point, one car.
         expect(clearer?.stats.overtakes).toBe(1)
     })
 
@@ -342,22 +342,17 @@ describe('createSimulation: clearing the course', () => {
         expect(finishes).toHaveLength(1)
         expect(finishes[0].network).toBe(clearer?.network)
         expect(finishes[0].overtakes).toBe(clearer?.stats.overtakes)
-        // The finish line is the last overtake, not the end of the victory parade: the
-        // clearer keeps driving for five more seconds and its time must not grow with it.
         expect(finishes[0].seconds).toBe(clearer?.stats.lastOvertakeAtSeconds)
         expect(finishes[0].seconds).toBeLessThan(SIMULATION.victoryCelebrationSeconds)
     })
 
-    // Crossing the line is not a race for one seat. Everybody who gets there has finished,
-    // and the parade ending is not a reason to take that back.
     it('stops the cars that never finished and leaves every finisher driving', () => {
         const sim = createSimulation(smallSettings, {
             winner: straightThrottleNetwork(),
             trafficSeed: 'many-finishers',
         })
 
-        // The one traffic car sits far up the road, out of reach of the whole round, so
-        // the only finishers are the two set by hand here.
+        // Keep natural finishes out of this hand-built fixture.
         const unreachable = sim.state.traffic[0]
         unreachable.position = vec(unreachable.position.x, sim.state.cars[0].car.position.y - 5000)
         sim.state.traffic = [unreachable]
@@ -383,8 +378,6 @@ describe('createSimulation: clearing the course', () => {
         for (const finisher of finishers) {
             expect(finisher.car.crashed).toBe(false)
             expect(sim.state.aliveCars).toContain(finisher)
-            // A time in the record is the record of the finish, and the runner up has one
-            // as much as the winner does.
             expect(finisher.network.history.at(-1)?.seconds).toBeDefined()
         }
         for (const other of others) {
@@ -393,8 +386,6 @@ describe('createSimulation: clearing the course', () => {
         }
     })
 
-    // Every finisher passed the same traffic, so the round score separates them only by
-    // the brake bonus, which says nothing about who won. First across the line does.
     it('breeds from the first car across the line, not from the highest score', () => {
         const sim = createSimulation(smallSettings, {
             winner: straightThrottleNetwork(),
@@ -408,13 +399,11 @@ describe('createSimulation: clearing the course', () => {
         const first = sim.state.cars[0]
         const second = sim.state.cars[1]
 
-        // One car crosses on its own, which is what opens the celebration.
         first.stats.overtakes = 1
         sim.step(SIMULATION.stepSeconds)
         expect(sim.state.courseWinner).toBe(first)
 
-        // A second crosses during the parade, having braked on the way: worth the whole
-        // brake bonus, which puts it above the winner on the round score.
+        // Later finisher has a higher bonus-adjusted score.
         second.stats.overtakes = 1
         second.stats.usedBrake = true
 
@@ -430,13 +419,9 @@ describe('createSimulation: clearing the course', () => {
         expect(sim.state.courseWinner).toBe(first)
         expect(sim.state.winner).toBe(first.network)
         expect(sim.state.parents[0]).toBe(first.network)
-        // Second place is still bred from, it just does not lead.
         expect(sim.state.parents).toContain(second.network)
     })
 
-    // The finish is a count of traffic passed, and the brake bonus is not traffic. A car
-    // one overtake short of the line used to be able to outscore a car that crossed it,
-    // taking the crown and hiding the finish along with it.
     it('crowns the finisher over a higher-scoring car that never finished', () => {
         const sim = createSimulation(smallSettings, {
             winner: straightThrottleNetwork(),
@@ -468,7 +453,6 @@ describe('createSimulation: clearing the course', () => {
             onCourseFinished: (result) => finishes.push(result),
         })
 
-        // Nobody moves, so the idle timeout ends the round with the course untouched.
         const steps = Math.ceil(
             (SIMULATION.idleTimeoutSeconds + SIMULATION.gameOverSeconds + 1) /
                 SIMULATION.stepSeconds,
@@ -503,7 +487,7 @@ describe('createSimulation: the player car', () => {
         const sim = createSimulation(smallSettings, { trafficSeed: 'radar-before-start' })
         sim.startManualDriving({ throttle: 0, brake: 0, steering: 0 })
 
-        // Park a traffic car right in front of the player, well inside the front area.
+        // Park traffic inside the front sensor before manual physics starts.
         const player = sim.state.playerCar
         if (!player) {
             throw new Error('Expected a player car')
@@ -515,19 +499,15 @@ describe('createSimulation: the player car', () => {
         expect(sim.state.waitingForManualInput).toBe(true)
         sim.step(SIMULATION.stepSeconds)
 
-        // The round has not started, but the radar is already on screen: it has to show
-        // the car parked ahead rather than the clear road the car was built with.
         expect(player.sensorState.readings.some((reading) => reading > 0)).toBe(true)
     })
 
     it('leaves the radar where it was last valid instead of casting it from inside a wall', () => {
-        // Full throttle into a hard left turn: it drives itself into the guard rail.
         const winner = constantOutputNetwork([10, -10, -10])
         const sim = createSimulation(smallSettings, { winner, trafficSeed: 'radar-after-crash' })
         const target = sim.state.cars[0]
         sim.state.traffic = []
-        // Wreck the rest of the field and give the target a result, so it stays the
-        // followed car after its own impact instead of handing the camera to a survivor.
+        // Keep the target as camera focus after impact.
         for (const racingCar of sim.state.cars) {
             if (racingCar !== target) {
                 crash(racingCar.car)
@@ -543,9 +523,7 @@ describe('createSimulation: the player car', () => {
         expect(target.car.crashed).toBe(true)
         const atImpact = target.sensorState
 
-        // A collision is only detected once the bodies overlap, so the wreck is partly
-        // through the barrier. Re-casting from there puts the origin outside the road and
-        // draws the whole radar beyond the rail, so it must stay exactly as it was.
+        // Recasting from the overlapping wreck would place its sensor origin beyond the rail.
         sim.step(SIMULATION.stepSeconds)
         sim.step(SIMULATION.stepSeconds)
 
@@ -562,14 +540,11 @@ describe('createSimulation: the player car', () => {
         expect(player?.player).toBe(true)
         expect(sim.state.cars).toContain(player)
         expect(sim.state.manualDriving).toBe(false)
-        // The player shares the one start line with everybody else, rather than being
-        // given a lane of its own.
         const middle = lanePosition(sim.state.road, Math.floor(sim.state.road.laneCount / 2))
         for (const racingCar of sim.state.cars) {
             expect(racingCar.car.position).toEqual(middle)
         }
 
-        // Nobody is driving: its network moves it like everyone else's.
         for (let i = 0; i < 30; i++) {
             sim.step(SIMULATION.stepSeconds)
         }
@@ -592,7 +567,6 @@ describe('createSimulation: the player car', () => {
 
         expect(sim.state.generation).toBe(generation + 1)
         expect(player).not.toBe(previousPlayer)
-        // The player continues the same round-robin lane distribution as the AI field.
         expect(player?.car.position).toEqual(
             lanePosition(sim.state.road, smallSettings.carsQuantity % sim.state.road.laneCount),
         )
@@ -694,14 +668,10 @@ describe('createSimulation: the player car', () => {
 
         const player = sim.state.playerCar
         const taughtNetwork = player?.network
-        // The brake bonus is worth more than the spread set below, and the AI cars decide
-        // for themselves whether to touch the brake. Cleared here so the ranking under
-        // test is the overtake ranking.
+        // Remove brake as a ranking variable for this fixture.
         for (const racingCar of sim.state.cars) {
             racingCar.stats.usedBrake = false
         }
-        // The player wins, and the rest of the field still scores: they are owed the seats
-        // behind it.
         const overtakes: number[] = sim.state.cars.map((racingCar, index) =>
             racingCar === player ? 10 : 9 - index,
         )
@@ -722,8 +692,6 @@ describe('createSimulation: the player car', () => {
         )
         expect(afterConsolidation).not.toBe(beforeConsolidation)
 
-        // First place, and nothing more than first place: the networks it beat keep their
-        // seats instead of being cleared out of the pool.
         expect(sim.state.winner).toBe(taughtNetwork)
         expect(sim.state.parents[0]).toBe(taughtNetwork)
         expect(sim.state.parents).toHaveLength(PARENT_COUNT)
@@ -736,8 +704,6 @@ describe('createSimulation: the player car', () => {
         expect(nextElite.car.controls.throttle).toBeGreaterThan(0)
     })
 
-    // The player's car is a competitor, not a guest: whatever the round decides about it
-    // is decided by the same ranking that decides everything else.
     it('admits a top-scoring player network to the veterans archive like any other car', () => {
         const sim = createSimulation(smallSettings, { trafficSeed: 'player-veteran' })
         sim.startManualDriving({ throttle: 1, brake: 0, steering: 0 })
@@ -756,13 +722,9 @@ describe('createSimulation: the player car', () => {
 
         expect(sim.state.veterans).toHaveLength(VETERANS.admittedPerRace)
         expect(sim.state.veterans[0]).toBe(taughtNetwork)
-        // Admitted with the race that earned it, not with an empty record.
         expect(taughtNetwork?.history).toHaveLength(1)
     })
 
-    // Consolidation rewrites the weights and the id derived from them, so it has to be
-    // over before the archive is written: otherwise localStorage keeps the network that
-    // raced while memory keeps the one that was trained.
     it('stores the consolidated player network in the archive, not the one that raced', () => {
         let savedRosterIds: string[] = []
         const sim = createSimulation(smallSettings, {
@@ -793,8 +755,6 @@ describe('createSimulation: the player car', () => {
 })
 
 describe('createSimulation: the brake bonus setting', () => {
-    // The slider exists to be moved mid-run and answered immediately, so it has to reach
-    // the ranking without waiting for a restart.
     it('re-ranks the field as soon as the bonus changes', () => {
         const sim = createSimulation(
             { ...smallSettings, brakeBonus: 10 },
@@ -811,7 +771,6 @@ describe('createSimulation: the brake bonus setting', () => {
         braker.stats.usedBrake = true
 
         sim.step(SIMULATION.stepSeconds)
-        // 1 + 10 beats 5.
         expect(sim.state.bestCar).toBe(braker)
 
         sim.updateSettings({ ...smallSettings, brakeBonus: 0 })
@@ -856,8 +815,6 @@ describe('createSimulation: the veterans archive', () => {
 
         finishRoundWithOvertakes(sim, [7, 0, 3, 0])
 
-        // Losers included on purpose: a median taken only from good races would describe
-        // a network's best days rather than a typical course.
         for (const network of networks) {
             expect(network.history).toHaveLength(1)
         }
@@ -888,10 +845,6 @@ describe('createSimulation: the veterans archive', () => {
         expect(rosters[0]).toBeGreaterThan(0)
     })
 
-    // The point of the whole mechanism: a network with a good record survives a round it
-    // scored nothing in, where `selectParents` would drop it from the parent pool the
-    // moment it drew a course it cannot drive. Tested against a FULL archive, so members
-    // really are competing for the seats.
     it('keeps a veteran with a strong record through a round it scored nothing in', () => {
         const veteran = straightThrottleNetwork()
         veteran.history = [{ overtakes: 30 }, { overtakes: 28 }, { overtakes: 32 }]

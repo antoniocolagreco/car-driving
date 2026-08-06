@@ -3,7 +3,6 @@ import { SIMULATION } from '@core/config'
 import type { CanvasLayer } from './canvas'
 import { cameraTranslation } from './camera'
 
-/** A `CanvasLayer` stub with just the fields `cameraTranslation` reads. */
 const stubLayer = (width: number, height: number): CanvasLayer => ({ width, height }) as CanvasLayer
 
 describe('cameraTranslation', () => {
@@ -13,9 +12,6 @@ describe('cameraTranslation', () => {
 
         const translation = cameraTranslation(layer, followY)
 
-        // ctx.translate(translation.y) shifts world y so that the followed
-        // point (screen y = 0 after translation, i.e. world y = followY) lands
-        // at cameraHeightRatio of the canvas height.
         const followedScreenY = translation.y + followY
         expect(followedScreenY).toBeCloseTo(layer.height * SIMULATION.cameraHeightRatio)
     })

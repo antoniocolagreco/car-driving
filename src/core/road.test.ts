@@ -9,7 +9,6 @@ describe('createRoad', () => {
             expect(Math.abs(border.a.x)).toBeCloseTo(road.width / 2)
             expect(Math.abs(border.b.x)).toBeCloseTo(road.width / 2)
         }
-        // One border on the left edge, one on the right edge.
         const borderXs = road.borders.map((border) => border.a.x).sort((a, b) => a - b)
         expect(borderXs[0]).toBeCloseTo(road.left)
         expect(borderXs[1]).toBeCloseTo(-road.left)

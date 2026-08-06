@@ -4,36 +4,24 @@ import type { SimulationSettings } from '@core/simulation'
 import type { RadarMode } from '@render/car'
 import { ELEMENT_IDS, findElement } from './dom'
 
-/**
- * Wires every input and button of the control panel. Slider/range/select limits
- * (min, max, step) live in the markup, generated at build time from
- * `@core/config` — this module only reacts to user input and sets the initial
- * `value` from `initial`, it never invents a range of its own.
- */
+/** Wires controls whose limits are defined by the markup and core config. */
 
 export type UiAction = 'restart' | 'reset' | 'evolve' | 'simulate'
 
-/** What the right-hand pane shows: the followed car's network, or the veterans standings. */
 export type SidePanelView = 'network' | 'veterans'
 
 export type ControlPanelHandlers = {
     onSettingsChange(settings: SimulationSettings): void
     onAction(action: UiAction): void
-    /** Manual driving switched on or off. */
     onDriveToggle(driving: boolean): void
     /** Traffic paint switched on or off; it must not affect the simulation. */
     onTrafficVisibilityToggle(visible: boolean): void
     /** Radar presentation changed; sensing and network inputs remain active. */
     onRadarModeChange(mode: RadarMode): void
-    /** The right-hand pane switched between the network graph and the veterans standings. */
     onSidePanelChange(view: SidePanelView): void
 }
 
-/**
- * The order the radar button cycles through: the summary first, then what it is made
- * of, then nothing. Three states are why the radar is a cycling button and not a switch
- * like the two next to it — `role="switch"` can only be on or off.
- */
+/** Three states require a cycle button rather than an ARIA switch. */
 const RADAR_CYCLE: readonly RadarMode[] = ['hull', 'zones', 'off']
 
 const RADAR_LABELS: Readonly<Record<RadarMode, string>> = {
@@ -42,24 +30,19 @@ const RADAR_LABELS: Readonly<Record<RadarMode, string>> = {
     off: 'Radar: hidden',
 }
 
-/** The label names what is on screen now, not what clicking would switch to. */
 const SIDE_PANEL_LABELS: Readonly<Record<SidePanelView, string>> = {
     network: 'Panel: network',
     veterans: 'Panel: veterans',
 }
 
-/**
- * The course-interval slider steps through `COURSE_INTERVALS` by index rather than by
- * value: the choices are 1, 3, 5, 10 and "never", which is not a range anything can be
- * clamped into, and the last of them has no numeric position on a track at all.
- */
+/** Labels an index-based interval choice, including Infinity. */
 export const courseIntervalLabel = (interval: number): string =>
     Number.isFinite(interval) ? String(interval) : '∞'
 
 const isPositiveInteger = (value: number): boolean =>
     Number.isFinite(value) && Number.isInteger(value) && value > 0
 
-/** Parses `"8, 6, 4"` into `[8, 6, 4]`; `undefined` if any part is not a positive integer. */
+/** Parses a comma-separated list of positive integers. */
 const parseHiddenLayers = (text: string): readonly number[] | undefined => {
     const parts = text.split(',').map((part) => Number(part.trim()))
     if (parts.length === 0 || !parts.every(isPositiveInteger)) {
@@ -68,21 +51,7 @@ const parseHiddenLayers = (text: string): readonly number[] | undefined => {
     return parts
 }
 
-/**
- * Wires every input and button of the control panel with `{ signal }`, so a
- * single `AbortController.abort()` tears the whole thing down.
- *
- * Behaviour that matters:
- * - Every numeric setting has both a slider and a typed number field (see
- *   `wireNumericSetting`), kept in sync, and applies on `change` rather than `input`.
- * - Manual driving is a switch, not a button: it reports its own state, because what it
- *   toggles is invisible until a key is pressed.
- * - Mutation rate only ever calls `onSettingsChange`: it applies to the next
- *   generation and must never trigger a restart of the current one.
- * - Hidden layers is a free-text field, applied on Enter, and rejects anything
- *   that is not a comma-separated list of positive integers by restoring the
- *   previous text instead of building a broken architecture.
- */
+/** Wires all controls under one abort signal. Numeric settings apply on `change`. */
 export const createControlPanel = (
     initial: SimulationSettings,
     handlers: ControlPanelHandlers,
@@ -100,19 +69,7 @@ export const createControlPanel = (
         handlers.onSettingsChange(settings)
     }
 
-    /**
-     * Wires one numeric setting: a slider to sweep it and a number field to type it,
-     * both in the unit the user reads, kept in sync with each other.
-     *
-     * Two rules that matter more than the plumbing:
-     *
-     * - The slider mirrors into the number field on every `input` event (so dragging
-     *   shows the value live) but only APPLIES on `change`, when the drag ends. A
-     *   setting that rebuilds the population must not rebuild it once per pixel.
-     * - The number field applies on `change` too, which fires on Enter or on blur, and
-     *   its value is clamped through `min`/`max` from the markup — a typed 500 in a
-     *   10-100 field becomes 100 rather than a population of 500.
-     */
+    /** Keeps a slider and number field synchronized; applies only on committed changes. */
     const wireNumericSetting = (
         rangeId: string,
         numberId: string,
@@ -155,8 +112,7 @@ export const createControlPanel = (
             'change',
             () => {
                 const typed = Number(numberField.value)
-                // An empty or unparseable field falls back to the slider, which still
-                // holds the last good value, instead of applying NaN.
+                // Fall back to the last valid slider value instead of applying NaN.
                 apply(Number.isFinite(typed) ? typed : Number(range?.value ?? min))
             },
             { signal },
@@ -170,9 +126,7 @@ export const createControlPanel = (
         (display) => ({ ...settings, carsQuantity: display }),
     )
 
-    // The mutation rate is the one setting that must NOT restart: it applies to the
-    // next generation, and interrupting the current one to change it would throw away
-    // the round the user is watching.
+    // Mutation applies to the next generation without interrupting this race.
     wireNumericSetting(
         ELEMENT_IDS.inputs.mutationRateRange,
         ELEMENT_IDS.inputs.mutationRateNumber,
@@ -181,7 +135,6 @@ export const createControlPanel = (
         { restarts: false },
     )
 
-    // --- Hidden layers: free text, applied (and validated) on Enter -----------
     const hiddenLayersInput = findElement<HTMLInputElement>(ELEMENT_IDS.inputs.hiddenLayersInput)
     if (hiddenLayersInput) {
         hiddenLayersInput.value = settings.hiddenLayers.join(', ')
@@ -206,12 +159,7 @@ export const createControlPanel = (
         )
     }
 
-    // --- Course interval -------------------------------------------------------
-    // A slider over a list, so the input's value is an INDEX into `COURSE_INTERVALS` and
-    // never the interval itself; `∞` is a legitimate choice and has no place on a track.
-    // Like the mutation rate it must not restart: it decides which layout the NEXT
-    // generation draws, and interrupting the current one to say so would throw away the
-    // race being watched.
+    // The slider stores an index because Infinity is a valid interval choice.
     const courseIntervalRange = findElement<HTMLInputElement>(
         ELEMENT_IDS.inputs.courseIntervalRange,
     )
@@ -225,8 +173,7 @@ export const createControlPanel = (
 
     if (courseIntervalRange) {
         const storedIndex = COURSE_INTERVALS.indexOf(settings.generationsPerCourse)
-        // An unknown stored value falls back to the default's position rather than to
-        // index 0, which would silently turn "3" into "randomise every generation".
+        // Unknown stored values fall back to the default, not index zero.
         const initialIndex =
             storedIndex === -1
                 ? COURSE_INTERVALS.indexOf(DEFAULTS.generationsPerCourse)
@@ -256,11 +203,7 @@ export const createControlPanel = (
         )
     }
 
-    // --- Brake bonus -----------------------------------------------------------
-    // The same index-into-a-list slider as the course interval: 0, 1, 3, 5 and 10 are the
-    // sizes worth telling apart, and the ones in between say nothing new. It applies
-    // immediately, including to the round on screen, because it changes nothing about the
-    // world and everything about how the field is ranked.
+    // Index-based choice that reranks the current round without changing physics.
     const brakeBonusRange = findElement<HTMLInputElement>(ELEMENT_IDS.inputs.brakeBonusRange)
     const brakeBonusValue = findElement<HTMLSpanElement>(ELEMENT_IDS.brakeBonusValue)
 
@@ -299,7 +242,6 @@ export const createControlPanel = (
         )
     }
 
-    // --- Manual driving --------------------------------------------------------
     const driveButton = findElement<HTMLButtonElement>(ELEMENT_IDS.buttons.drive)
     const driveState = findElement<HTMLSpanElement>(ELEMENT_IDS.manualDriveState)
     let driving = false
@@ -312,7 +254,6 @@ export const createControlPanel = (
             driveState.textContent = driving ? 'Manual driving: ON' : 'Manual driving: off'
         }
         driveButton.setAttribute('aria-checked', String(driving))
-        // A switch has to look switched, not just say so.
         driveButton.classList.toggle('bg-emerald-600', driving)
         driveButton.classList.toggle('hover:bg-emerald-700', driving)
     }
@@ -326,7 +267,6 @@ export const createControlPanel = (
 
     driveButton?.addEventListener('click', toggleDriving, { signal })
 
-    // --- Traffic visibility ---------------------------------------------------
     const trafficButton = findElement<HTMLButtonElement>(ELEMENT_IDS.buttons.traffic)
     const trafficState = findElement<HTMLSpanElement>(ELEMENT_IDS.trafficState)
     let trafficVisible: boolean = true
@@ -352,7 +292,6 @@ export const createControlPanel = (
 
     trafficButton?.addEventListener('click', toggleTrafficVisibility, { signal })
 
-    // --- Radar presentation ---------------------------------------------------
     const radarButton = findElement<HTMLButtonElement>(ELEMENT_IDS.buttons.radar)
     const radarState = findElement<HTMLSpanElement>(ELEMENT_IDS.radarState)
     let radarMode: RadarMode = RADAR_CYCLE[0]
@@ -364,8 +303,6 @@ export const createControlPanel = (
         if (radarState) {
             radarState.textContent = RADAR_LABELS[radarMode]
         }
-        // Its own label is the only place the current mode is announced, so the colour
-        // says nothing more than "something is being drawn".
         const painting: boolean = radarMode !== 'off'
         radarButton.classList.toggle('bg-emerald-600', painting)
         radarButton.classList.toggle('hover:bg-emerald-700', painting)
@@ -381,11 +318,7 @@ export const createControlPanel = (
 
     radarButton?.addEventListener('click', cycleRadarMode, { signal })
 
-    // --- Right-hand pane ------------------------------------------------------
-    // The two things worth looking at while a race runs compete for the same space and
-    // answer different questions: the graph is about the one car being followed right
-    // now, the standings are about what the run has accumulated. Showing them side by
-    // side would halve both.
+    // Network graph and standings share one pane.
     const sidePanelButton = findElement<HTMLButtonElement>(ELEMENT_IDS.buttons.sidePanel)
     const sidePanelState = findElement<HTMLSpanElement>(ELEMENT_IDS.sidePanelState)
     let sidePanelView: SidePanelView = 'network'
@@ -434,7 +367,6 @@ export const createControlPanel = (
         { signal },
     )
 
-    // --- Network buttons ---------------------------------------------------------
     const wireAction = (id: string, action: UiAction): void => {
         findElement<HTMLButtonElement>(id)?.addEventListener(
             'click',

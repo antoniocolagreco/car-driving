@@ -23,11 +23,6 @@ const { lang = 'en', title, ...otherProps } = Astro.props
         class="min-h-screen relative bg-stone-50 text-neutral-800 dark:bg-neutral-800 dark:text-stone-50 flex flex-col min-w-0"
     >
         <ClientRouter />
-        <!--
-            The header is deliberately one thin line and the main area is
-            deliberately full width: this app is two canvases, and every pixel
-            spent on chrome is a pixel taken away from them.
-        -->
         <header class="bg-rose-600 text-stone-50">
             <nav class="flex w-full items-baseline justify-between gap-4 px-3 py-1">
                 <NavLink href={`${import.meta.env.BASE_URL}/`}

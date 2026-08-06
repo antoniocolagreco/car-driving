@@ -33,14 +33,7 @@ import { createSimulateModal } from '@ui/simulate-modal'
 import { createVeteransPanel } from '@ui/veterans-panel'
 import victoryAudioUrl from '../audio/win.mp3?url'
 
-/**
- * The only module allowed to know about `core/`, `render/` and `ui/` at once.
- * It owns the two canvases, the
- * fixed-timestep loop that drives the core simulation, the HUD, the control
- * panel and the localStorage wiring. `core/` never touches localStorage directly: it
- * reports a winner out through `onGenerationEnd` and a finished course through
- * `onCourseFinished`, and this module decides what is worth keeping.
- */
+/** Composition root for core simulation, rendering, UI and persistence. */
 
 export type SimulationApp = {
     start(): void
@@ -48,19 +41,14 @@ export type SimulationApp = {
     destroy(): void
 }
 
-/** How often the (expensive) network visualization redraws, independent of the 60fps simulation. */
+/** Network visualization rate, independent of simulation steps. */
 const NETWORK_DRAW_INTERVAL_MS = 1000 / 8
 
-/** Two hidden-layer lists describe the same architecture when they match neuron for neuron. */
 const sameLayers = (a: readonly number[], b: readonly number[]): boolean =>
     a.length === b.length && a.every((count, index) => count === b[index])
 
-/** Builds the app: two canvas layers inside `container`, the simulation loop, the HUD and the controls. */
 export const createSimulationApp = (container: HTMLElement): SimulationApp => {
     const stored = loadSettings()
-    // Reassigned wholesale on every change, never mutated field-by-field —
-    // `SimulationSettings`'s fields are readonly, matching the immutability
-    // convention the rest of the codebase follows for value types.
     let settings: SimulationSettings = {
         carsQuantity: stored.carsQuantity,
         mutationRate: stored.mutationRate,
@@ -69,9 +57,8 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         brakeBonus: stored.brakeBonus,
     }
     let lastNetworkDrawMs = 0
-    /** The generation the standings on screen were built for; 0 means never painted. */
     let standingsGeneration = 0
-    // A paint-only preference: changing it must never alter or restart the simulation.
+    // Paint-only; never restart or alter simulation state.
     let trafficVisible: boolean = true
     let radarMode: RadarMode = 'hull'
     const victoryAudio: HTMLAudioElement = new Audio(victoryAudioUrl)
@@ -82,9 +69,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
     let victoryAudioUnlocked: boolean = false
     const abortController: AbortController = new AbortController()
 
-    // Safari and other browsers require an audio element to begin playback from a
-    // user gesture at least once. Prime this exact element silently on the first
-    // interaction, then reuse it at full volume when the course is cleared.
+    // Prime audio from a user gesture for browsers that block later autoplay.
     const unlockVictoryAudio = (): void => {
         if (victoryAudioUnlocked) {
             return
@@ -114,29 +99,18 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         signal: abortController.signal,
     })
 
-    /**
-     * Background mode: the simulation is stepped as fast as the machine manages, with
-     * nothing drawn at all, so a change can be judged over dozens of races instead of
-     * being watched in real time. Drawing is what costs the time, so skipping it is the
-     * whole speed-up, and the modal is written to once per finished race rather than per
-     * frame.
-     */
+    /** Background mode steps without rendering and updates the modal once per race. */
     let simulating = false
     let stopAfterCurrentRace = false
     let racesCompleted = 0
     let simulateFrameId: number | undefined
 
-    /**
-     * Milliseconds of stepping per animation frame while simulating. It has to stay
-     * under a frame's worth of time: the browser can only repaint the modal, and react
-     * to the Stop button, between one slice and the next.
-     */
+    /** Keep slices short enough for modal paint and Stop events between them. */
     const SIMULATE_SLICE_MS = 12
 
     const simulateSlice = (): void => {
         const deadline = performance.now() + SIMULATE_SLICE_MS
-        // `simulating` is re-checked every step because the callbacks below run inside
-        // `step` and can end the run mid-slice.
+        // A simulation callback can end the run during any step.
         while (simulating && performance.now() < deadline) {
             simulation.step(SIMULATION.stepSeconds)
         }
@@ -155,8 +129,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             simulateFrameId = undefined
         }
         simulateModal.close()
-        // The rendered loop owns a fixed-timestep accumulator; whatever was left in it
-        // belongs to a frame that happened before the background run.
+        // Discard rendered-loop time left over from before the background run.
         accumulator.seconds = 0
         frameLoop.start()
     }
@@ -188,36 +161,20 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             seconds: simulation.state.elapsedSeconds,
         })
 
-        // Somebody cleared the course, or Stop was pressed and the race it was waiting on
-        // has now finished. Either way the run is over and the normal view comes back.
+        // Stop requests take effect only after the current race reports its result.
         if (stopAfterCurrentRace || simulation.state.courseCleared) {
             stopSimulating()
         }
     }
 
-    /**
-     * The record holder. Loaded once, replaced by whoever clears a course next, and
-     * dropped when its architecture stops matching the settings, because a champion nobody
-     * can load or race against cannot hold the seat.
-     */
+    /** Latest finisher, discarded when incompatible with the selected architecture. */
     let champion: ChampionRecord | undefined = loadChampion()
     if (champion && !isCompatibleNetwork(champion.network, settings.hiddenLayers)) {
         clearChampion()
         champion = undefined
     }
 
-    /**
-     * The champion is the LATEST network to clear a course, not the fastest one ever to
-     * do it. Whoever finishes takes the seat, even with a worse time than the network it
-     * displaces.
-     *
-     * It used to be a record, kept only for a strictly faster finish. That made it a
-     * trophy rather than a competitor, and the champion is on the grid of every race: the
-     * seat was being held by whichever network once drew a course it happened to finish
-     * quickly, against a field that had gone on evolving past it. Clearing a course at
-     * all is the rare event here, so the most recent one is the better representative of
-     * what the population can currently do, and its time is recorded rather than compared.
-     */
+    /** Every finisher replaces the champion; time describes the run but does not guard the seat. */
     const onCourseFinished = (result: CourseResult): void => {
         champion = {
             network: result.network,
@@ -229,16 +186,10 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         hud.showChampion(champion)
     }
 
-    /**
-     * The archive is written on every generation, because that is when it changes and
-     * losing a session's worth of it to a closed tab would defeat the point of keeping
-     * a long-term memory at all.
-     */
     const onVeteransChanged = (roster: readonly Network[]): void => {
         saveVeterans(roster)
     }
 
-    /** Members whose architecture no longer matches the settings could not race anyway. */
     const usableVeterans = (roster: readonly Network[]): Network[] =>
         roster.filter((network) => isCompatibleNetwork(network, settings.hiddenLayers))
 
@@ -248,11 +199,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         saveVeterans(veterans)
     }
 
-    // `simulation` is reassigned wholesale (never mutated) on 'reset', the one
-    // action that needs to drop the current winner entirely: `restart()`
-    // always keeps the in-memory winner unless a new one is given, so
-    // "start from random networks" can only be achieved by building a fresh
-    // `Simulation` with no winner at all.
+    // Reset rebuilds the simulation because restart preserves its in-memory winner.
     const loadedWinner = loadWinner()
     const winner =
         loadedWinner && isCompatibleNetwork(loadedWinner, settings.hiddenLayers)
@@ -272,9 +219,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
 
     const simulationLayer = createCanvasLayer(container, 'Simulation')
 
-    // The network graph and the veterans standings share the second grid cell, so the
-    // cell gets its own wrapper: appending both straight into the container would make
-    // it a three-column grid and squeeze the road down to a third of the width.
+    // The graph and standings alternate in one grid cell.
     const sidePane = document.createElement('div')
     sidePane.className = 'relative min-h-0 min-w-0'
     container.appendChild(sidePane)
@@ -282,11 +227,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
     const veteransPanel = createVeteransPanel(sidePane, abortController.signal)
     let sidePanelView: SidePanelView = 'network'
 
-    /**
-     * Repaints the standings. Called once per race rather than per frame: the archive
-     * only changes when a race ends, and a hundred rows rebuilt sixty times a second
-     * would cost more than the race itself.
-     */
+    /** Repaints standings once per race. */
     const refreshVeterans = (): void => {
         if (sidePanelView !== 'veterans') {
             return
@@ -297,16 +238,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
 
     const hud = createHud()
 
-    /**
-     * Forgets everything evolved so far and starts again from random networks: the winner,
-     * the whole archive and the record holder alike. A champion left in place would keep
-     * entering every race and keep holding a time the fresh population had no part in
-     * setting, so it goes with the rest.
-     *
-     * The simulation is rebuilt rather than restarted, because `restart` always keeps the
-     * in-memory winner unless it is handed another one, and the callbacks have to be
-     * rewired onto the new instance or they would stop watching.
-     */
+    /** Clears winner, archive and champion, then rebuilds the simulation and callbacks. */
     const resetEverything = (): void => {
         clearWinner()
         clearVeterans()
@@ -318,8 +250,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             onCourseFinished,
             onVeteransChanged,
         })
-        // The standings are otherwise repainted once per race, which would leave the old
-        // archive on screen until the new population finished its first one.
+        // Clear stale standings immediately instead of waiting for the first new race.
         refreshVeterans()
     }
 
@@ -349,9 +280,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             accumulator.seconds -= SIMULATION.stepSeconds
             steps += 1
         }
-        // A stalled tab cannot be allowed to keep maxing out steps every frame forever
-        // trying to "catch up": once the cap is hit the remaining time is dropped rather
-        // than banked for the next frame.
+        // Drop excess elapsed time after reaching the catch-up cap.
         if (steps >= SIMULATION.maxStepsPerFrame) {
             accumulator.seconds = 0
         }
@@ -360,17 +289,14 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
         if (victoryIsActive && !victoryWasActive) {
             victoryAudio.muted = false
             victoryAudio.currentTime = 0
-            // Audio is celebratory only: a remaining browser-policy rejection must not
-            // interrupt the simulation, but is reported instead of being hidden.
+            // Playback failure must not interrupt the simulation.
             void victoryAudio.play().catch((error: unknown) => {
                 console.warn('Victory audio playback was blocked by the browser', error)
             })
         }
         victoryWasActive = victoryIsActive
 
-        // Once per race, on the generation the new grid belongs to: the standings answer
-        // "who is out there and what have they done", and both halves of that only change
-        // when a race starts.
+        // Grid membership and archive history change only between races.
         if (simulation.state.generation !== standingsGeneration) {
             standingsGeneration = simulation.state.generation
             refreshVeterans()
@@ -383,14 +309,12 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
 
     const frameLoop = createFrameLoop(onFrame)
 
-    // Stop is a request, not a switch: the race in progress is allowed to finish so the
-    // run never reports a truncated result, and `onGenerationEnd` closes the modal.
+    // Stop after the current race so the final result is not truncated.
     const simulateModal = createSimulateModal(() => {
         stopAfterCurrentRace = true
     }, abortController.signal)
 
-    // One live `Controls` record the keyboard writes into for the whole session. The
-    // first real driving intent releases a newly armed manual round; key repeat does not.
+    // The first manual driving intent releases the armed round.
     const manualInput: ManualControlInput = createManualControls(abortController.signal, {
         onIntentStart: () => simulation.beginManualDriving(),
     })
@@ -406,10 +330,7 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
                 settings = nextSettings
                 saveSettings(settings)
 
-                // A new architecture is a new species. Not one network evolved so far can
-                // even feed forward through it, so the winner, the archive and the record
-                // would all sit there unusable while the standings still listed them.
-                // Changing the layers is starting over, and it says so by doing it.
+                // Existing networks cannot run through a different architecture.
                 if (architectureChanged) {
                     resetEverything()
                     return
@@ -444,13 +365,10 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             onDriveToggle: (driving) => {
                 manualInput.reset()
                 if (driving) {
-                    // Manual mode always begins with a clean round. `startManualDriving`
-                    // arms it without advancing time; the first Arrow/WASD/Space keydown
-                    // calls `beginManualDriving` through the keyboard handler above.
+                    // Start frozen; the first driving key releases the round.
                     simulation.startManualDriving(manualInput.controls)
                 } else {
-                    // No restart here: the same player car continues immediately, driven
-                    // by the network that was trained during the manual part of the run.
+                    // Continue the same car under its newly trained network.
                     simulation.stopManualDriving()
                 }
             },
@@ -463,19 +381,14 @@ export const createSimulationApp = (container: HTMLElement): SimulationApp => {
             onSidePanelChange: (view) => {
                 sidePanelView = view
                 veteransPanel.setVisible(view === 'veterans')
-                // `createCanvasLayer` sets `display: block` inline, so hiding the canvas
-                // has to go through the same property rather than through a class.
+                // Canvas visibility is inline, so the paired panel uses the same mechanism.
                 networkLayer.element.style.display = view === 'network' ? 'block' : 'none'
-                // Painted here rather than waiting for the next race: the standings are
-                // switched to in order to be read now, and the next race can be a minute off.
                 refreshVeterans()
             },
         },
         abortController.signal,
     )
 
-    // The champion panel starts empty, so it is filled once here rather than waiting for
-    // the first finish to reveal a record that already exists.
     hud.showChampion(champion)
 
     return {

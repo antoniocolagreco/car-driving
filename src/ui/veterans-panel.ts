@@ -8,42 +8,24 @@ import {
     worstScore,
 } from '@core/veterans'
 
-/**
- * The veterans standings: one row per archive member, sortable by any column, shown in
- * the right-hand pane in place of the network graph.
- *
- * Built as a real `<table>` rather than a grid of divs, because that is what it is: the
- * header cells are the sort controls, and a screen reader gets the row/column
- * relationships for free.
- *
- * Rebuilt wholesale on every update rather than diffed. It is redrawn once per race,
- * not per frame, and a hundred rows of plain text cost nothing next to the clarity of
- * having exactly one code path that turns a roster into markup.
- */
+/** Sortable archive table, rebuilt once per race. */
 
-/** What a column sorts by, and how it is rendered. */
 type ColumnKey = 'network' | 'races' | 'survival' | 'best' | 'worst' | 'median' | 'time'
 
 type Column = {
     readonly key: ColumnKey
     readonly label: string
     readonly title: string
-    /** Sort value. `undefined` sorts last whichever direction is chosen. */
+    /** `undefined` always sorts last. */
     readonly value: (network: Network) => number | string | undefined
-    /** Text shown in the cell. */
     readonly text: (network: Network) => string
     readonly numeric: boolean
 }
 
-/**
- * Seconds shown to one decimal, the precision the champion's record is measured at.
- * An empty cell means the network has never cleared a course, which is the whole
- * information: there is no time because there was no finish.
- */
+/** Empty text means the network has never finished. */
 const formatSeconds = (seconds: number | undefined): string =>
     seconds === undefined ? '' : `${seconds.toFixed(1)}s`
 
-/** A rate in [0, 1] as a percentage with two decimals, which is the resolution of a hundred races. */
 const formatPercentage = (rate: number): string => `${(rate * 100).toFixed(2)}%`
 
 const COLUMNS: readonly Column[] = [
@@ -105,28 +87,19 @@ const COLUMNS: readonly Column[] = [
     },
 ]
 
-/** The handle `app.ts` keeps on the panel. */
 export type VeteransPanel = {
     /** Repaints the standings. `racingIds` are the networks on the grid right now. */
     update(roster: readonly Network[], racingIds: ReadonlySet<string>): void
-    /** Shows or hides the panel. Hidden is the initial state. */
     setVisible(visible: boolean): void
     destroy(): void
 }
 
 type SortState = {
     key: ColumnKey
-    /** True for smallest/A-first. Numeric columns open on descending, text on ascending. */
     ascending: boolean
 }
 
-/**
- * Compares two values of the same column, with `undefined` always last.
- *
- * Last in BOTH directions on purpose: a missing best time means the network never
- * cleared a course, and floating those rows to the top when sorting ascending would
- * bury every network that actually has a time under every network that does not.
- */
+/** Compares column values while keeping missing finish data last in both directions. */
 export const compareValues = (
     left: number | string | undefined,
     right: number | string | undefined,
@@ -150,9 +123,7 @@ export const createVeteransPanel = (container: HTMLElement, signal: AbortSignal)
     const root = document.createElement('div')
     root.className =
         'absolute inset-0 min-h-0 flex-col overflow-hidden rounded-md bg-neutral-900 text-xs text-stone-50'
-    // Visibility through the inline style rather than a `hidden` class: the canvas this
-    // panel takes turns with carries `display: block` inline of its own, and a class
-    // could never win against that. One mechanism for both, so neither can get stuck.
+    // Match the canvas's inline visibility mechanism.
     root.style.display = 'none'
 
     const caption = document.createElement('p')
@@ -169,9 +140,7 @@ export const createVeteransPanel = (container: HTMLElement, signal: AbortSignal)
     const headRow = document.createElement('tr')
     const body = document.createElement('tbody')
 
-    // Opens on the archive's own primary key. The roster arrives already ranked, so a
-    // stable sort leaves equal rates in exactly the order the archive holds them, which
-    // is how a panel full of networks that have never finished still reads as a standing.
+    // Stable sorting preserves archive order among equal completion rates.
     let sort: SortState = { key: 'survival', ascending: false }
     let lastRoster: readonly Network[] = []
     let lastRacingIds: ReadonlySet<string> = new Set()
@@ -203,9 +172,7 @@ export const createVeteransPanel = (container: HTMLElement, signal: AbortSignal)
         for (const [index, network] of ordered.entries()) {
             const row = document.createElement('tr')
             const racing = lastRacingIds.has(network.id)
-            // Rank first, so a re-sorted table still reads as a standing rather than as a
-            // list; the racing rows are lifted out of the striping so they are findable
-            // while the race they are in is running.
+            // Keep rank visible after column sorting; highlight current entrants.
             row.className = racing
                 ? 'bg-emerald-900/50 ring-1 ring-emerald-500/40'
                 : 'odd:bg-white/5'
@@ -238,9 +205,7 @@ export const createVeteransPanel = (container: HTMLElement, signal: AbortSignal)
             body.appendChild(row)
         }
 
-        // Counted against the roster, not taken from the size of `lastRacingIds`: that set
-        // holds every network on the grid, which is nearly the whole population, and
-        // reporting it here read as "the entire archive is racing" when a tenth of it was.
+        // Count only archived networks among all ids currently on the grid.
         const racingCount: number = lastRoster.filter((network) =>
             lastRacingIds.has(network.id),
         ).length
@@ -266,8 +231,7 @@ export const createVeteransPanel = (container: HTMLElement, signal: AbortSignal)
         cell.addEventListener(
             'click',
             () => {
-                // Re-clicking the active column reverses it; moving to a new one opens it
-                // at its most useful end, which for a score is the high end.
+                // New numeric columns start descending; re-clicking reverses direction.
                 sort =
                     sort.key === column.key
                         ? { key: column.key, ascending: !sort.ascending }

@@ -17,10 +17,8 @@ describe('stepCar', () => {
             stepCar(left, SIMULATION.stepSeconds)
         }
 
-        // Same magnitude, opposite signs: the number reads like the steering that caused it.
         expect(right.headingDegrees).toBeGreaterThan(0)
         expect(left.headingDegrees).toBeCloseTo(-right.headingDegrees)
-        // And the car really did move right, which is what the sign claims.
         expect(right.position.x).toBeGreaterThan(0)
         expect(left.position.x).toBeLessThan(0)
     })
@@ -54,7 +52,6 @@ describe('stepCar', () => {
         car.speed = 5
         car.controls = { throttle: 0, brake: 1, steering: 0 }
 
-        // A large dt so the brake would overshoot past 0 if it were not clamped.
         stepCar(car, 10)
 
         expect(car.speed).toBe(0)
@@ -75,7 +72,7 @@ describe('stepCar', () => {
         car.speed = 0.05
         car.controls = { throttle: 0, brake: 0, steering: 0 }
 
-        stepCar(car, 10) // large dt, well past what is needed to fully decelerate
+        stepCar(car, 10)
 
         expect(car.speed).toBe(0)
     })

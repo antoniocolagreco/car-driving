@@ -12,24 +12,16 @@ import {
     worstScore,
 } from './veterans'
 
-/**
- * A network stripped to what the archive actually reads: an identity and a record.
- *
- * None of its races carries a time, so none of them was finished. Every ranking test
- * built on this one is therefore a test of how an archive of networks that have never
- * cleared a course orders itself.
- */
+/** Fixture with unfinished races only. */
 const networkWith = (id: string, scores: readonly number[]): Network =>
     ({
         id,
         history: scores.map((overtakes) => ({ overtakes })),
     }) as unknown as Network
 
-/** A network whose races are given in full, finish times included. */
 const networkWithRaces = (id: string, history: readonly RaceRecord[]): Network =>
     ({ id, history: [...history] }) as unknown as Network
 
-/** `count` races, the first `finishedCount` of them cleared, all scoring `overtakes`. */
 const races = (count: number, finishedCount: number, overtakes: number): RaceRecord[] =>
     Array.from({ length: count }, (_, index) =>
         index < finishedCount ? { overtakes, seconds: 40 + index } : { overtakes },
@@ -37,7 +29,6 @@ const races = (count: number, finishedCount: number, overtakes: number): RaceRec
 
 const idsOf = (roster: readonly Network[]): string[] => roster.map((network) => network.id)
 
-/** `count` distinct established members, all with the same unremarkable record. */
 const filler = (count: number, score = 20): Network[] =>
     Array.from({ length: count }, (_, index) =>
         networkWith(`filler-${index}`, [score, score, score]),
@@ -56,8 +47,6 @@ describe('medianScore', () => {
         expect(medianScore(networkWith('even', [10, 20, 30, 40]))).toBe(25)
     })
 
-    // The whole reason the archive ranks on the median: one 40 taken on an easy course
-    // must not promote a network that does 20 on everything else.
     it('ignores a single lucky course that a mean would be dragged up by', () => {
         expect(medianScore(networkWith('lucky', [20, 20, 20, 20, 40]))).toBe(20)
     })
@@ -78,9 +67,6 @@ describe('completionRate', () => {
 })
 
 describe('rankRoster', () => {
-    // The whole point of the criterion: clearing the course is the goal, and overtakes are
-    // only the way there. A network that finishes nine races in ten has done the task nine
-    // times, whatever the one with the higher median never managed to complete.
     it('puts the better finisher first, whatever the medians say', () => {
         const roster = [
             networkWithRaces('unfinished', races(10, 5, 30)),
@@ -90,8 +76,6 @@ describe('rankRoster', () => {
         expect(idsOf(rankRoster(roster))).toEqual(['finisher', 'unfinished'])
     })
 
-    // Nothing to migrate: a finish has always been recorded as a time, so an archive
-    // saved by an older build answers this question about itself already.
     it('reads a finish out of an archive saved before the rate existed', () => {
         const roster = [
             networkWith('never-finished', [40, 40, 40, 40]),
@@ -120,8 +104,6 @@ describe('rankRoster', () => {
         expect(idsOf(rankRoster(roster))).toEqual(['strong', 'middling', 'weak'])
     })
 
-    // How many races a member has run buys it nothing on its own: a newcomer with one
-    // good race outranks a veteran with a worse median over forty.
     it('gives a newcomer with a better median the better place', () => {
         const roster = [networkWith('established', [12, 12, 12, 12]), networkWith('newcomer', [30])]
 
@@ -179,8 +161,6 @@ describe('updateRoster', () => {
         expect(idsOf(updateRoster(full, [admitted]))).not.toContain('worst')
     })
 
-    // A newcomer gets no shelter for being new: admitted on a race it scored nothing in,
-    // it is the weakest entry in a full archive and leaves the way it came.
     it('evicts a newcomer whose only race is the worst score in the archive', () => {
         const full = filler(VETERANS.rosterSize)
         const unlucky = networkWith('unlucky', [0])
@@ -188,8 +168,6 @@ describe('updateRoster', () => {
         expect(idsOf(updateRoster(full, [unlucky]))).not.toContain('unlucky')
     })
 
-    // Eviction runs on the same criterion as the racing selection, so the member that
-    // finishes least is the one the archive stops keeping, however high its median is.
     it('drops the worst finisher before a lower median that keeps clearing courses', () => {
         const established = Array.from({ length: VETERANS.rosterSize - 2 }, (_, index) =>
             networkWithRaces(`filler-${index}`, races(10, 7, 20)),
@@ -206,8 +184,6 @@ describe('updateRoster', () => {
         expect(kept).not.toContain('unfinished')
     })
 
-    // Eviction has to be the exact reverse of the ranking, or a member could be dropped
-    // while still ranking above one that was kept.
     it('drops exactly whoever ranked last', () => {
         const full = [...filler(VETERANS.rosterSize - 1), networkWith('last', [2, 2, 2])]
         const ranked = rankRoster(full)

@@ -12,18 +12,7 @@ export type ManualControlHandlers = {
     onIntentStart?(): void
 }
 
-/**
- * Manual driving: turns the keyboard into a live `Controls` record the simulation can
- * read every step, exactly as it reads a network's outputs.
- *
- * Arrows or WASD steer and accelerate, Space brakes. The object returned is MUTATED in
- * place as keys go down and up — `simulation.startManualDriving` keeps a reference to it
- * and copies it per step, so there is nothing to poll and no event plumbing in `core/`.
- *
- * Keys are tracked as a set of held codes rather than by writing the controls directly
- * on each event, so releasing one arrow while another is still held does the right thing
- * instead of zeroing the input.
- */
+/** Maps held Arrow/WASD/Space keys onto one mutable controls record. */
 export const createManualControls = (
     signal: AbortSignal,
     handlers: ManualControlHandlers = {},
@@ -69,7 +58,7 @@ export const createManualControls = (
             if (!intent) {
                 return
             }
-            // Arrows scroll the page and Space pages down: neither is wanted mid-corner.
+            // Prevent page scrolling while driving.
             event.preventDefault()
             if (!held.has(intent)) {
                 handlers.onIntentStart?.()
@@ -93,8 +82,7 @@ export const createManualControls = (
         { signal },
     )
 
-    // A key held while the window loses focus never sends its `keyup`, which would leave
-    // the car accelerating into a wall while the user is somewhere else entirely.
+    // Blur may swallow keyup events, so release every held control.
     window.addEventListener(
         'blur',
         () => {

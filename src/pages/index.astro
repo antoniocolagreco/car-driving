@@ -24,20 +24,17 @@ import DefaultLayout from '@layouts/default-layout.astro'
 type Props = HTMLAttributes<'div'>
 const { class: className, ...rest } = Astro.props
 
-// Every numeric control is offered twice — a slider to sweep and a number field to
-// type into. Mutation is shown as a percentage while the simulation stores a 0-1 fraction.
+// Mutation is displayed as a percentage but stored as a fraction.
 const mutationMinPercent = Math.round(MUTATION.minRate * 100)
 const mutationMaxPercent = Math.round(MUTATION.maxRate * 100)
 const mutationDefaultPercent = Math.round(DEFAULTS.mutationRate * 100)
 
-// The traffic-interval slider carries an index into `COURSE_INTERVALS`, not the interval
-// itself: the last choice is "never re-randomise", which has no numeric place on a track.
+// Index-based because Infinity is a valid interval choice.
 const courseIntervalIndex = COURSE_INTERVALS.indexOf(DEFAULTS.generationsPerCourse)
 const courseIntervalLabels = COURSE_INTERVALS.map((interval) =>
     Number.isFinite(interval) ? String(interval) : '∞',
 ).join(', ')
 
-// Same shape again: the slider carries an index into `BRAKE_BONUSES`.
 const brakeBonusIndex = BRAKE_BONUSES.indexOf(DEFAULTS.brakeBonus)
 const brakeBonusLabels = BRAKE_BONUSES.join(', ')
 
@@ -61,13 +58,6 @@ const iconSize = 15
 
 <DefaultLayout title="Self Driving Car">
     <div class="flex h-full min-h-0 flex-col gap-2 py-2">
-        <!--
-            One wrapping toolbar instead of a button row plus three bordered
-            fieldsets. Groups are separated by thin dividers rather than by boxes
-            and legends, because a box costs ~2rem of height per row and tells
-            the reader nothing a label does not already say. Every control keeps
-            its own `<label for>`, so grouping is the only thing that was lost.
-        -->
         <section
             aria-label="Simulation controls"
             class="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs"
@@ -102,12 +92,6 @@ const iconSize = 15
 
             <div class="h-5 w-px bg-current opacity-20" aria-hidden="true"></div>
 
-            <!--
-                Manual driving reads as a switch rather than a button: its label says which
-                state it is in, its colour changes with it, and the keys it enables are on the
-                control itself. A plain button that toggles something invisible is how the
-                first version of this ended up looking broken.
-            -->
             <Button
                 id={ELEMENT_IDS.buttons.drive}
                 type="button"
@@ -137,10 +121,7 @@ const iconSize = 15
                 <span id={ELEMENT_IDS.trafficState}>Traffic: visible</span>
             </Button>
 
-            <!--
-                Three states, so this one is a cycling button rather than a switch: the free-area
-                polygon, the eleven zones it is built from, then nothing at all.
-            -->
+            <!-- Three radar states require a cycle button rather than a switch. -->
             <Button
                 id={ELEMENT_IDS.buttons.radar}
                 type="button"
@@ -270,9 +251,7 @@ const iconSize = 15
             <div
                 id={ELEMENT_IDS.appContainer}
                 class:list={[
-                    // The road is only 240 px wide, so a half-width canvas is mostly
-                    // grass; the network graph, on the other hand, gets easier to read
-                    // with every pixel it is given. Hence 2fr / 3fr rather than 1fr / 1fr.
+                    // Give the denser network graph more width than the narrow road.
                     'grid h-full w-full grid-cols-1 grid-rows-2 gap-2 overflow-hidden rounded-md bg-neutral-900 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:grid-rows-1',
                     className,
                 ]}

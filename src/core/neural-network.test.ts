@@ -305,10 +305,6 @@ describe('serializeNetwork / deserializeNetwork', () => {
         expect(deserializeNetwork(saved)).toBeDefined()
     })
 
-    // Storage keeps two decimals per parameter, so a round trip is quantised rather than
-    // exact. What has to survive is the shape and every value to that precision: a
-    // network that came back with a weight in the wrong slot, or off by more than one
-    // step of rounding, is a different driver from the one that was saved.
     it('round-trips every weight to the stored precision', () => {
         const network = createNetwork(ARCHITECTURE)
         const restored = deserializeNetwork(serializeNetwork(network))
@@ -351,9 +347,6 @@ describe('serializeNetwork / deserializeNetwork', () => {
         expect(parent.history).toHaveLength(1)
     })
 
-    // The identity is the weights. An exact clone is therefore the SAME network, and has
-    // to say so: this is what stops the player's car, built as `mutate(elite, 0)` every
-    // race, from entering the veterans archive as a second copy of the elite.
     it('gives an exact clone the identity of the network it was cloned from', () => {
         const parent = createNetwork(ARCHITECTURE)
 
@@ -367,8 +360,6 @@ describe('serializeNetwork / deserializeNetwork', () => {
         expect(twin?.id).toBe(network.id)
     })
 
-    // Training moves weights in place, so an id computed once at construction would go
-    // stale and keep claiming to be the untrained network.
     it('re-derives the id when training changes the weights', () => {
         const network = createNetwork(ARCHITECTURE)
         const before = network.id

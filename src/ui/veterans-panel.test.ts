@@ -14,9 +14,6 @@ describe('compareValues', () => {
         expect(['c', 'a', 'b'].sort((a, b) => compareValues(a, b, true))).toEqual(['a', 'b', 'c'])
     })
 
-    // A missing best time means the network never cleared a course. Sorting those to the
-    // top would bury every network that has a time under every network that has none,
-    // which is the opposite of what somebody sorting by best time is looking for.
     it('keeps missing values last in both directions', () => {
         const values: (number | undefined)[] = [undefined, 30, undefined, 10]
 

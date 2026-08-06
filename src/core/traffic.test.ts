@@ -3,7 +3,6 @@ import { RACING_CAR, SIMULATION, TRAFFIC_CAR } from '@core/config'
 import { type Road, createRoad, lanePosition } from './road'
 import { type TrafficPattern, TRAFFIC_PATTERNS, generateTraffic } from './traffic'
 
-/** Finds the lane whose centre is closest to `x`, to recover a car's lane from its position. */
 const nearestLane = (road: Road, x: number): number => {
     let closestLane = 0
     let closestDistance = Infinity
@@ -17,19 +16,9 @@ const nearestLane = (road: Road, x: number): number => {
     return closestLane
 }
 
-/**
- * Re-derives which `TrafficPattern` produced each row of generated traffic, purely from
- * car positions.
- *
- * Rows are found by clustering rather than by dividing through a fixed pitch, because
- * there is no fixed pitch: `generateTraffic` measures its gaps from the deepest car of
- * each row, so a staggered row pushes the next one further away. A row spans at most
- * 120 px of its own while the clear road between rows is 500, so any gap over 300
- * separates two rows and nothing else can.
- */
+/** Recovers patterns by clustering rows because staggered rows have no fixed pitch. */
 const identifyPatternPerRow = (road: Road, traffic: ReturnType<typeof generateTraffic>) => {
     const ROW_GAP_THRESHOLD = 300
-    // Nearest the start line first: forward is -y, so that is descending y.
     const byDepth = [...traffic].sort((a, b) => b.position.y - a.position.y)
 
     const rowsOfCars: { lane: number; offset: number }[][] = []
@@ -88,19 +77,14 @@ describe('generateTraffic', () => {
         expect(b.map((car) => car.position)).not.toEqual(a.map((car) => car.position))
     })
 
-    // The rule the whole layout rests on: what a car is given is CLEAR ROAD, and a row
-    // that stands two cars deep must not pay for its own depth out of the gap behind it.
     it('leaves the same clear road after a staggered row as after a flat one', () => {
         const road = createRoad()
         const traffic = generateTraffic(road, 20, 'staggered-gaps')
 
-        // Nearest the start line first, one entry per distinct depth.
         const depths = [...new Set(traffic.map((car) => Math.round(car.position.y)))].sort(
             (a, b) => b - a,
         )
 
-        // A row spans at most 120 px of its own and the gap between rows is 500, so any
-        // step larger than that threshold is the boundary between two rows.
         const gaps: number[] = []
         for (let index = 1; index < depths.length; index++) {
             const step = depths[index - 1] - depths[index]
@@ -116,8 +100,6 @@ describe('generateTraffic', () => {
     })
 
     it('gives two patterns the same kind exactly when they leave the same lanes open', () => {
-        // The whole generation rule rests on this: a kind stands for the gap a row
-        // leaves, so "a different kind than the row before" means "a different gap".
         const openLanes = (pattern: TrafficPattern): string =>
             [0, 1, 2].filter((lane) => !pattern.cars.some((spot) => spot.lane === lane)).join(',')
 
@@ -173,8 +155,6 @@ describe('generateTraffic', () => {
         const road = createRoad()
         const traffic = generateTraffic(road, 20, 'overlap-seed')
 
-        // Traffic never steers, so every body stays axis-aligned: two of them are clear
-        // of each other exactly when they are a full car apart on one of the two axes.
         for (let i = 0; i < traffic.length; i++) {
             for (let j = i + 1; j < traffic.length; j++) {
                 const a = traffic[i]
@@ -192,12 +172,7 @@ describe('generateTraffic', () => {
         const passingClearance = (RACING_CAR.width + TRAFFIC_CAR.width) / 2
         const halfCar = RACING_CAR.width / 2
 
-        // A straight line at constant x is the only guarantee that a row can be driven
-        // through at all, and it is not a conservative one: cars are 96px long while a
-        // pattern staggers them by at most 200px, so two of them leave a few px of clear
-        // road between their bodies — never the ~96px a car would need to sit in the gap
-        // and swap sides, let alone the ~400px of closing distance a lane change costs at
-        // top speed. A row with no straight corridor is therefore a wall, not a puzzle.
+        // Without a straight corridor, staggered traffic forms a wall rather than an obstacle.
         for (const pattern of TRAFFIC_PATTERNS) {
             const clears = (x: number): boolean =>
                 pattern.cars.every(
@@ -232,7 +207,6 @@ describe('generateTraffic', () => {
         const road = createRoad()
         const rows = 20
         const sectionSize = rows / 4
-        // Read as "by the end of this quarter, these difficulties are allowed".
         const allowedBySection: readonly TrafficPattern['difficulty'][][] = [
             ['easy'],
             ['easy', 'medium'],

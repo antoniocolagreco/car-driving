@@ -7,17 +7,11 @@ import { type CarStats, createStats } from './fitness'
 import { type Car, RACING_CAR_SPEC, createCar } from './car'
 import { type Road, lanePosition } from './road'
 
-/**
- * Generation and selection: turns a `Road` plus a set of options into a fresh
- * population of `RacingCar`s, ready for `simulation.ts` to step. This is where
- * the previous generation's winner is either cloned-with-mutation into the
- * next generation or discarded, but never both — see `createPopulation`.
- */
+/** Builds the racing population from parents, archived entrants and mutation settings. */
 
-/** A competitor: a car body, the brain driving it, its sensors and its score. */
 export type RacingCar = {
     car: Car
-    /** True for the player's car: always in the field, driven by hand only when asked. */
+    /** Always in the field; controlled manually only when requested. */
     readonly player: boolean
     network: Network
     sensorState: SensorState
@@ -25,38 +19,22 @@ export type RacingCar = {
     winner: boolean
 }
 
-/** Everything needed to build one generation's population. */
 export type PopulationOptions = {
     readonly quantity: number
     readonly hiddenLayers: readonly number[]
     readonly mutationRate: number
-    /**
-     * The previous generation's best networks, best first. Empty on the very first
-     * generation, when there is nothing to breed from and every car starts random.
-     */
+    /** Previous generation's best networks, best first. */
     readonly parents?: readonly Network[]
-    /**
-     * Archive members that race this generation unmutated, best first. They are not
-     * bred from here: they are competitors, entered to have their medians retested on
-     * a course they have not seen.
-     */
+    /** Archive members entered unmutated for another measurement. */
     readonly veterans?: readonly Network[]
-    /** The record holder, entered in every race it can drive, unmutated. */
+    /** Record holder entered unmutated when compatible. */
     readonly champion?: Network
 }
 
-/** Two architectures match when they have the same length and the same neuron counts, in order. */
 const sameArchitecture = (a: readonly number[], b: readonly number[]): boolean =>
     a.length === b.length && a.every((count, index) => count === b[index])
 
-/**
- * The mutation rate for car `index` of `quantity`, following `MUTATION_DISTRIBUTION`:
- * the first `minimal` share is barely touched (a fixed, very low rate), the next
- * `low` share gets something between that floor and `baseRate`, the next `target`
- * share gets exactly `baseRate`, and the rest — the explorers — get something
- * between `baseRate` and full randomness. `random01` is injected (rather than
- * calling `Math.random` directly) so the tiering can be unit tested deterministically.
- */
+/** Returns the per-parameter rate for an index in the configured mutation bands. */
 export const mutationRateForIndex = (
     index: number,
     quantity: number,
@@ -68,17 +46,13 @@ export const mutationRateForIndex = (
     const minimalCount = Math.floor(quantity * MUTATION_DISTRIBUTION.minimal)
     const lowCount = minimalCount + Math.floor(quantity * MUTATION_DISTRIBUTION.low)
     const targetCount = lowCount + Math.floor(quantity * MUTATION_DISTRIBUTION.target)
-    // Whatever is left after flooring the first three bands becomes the fourth
-    // (explorer) band, so the four shares always add up to the full population
-    // even when `quantity * share` does not divide evenly.
+    // The explorer band absorbs rounding leftovers.
 
     if (index < minimalCount) {
         return MUTATION.lowRateFloor
     }
 
     if (index < lowCount) {
-        // Between the floor and the base rate. If the base rate is already at or
-        // below the floor there is no room between them, so fall back to it.
         return rate <= MUTATION.lowRateFloor
             ? rate
             : MUTATION.lowRateFloor + random01() * (rate - MUTATION.lowRateFloor)
@@ -88,74 +62,34 @@ export const mutationRateForIndex = (
         return rate
     }
 
-    // The explorers: between the base rate and a multiple of it, NOT between the base
-    // rate and full randomness. Tying the ceiling to the rate is what makes the slider
-    // mean something — at 2 % the whole field still drives like the winner, at 50 %
-    // even the refiners are taking real risks. If there is no room above the rate
-    // (already at the maximum), fall back to it.
+    // Keep explorers proportional to the slider instead of silently approaching full randomness.
     const ceiling = Math.min(MUTATION.maxRate, rate * MUTATION.explorerFactor)
     return rate >= ceiling ? rate : rate + random01() * (ceiling - rate)
 }
 
 /**
- * Every competitor starts from the middle lane, on the same spot.
- *
- * They used to be spread across the lanes round-robin, `0, 1, 2, 0, ...`, which
- * quietly made the start lane part of the score. These networks drive a learned
- * trajectory rather than a lane-aware policy, so the same weights that pass eight
- * cars from lane 1 drive straight into the right-hand rail from lane 0. Two things
- * followed. The elite is always car 0 and so always restarted in lane 0, while the
- * winner it carries had almost never won there: measured over 21 generations it
- * scored nothing in 9 of them, and every one of those 9 followed a winner that had
- * come from lane 1 or 2, never from lane 0. And ranking a field whose members ran
- * from different lanes compares them on different tasks, so the "best" network was
- * partly whoever drew the lane that suited its trajectory, and its children were
- * redistributed across all three lanes where two thirds of them started in the wrong
- * one. One start line for everybody removes that variable: the elite re-runs the race
- * it actually won, and every score in the generation is earned on the same problem.
+ * A shared middle-lane start keeps scores comparable. Round-robin starts previously
+ * produced 9 elite failures in 21 generations after winners from another lane.
  */
 const raceStartPosition = (road: Road): Vec2 => lanePosition(road, Math.floor(road.laneCount / 2))
 
-/**
- * Display colour used only while the human holds the wheel. Under neural-network
- * control the player's car wears its network's own colour, like every other competitor.
- */
+/** Display override used only while the human holds the wheel. */
 export const PLAYER_COLOR = '#38bdf8'
 
-/**
- * Builds a `RacingCar` at `position`, with a fresh body, stats and an empty
- * (not-yet-cast) sensor state.
- *
- * The body wears `network.color`, which belongs to the network and never changes. The
- * round's winner used to be painted white instead, to make the one car every other car
- * descends from findable in the crowd; the WINNER badge above it already says that, and
- * the colour channel is worth more spent on identity — a veteran keeps the same colour
- * from the race it was admitted on to the race it is dropped, so it can be followed by
- * eye across a run.
- */
 const createRacingCar = (position: Vec2, network: Network, player = false): RacingCar => {
     const car = createCar(position, RACING_CAR_SPEC, network.color)
     return {
         car,
         player,
         network,
-        // No obstacles exist to cast against yet at population creation time;
-        // `simulation.ts` casts the real sensor state on the first `step`.
+        // Recast against real obstacles on the first simulation step.
         sensorState: castSensors(position, car.heading, []),
         stats: createStats(position),
         winner: false,
     }
 }
 
-/**
- * Picks the network for car `index`.
- *
- * With no parents (the very first generation) every car is fresh and random. With
- * parents, car 0 is `parents[0]` — the winner itself, unmutated: elitism, so a
- * generation can never lose the best network it has found. Every other car descends
- * from one of the parents, taken round-robin so each of them gets a comparable share
- * of the field, and is mutated exactly once at `mutationRateForIndex`'s tiered rate.
- */
+/** Selects an elite or a mutated parent; a missing parent pool produces random networks. */
 const networkForIndex = (
     index: number,
     quantity: number,
@@ -169,48 +103,32 @@ const networkForIndex = (
     if (index === 0) {
         return parents[0]
     }
-    // The refining band belongs to the winner: those are the cars whose job is to
-    // improve on the best network we have, and handing a quarter of them to a weaker
-    // parent instead just dilutes the line that is actually winning. Everyone else is
-    // spread across the parents round-robin, which is what keeps rival strategies alive.
+    // Reserve the refining band for the winner; distribute the rest across all parents.
     const refiners = Math.floor(quantity * MUTATION_DISTRIBUTION.minimal)
     const parent = index < refiners ? parents[0] : parents[index % parents.length]
     const rate = mutationRateForIndex(index, quantity, mutationRate, Math.random)
     return mutate(parent, rate)
 }
 
-/** The architecture a population with these settings needs: see the I/O contract in `neural-network.ts`. */
 const architectureFor = (options: PopulationOptions): number[] => [
     SENSOR_ZONE_ORDER.length + 1,
     ...options.hiddenLayers,
     3,
 ]
 
-/** The parents that can actually be used with `architecture`, best first. */
 const usableParents = (
     options: PopulationOptions,
     architecture: readonly number[],
 ): readonly Network[] =>
     (options.parents ?? []).filter((parent) => sameArchitecture(parent.architecture, architecture))
 
-/** True when a network can consume the eleven spatial readings followed by speed. */
+/** Checks the fixed sensor/speed input and output contract. */
 export const isCompatibleNetwork = (network: Network, hiddenLayers: readonly number[]): boolean =>
     sameArchitecture(network.architecture, [SENSOR_ZONE_ORDER.length + 1, ...hiddenLayers, 3])
 
 /**
- * Builds the player's car. It is ALWAYS in the field, one more competitor with the same
- * body, sensors and random base colour as everyone else, and a network that starts as an exact
- * copy of the current winner (or a fresh random one when there is no winner yet).
- *
- * Always present, because the alternative was worse: adding and removing it when manual
- * driving was switched on and off meant every toggle rebuilt the generation, and a driver
- * switches off the moment they crash — so a round somebody had just won was thrown away
- * on the way out. Here the car simply exists, and the switch only decides who holds its
- * wheel. When nobody does, its network drives it exactly like the others.
- *
- * Starting from the winner rather than from noise is what makes driving worth doing:
- * your inputs teach corrections on top of what the population already knows, instead of
- * having to demonstrate the whole task from scratch (see `trainBatch`).
+ * Builds the always-present player competitor. It clones the winner so manual training
+ * corrects an existing policy; toggling manual control never rebuilds the generation.
  */
 export const createPlayerCar = (road: Road, options: PopulationOptions): RacingCar => {
     const architecture = architectureFor(options)
@@ -222,19 +140,7 @@ export const createPlayerCar = (road: Road, options: PopulationOptions): RacingC
     )
 }
 
-/**
- * The networks entered unmutated, in addition to the elite: the record holder first,
- * then the archive members due to race.
- *
- * They are entered rather than bred from. Their job in the field is to be measured
- * again on a course they have not driven, which is the only thing that keeps a median
- * honest, and mutating them would measure something else.
- *
- * Deduplicated by `id`, because the overlap is the normal case and not an edge one: the
- * champion is usually in the archive too, and the elite is usually the network that was
- * just admitted to it. Racing the same weights twice would waste a slot and, worse, put
- * two identical results into one network's history from a single race.
- */
+/** Returns compatible champion/archive entrants once each, preserving their exact weights. */
 const fixedEntrants = (
     options: PopulationOptions,
     architecture: readonly number[],
@@ -253,25 +159,13 @@ const fixedEntrants = (
         seen.add(network.id)
         entrants.push(network)
     }
-    // Half the grid is the hard limit. Below it the veterans are a control group racing
-    // against the current line; at it they would BE the field, and a generation that is
-    // all memory and no offspring cannot improve on anything.
+    // Keep at least half the grid available for offspring.
     return entrants.slice(0, Math.floor(options.quantity / 2))
 }
 
 /**
- * Builds one generation's population, from the same start line for everybody.
- *
- * The grid is offspring plus a tail of unmutated entrants: the record holder and the
- * archive members due a retest. Offspring are generated first and counted among
- * themselves, so `mutationRateForIndex`'s bands stay shares of the breeding field
- * rather than shares of a grid the veterans have already taken a slice out of, and car
- * 0 remains the elite.
- *
- * A parent trained for a different fixed sensor layout or hidden-layer shape than
- * requested here is unusable — its `architecture` does not match `[12, ...hiddenLayers, 3]`
- * and it could not even `feedForward` — so it is dropped, and if that leaves no parents
- * at all every car starts fresh instead of crashing or silently producing garbage.
+ * Builds offspring first, then adds deduplicated fixed entrants. Incompatible parents
+ * are dropped; if none remain the population starts randomly.
  */
 export const createPopulation = (road: Road, options: PopulationOptions): RacingCar[] => {
     const architecture = architectureFor(options)

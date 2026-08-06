@@ -1,24 +1,14 @@
-/**
- * Single source of truth for every DOM element id the UI touches, plus a small
- * helper to look one up without repeating a null-check at every call site.
- */
+/** DOM ids shared by markup and UI wiring. */
 
 export const ELEMENT_IDS = {
-    /** The element `render/canvas.ts` appends the two canvases into. */
     appContainer: 'app-container',
     /** `aria-live` region: only meaningful state changes are announced here. */
     statusRegion: 'status-region',
-    /** Text inside the manual-driving switch; the adjacent shortcut badge stays intact. */
     manualDriveState: 'manual-drive-state',
-    /** Text inside the traffic-visibility switch. */
     trafficState: 'traffic-state',
-    /** Text inside the radar-visibility switch. */
     radarState: 'radar-state',
-    /** Text inside the switch that chooses what the right-hand pane shows. */
     sidePanelState: 'side-panel-state',
-    /** Reads back the course-interval slider, which has no number field of its own. */
     courseIntervalValue: 'course-interval-value',
-    /** Reads back the brake-bonus slider, likewise a list rather than a range. */
     brakeBonusValue: 'brake-bonus-value',
     buttons: {
         reset: 'reset-network-button',
@@ -52,13 +42,11 @@ export const ELEMENT_IDS = {
         headingDeviation: 'hud-heading-deviation',
         fps: 'hud-fps',
     },
-    /** The record holder's panel, filled from localStorage rather than from the simulation. */
     champion: {
         networkId: 'champion-network-id',
         seconds: 'champion-seconds',
         overtakes: 'champion-overtakes',
     },
-    /** The modal shown while the simulation runs headless, with no rendering at all. */
     simulate: {
         dialog: 'simulate-dialog',
         raceCount: 'simulate-race-count',
@@ -68,10 +56,7 @@ export const ELEMENT_IDS = {
     },
 } as const
 
-/**
- * Looks up an element by id, returning `undefined` instead of `null` when it is
- * missing so callers can use optional chaining / nullish coalescing directly.
- */
+/** Looks up an element and normalizes a missing result to `undefined`. */
 export const findElement = <T extends HTMLElement = HTMLElement>(id: string): T | undefined => {
     const element = document.getElementById(id)
     return element instanceof HTMLElement ? (element as T) : undefined

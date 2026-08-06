@@ -1,214 +1,294 @@
-# Tentativi di training falliti
+# Tentativi di training: risultati negativi e prove incomplete
 
-Questo documento raccoglie i tentativi noti che non hanno migliorato in modo
-ripetibile l'addestramento da zero. Lo scopo e evitare di ripetere esperimenti
-gia smentiti da benchmark o prove interattive.
+Questo documento raccoglie soltanto ciò che è sostenuto da almeno una delle
+seguenti fonti:
+
+- un benchmark o una prova interattiva di cui è stato annotato il risultato;
+- un commit che descrive esplicitamente l'esperimento e il suo esito;
+- un comportamento ancora documentato nel codice o nel README.
+
+Un'implementazione senza una misura non dimostra né che l'idea funzioni né che
+non funzioni. Le ipotesi sono quindi tenute separate dai risultati.
 
 Ultimo aggiornamento: 6 agosto 2026.
 
-## Criterio usato per dichiarare un miglioramento
+## Problema da risolvere
 
-Il problema da risolvere non e ottenere una singola vittoria fortunata, ma
-ridurre la probabilita che una popolazione resti bloccata per centinaia di
-corse.
+Partendo da reti casuali, alcune esecuzioni arrivano a completare il percorso,
+mentre altre restano ferme per centinaia di gare fra circa 20 e 32 sorpassi.
+L'obiettivo non è ottenere una singola vittoria fortunata, ma aumentare in modo
+ripetibile la percentuale di esecuzioni che completano almeno un percorso entro
+un limite prestabilito.
 
-Per l'ultimo intervento erano stati fissati questi gate:
+Con la configurazione predefinita la rete ha 12 ingressi, livelli nascosti
+`16, 12, 8` e 3 uscite: 504 pesi e 39 bias, per un totale di 543 parametri.
+Questo numero descrive la dimensione della ricerca, ma da solo non dimostra che
+l'evoluzione non possa apprendere da un obiettivo scalare.
 
-- smoke test: almeno 2 seed riusciti su 3, con un massimo di 100 corse per seed;
-- test completo, da eseguire solo dopo lo smoke: almeno 8 seed riusciti su 10,
-  con un massimo di 200 corse per seed;
-- una corsa e riuscita soltanto quando almeno una rete completa il percorso.
+## Criterio usato nell'ultimo esperimento
 
-L'intervento non ha superato lo smoke test. Il test completo non e quindi stato
-eseguito.
+Per la valutazione multi-layout erano stati stabiliti questi gate prima di
+eseguire il benchmark:
 
-## 1. Valutazione della stessa popolazione su tre percorsi
+- smoke test: almeno 2 seed riusciti su 3 entro 100 gare per seed;
+- test completo: almeno 8 seed riusciti su 10 entro 200 gare per seed;
+- il test completo sarebbe partito soltanto dopo il superamento dello smoke;
+- un seed era riuscito soltanto quando almeno una rete completava il percorso.
 
-### Ipotesi
+Lo smoke test è fallito; il test completo non è stato eseguito.
 
-La selezione su un solo percorso poteva promuovere una rete fortunata e perdere
-una rete generalmente migliore. Per ridurre il rumore, la stessa identica
-popolazione e stata valutata, senza mutazioni intermedie, su tre layout di
-traffico prima di riprodursi.
+# Esperimenti con un risultato negativo documentato
 
-La classifica aggregata era lessicografica:
+## 1. Valutare la stessa popolazione su tre layout
 
-1. numero di percorsi completati;
-2. mediana dei sorpassi normalizzati per il traffico presente;
-3. risultato sul layout peggiore;
-4. tempo mediano di completamento;
-5. uso del freno soltanto come ultimo spareggio;
-6. ordine stabile della popolazione.
+### Modifica
 
-Sono stati inoltre separati gli esiti della guida manuale dalla valutazione
-automatica: una dimostrazione manuale poteva essere promossa solo vincendo, e
-non poteva costituire una prova parziale del batch automatico.
+La stessa popolazione, con pesi immutati, correva su tre layout di traffico
+prima della selezione e della riproduzione. La classifica aggregata considerava,
+nell'ordine, layout completati, mediana dei sorpassi normalizzati, risultato
+peggiore, tempo di completamento, uso del freno e ordine stabile.
 
 ### Risultati
 
-Lo smoke benchmark deterministico e fallito sui primi due seed, rendendo gia
-impossibile il risultato minimo di 2 successi su 3:
+I primi due seed deterministici dello smoke test hanno reso matematicamente
+impossibile raggiungere il gate di 2 successi su 3:
 
-| Seed |    Limite | Percorsi completati | Miglior numero di sorpassi |
-| ---: | --------: | ------------------: | -------------------------: |
-|    1 | 100 corse |                   0 |                         14 |
-|    2 | 100 corse |                   0 |                         25 |
+| Seed |   Limite | Completamenti | Miglior risultato |
+| ---: | -------: | ------------: | ----------------: |
+|    1 | 100 gare |             0 |       14 sorpassi |
+|    2 | 100 gare |             0 |       25 sorpassi |
 
-Le prove nell'interfaccia hanno confermato una varianza molto elevata:
+Le prove interattive hanno mostrato la stessa forte variabilità:
 
-| Prova                           | Esito osservato                                                    |
-| ------------------------------- | ------------------------------------------------------------------ |
-| Prima esecuzione                | vittoria intorno alla generazione 29, 40 sorpassi in 43,03 s       |
-| Reset successivo                | nessuna vittoria dopo 200 corse, miglior risultato 28              |
-| Prosecuzione dello stesso reset | vittoria solo intorno alla generazione 101, 40 sorpassi in 74,73 s |
-| Reset piu recente               | nessuna vittoria dopo 359 corse, miglior risultato 32              |
+| Prova                           | Esito osservato                                               |
+| ------------------------------- | ------------------------------------------------------------- |
+| Prima esecuzione                | vittoria intorno alla generazione 29; 40 sorpassi in 43,03 s  |
+| Reset successivo                | nessuna vittoria dopo 200 gare; massimo 28 sorpassi           |
+| Prosecuzione dello stesso reset | vittoria intorno alla generazione 101; 40 sorpassi in 74,73 s |
+| Reset più recente               | nessuna vittoria dopo 359 gare; massimo 32 sorpassi           |
 
-Con tre layout per generazione, una vittoria alla generazione 101 richiede circa
-300 corse. La valutazione multipla ha quindi rallentato di circa tre volte la
-riproduzione, senza eliminare i plateau o rendere affidabile il training.
-
-### Conclusione
-
-Tentativo respinto e rimosso. Una vittoria isolata non compensa due reset capaci
-di restare bloccati per 200 e 359 corse. La modifica riduceva il rumore della
-valutazione, ma non creava un percorso evolutivo per uscire dai massimi locali.
+Con tre layout per generazione, arrivare alla generazione 101 richiedeva circa
+300 gare. La modifica ha rallentato la riproduzione senza rendere affidabile il
+training ed è stata rimossa.
 
 ## 2. Inizializzazione Xavier con bias a zero
 
-### Ipotesi
+L'inizializzazione Xavier è stata provata insieme alla valutazione multi-layout.
+I primi due seed non hanno completato il percorso e non è stato osservato un
+miglioramento ripetibile nell'interfaccia.
 
-Pesi iniziali scalati in funzione del fan-in e fan-out potevano evitare
-saturazioni iniziali e produrre reti casuali con segnali piu utilizzabili.
+Non è stato eseguito un confronto A/B isolato. La conclusione corretta è quindi
+limitata: la combinazione provata ha fallito; non è dimostrato che Xavier, preso
+da solo, peggiori il training.
 
-### Risultato
+## 3. Bias iniziale degli output `[0.5, -0.5, 0]`
 
-La modifica e stata provata insieme alla valutazione multi-layout. Non ha
-permesso ai primi due seed dello smoke test di completare il percorso e non ha
-ridotto la varianza osservata nell'interfaccia.
+L'obiettivo era far partire le reti orientate verso accelerazione, assenza di
+frenata e sterzo neutro.
 
-### Conclusione
+- in una prova breve, il massimo entro 30 gare è salito da 12 a 20 sorpassi;
+- nei due seed successivi non ci sono stati completamenti, con massimi di 23 e
+  19 sorpassi.
 
-Tentativo respinto e rimosso. Non esiste evidenza A/B di un miglioramento
-ripetibile; l'evidenza integrata e negativa.
+Il miglioramento del primo seed non si è generalizzato. La modifica è stata
+rimossa.
 
-## 3. Bias iniziale degli output verso la guida
+## 4. Eliminare il bonus numerico del freno
 
-### Ipotesi
+Nell'esperimento multi-layout il freno era soltanto l'ultimo spareggio, senza
+bonus numerico. Le esecuzioni bloccate a 200 e 359 gare usavano questa regola.
 
-Un bias iniziale degli output pari a `[0.5, -0.5, 0]` doveva favorire
-accelerazione, assenza di frenata e sterzo neutro, evitando popolazioni iniziali
-incapaci di partire.
+Questo dimostra soltanto che togliere il bonus nella combinazione provata non ha
+risolto il problema. Non dimostra che il bonus corrente sia ottimale né isola
+l'effetto della sua rimozione.
 
-### Risultati
+## 5. Ricompense per azioni vicino agli ostacoli
 
-- su una prova breve del seed 1, il massimo a 30 corse e salito da 12 a 20;
-- nello smoke successivo, i primi due seed hanno comunque ottenuto zero
-  completamenti, con picchi rispettivamente di 23 e 19 sorpassi.
+Tentativi storici documentati in `README.md` e in `src/core/fitness.ts`:
 
-### Conclusione
+- punti per ogni frame con il freno premuto vicino a un ostacolo: le auto si
+  accodavano al traffico e pompavano il freno senza sorpassare;
+- punti per ogni frame di sterzata intensa vicino a un ostacolo: le auto
+  oscillavano lo sterzo per accumulare ricompensa;
+- malus proporzionale alla velocità d'impatto: selezionava auto che si
+  schiantavano più lentamente;
+- malus a V, minimo alla velocità del traffico: selezionava auto che colpivano
+  lateralmente il muro a quella velocità;
+- bonus del freno senza richiedere almeno un sorpasso: la popolazione collassò
+  sulle auto che frenavano alla partenza e morivano per inattività. Furono
+  annotate 24 generazioni consecutive con zero sorpassi nell'intero campo.
 
-Il miglioramento locale sul primo seed non si e generalizzato. Il tentativo e
-stato scartato e rimosso prima del rollback finale.
+Questi risultati mostrano che quelle specifiche ricompense erano sfruttabili.
+Non autorizzano la conclusione più ampia che qualunque reward shaping sia
+necessariamente inutile.
 
-## 4. Rimozione del bonus numerico del freno
+## 6. Credito parziale per la distanza dalla prossima auto
 
-### Ipotesi
+La distanza minima dalla successiva auto da superare fu usata per ordinare le
+reti a pari sorpassi. Su tre prove da 40 gare, i picchi passarono da
+`20 / 23 / 18` a `17 / 10 / 14`.
 
-Il bonus del freno poteva premiare un'azione invece del risultato e promuovere
-reti con meno sorpassi. E stato rimosso dal punteggio e mantenuto soltanto come
-ultimo spareggio nella classifica aggregata.
+La misura premiava anche chi caricava frontalmente un ostacolo e moriva pochi
+pixel più avanti. Il risultato e la motivazione della rimozione sono ancora
+documentati in `src/core/fitness.ts` e nel commit `c3c5fbb`.
 
-### Risultato
+## 7. Usare il tempo come spareggio prima del traguardo
 
-I fallimenti dello smoke benchmark e i reset bloccati a 200 e 359 corse si sono
-verificati con questa regola. La rimozione del bonus non ha reso affidabile il
-training.
+Quando più reti morivano sullo stesso ostacolo con gli stessi sorpassi, il tempo
+premiava chi raggiungeva prima quel punteggio, cioè spesso chi arrivava più
+veloce contro il muro. Il commit `c3c5fbb` ha limitato lo spareggio temporale
+alle sole reti che completano il percorso.
 
-### Conclusione
+Questa voce documenta un criterio di selezione ritenuto dannoso e poi rimosso;
+non prova, da sola, che la modifica abbia risolto i plateau complessivi.
 
-Tentativo respinto e rimosso insieme alla valutazione multi-layout. Questo non
-dimostra che il bonus corrente sia ottimale; dimostra soltanto che eliminarlo in
-questa configurazione non risolve il problema.
+## 8. Interpolare tutti i parametri verso nuovi valori casuali
 
-## 5. Benchmark deterministico e modifiche di supporto
+La vecchia mutazione spostava ogni parametro verso un valore casuale. Al 10%,
+tutti i parametri cambiavano un poco invece di modificarne localmente una parte.
+È stato annotato un plateau a 1935 px: la generazione 3 lo raggiunse e le
+generazioni dalla 4 alla 12 non migliorarono.
 
-Per misurare l'esperimento era stato aggiunto un benchmark headless con seed
-riproducibili, avanzamento frequente, stima del tempo residuo e arresto anticipato
-quando il gate diventava irraggiungibile. Erano state aggiunte anche modifiche di
-supporto:
+La strategia è stata sostituita con perturbazioni locali applicate a una
+probabilità per parametro. Il risultato storico è documentato in
+`src/core/neural-network.ts` e nel README.
 
-- sorgente casuale iniettabile per inizializzazione e mutazione;
-- persistenza versione 10 con numero di auto nel traffico per normalizzare i
-  risultati storici;
-- scarto dei batch parziali a reset, restart o cambio di architettura;
-- callback separata per ogni layout e persistenza soltanto a batch completo;
-- test unitari per aggregazione, migrazione e ciclo di simulazione.
+## 9. Esploratori quasi casuali indipendenti dallo slider
 
-I test tecnici, il typecheck, il lint e la build passavano, ma verificavano la
-correttezza dell'implementazione, non l'efficacia evolutiva. Il benchmark
-funzionale ha invece respinto l'ipotesi. Tutto il codice di supporto e stato
-rimosso con l'esperimento; i risultati negativi restano documentati qui.
+Una fascia della popolazione usava tassi di mutazione fino al 100% anche con lo
+slider molto basso. Con lo slider al 2%, furono annotate 22 reti su 100 mutate
+oltre il 20% e una al 93%.
 
-## 6. Reward shaping gia provato in precedenza
+Il limite degli esploratori è stato poi legato al valore dello slider. Questo
+esperimento dimostra che il vecchio controllo non rappresentava il tasso
+richiesto; non dimostra quale distribuzione sia globalmente ottimale.
 
-Questi tentativi erano gia documentati nel progetto e non vanno ripetuti:
+## 10. Un solo genitore
 
-- premio per ogni frame con il freno premuto vicino a un ostacolo: le auto si
-  accodavano a un veicolo lento e coltivavano punti senza sorpassare;
-- premio per sterzata intensa vicino a un ostacolo: le auto oscillavano il
-  volante per accumulare ricompensa;
-- malus d'impatto proporzionale alla velocita: selezionava una guida sempre piu
-  timida;
-- malus d'impatto a V, minimo alla velocita del traffico: selezionava auto che
-  colpivano lateralmente il muro proprio a quella velocita;
-- bonus del freno senza il requisito di almeno un sorpasso: collasso in una
-  generazione su auto che frenavano alla partenza, non sorpassavano nessuno e
-  morivano per idle timeout; furono osservate 24 generazioni consecutive con
-  zero sorpassi nell'intera popolazione.
+Con tutta la popolazione derivata da una sola rete, fu annotato un plateau a 6
+sorpassi per circa dodici generazioni consecutive. La configurazione corrente
+usa quattro genitori. Il dato e la motivazione sono documentati in
+`src/core/config.ts`.
 
-Il pattern comune e che l'evoluzione ottimizza letteralmente la ricompensa
-laterale, non il comportamento di guida desiderato.
+## 11. Partenze distribuite sulle tre corsie
 
-## 7. Mutazione e costruzione del percorso gia provate in precedenza
+Le auto partivano a rotazione dalle corsie `0, 1, 2`. In 21 generazioni, l'élite
+ottenne zero sorpassi in 9 casi; tutti e 9 seguivano un vincitore partito dalla
+corsia 1 o 2, mentre l'élite veniva poi riposizionata nella corsia 0.
 
-Anche questi tentativi erano gia stati misurati e scartati:
+La partenza unica dalla corsia centrale ha eliminato questa differenza di
+compito fra concorrenti. Il risultato è documentato in `README.md` e in
+`src/core/population.ts`.
 
-- interpolare ogni parametro verso un nuovo valore casuale: anche al 10% tutti
-  i parametri si spostavano, impedendo la ricerca locale; il vincitore si
-  bloccava entro circa tre generazioni;
-- banda esplorativa indipendente dal mutation rate scelto: con slider al 2%, 22
-  auto su 100 mutavano comunque oltre il 20% e una arrivava al 93%, diventando
-  quasi casuale;
-- mantenere per sempre lo stesso percorso: la rete memorizzava il layout; e
-  stato osservato un plateau a 1935 px per nove generazioni consecutive;
-- rimuovere la rampa di difficolta e mescolare tutto il percorso: ostacoli
-  complessi comparivano troppo presto e le abilita elementari non riuscivano ad
-  accumularsi tra una generazione e la successiva.
+## 12. Tenere fisso per sempre lo stesso layout
 
-## 8. Tentativi non ricostruibili
+Un layout fisso rendeva i risultati confrontabili, ma favoriva la
+memorizzazione. È stato annotato un plateau a 1935 px per nove generazioni sullo
+stesso ostacolo. Il progetto è quindi passato a cambiare layout ogni gruppo di
+generazioni.
 
-Prima di questo intervento sono state eliminate cinque branch di esperimenti e
-sono stati eseguiti almeno cinque tentativi di enhancement o refactoring con
-Claude Opus 5.0. I branch e i relativi risultati dettagliati non sono disponibili
-nel worktree corrente, quindi non e corretto attribuire loro modifiche o numeri
-specifici senza artefatti. Il solo dato certo e che non hanno prodotto un
-miglioramento ritenuto utile.
+Non è disponibile una misura multi-seed che quantifichi quanto questa modifica
+abbia inciso sul tasso finale di completamento.
 
-Se in futuro si recuperano commit, patch o log di quelle prove, vanno aggiunti a
-questa sezione prima di riprendere una delle stesse direzioni.
+## 13. Rimuovere la progressione di difficoltà
 
-## Diagnosi che resta aperta
+Mescolando fin dall'inizio tutti i pattern, gli ostacoli complessi comparivano
+prima che la popolazione accumulasse abilità elementari. La variante è descritta
+come peggiore nel README ed è stata rimossa.
 
-I risultati sono bimodali: alcune inizializzazioni scoprono una sequenza utile e
-vincono, altre convergono tra 20 e 32 sorpassi per centinaia di corse. Poiche una
-rete ogni tanto completa il percorso, sensori, fisica e capacita della rete sono
-sufficienti almeno in linea di principio. Il sospetto principale resta quindi
-la convergenza prematura di linee genetiche troppo simili combinata con un
-segnale di fitness discontinuo: una manovra preparatoria migliore non riceve
-credito se l'auto muore comunque sullo stesso ostacolo.
+Non è disponibile nel repository un benchmark multi-seed completo; va quindi
+considerata evidenza osservativa, non una stima quantitativa dell'effetto.
 
-Questa e una diagnosi da verificare, non un risultato. Prima di un altro refactor
-servono misure sulla diversita delle linee, sul ricambio dei genitori, sulla
-distanza genetica dalle reti parentali e sui risultati per singolo layout. Non
-va avviato un altro benchmark lungo senza prima ottenere evidenza da queste
-misure e da smoke test brevi con arresto anticipato.
+## 14. Portare tutti i sensori a 700 px
+
+Il commit `750f72c` assegnava 700 px a tutte le zone percettive. Il revert
+`0ba95b7` registra che, durante una prova, la popolazione non sceglieva meglio il
+lato da cui passare e perdeva risoluzione sui fianchi.
+
+La prova giustifica il revert di quella configurazione. Non dimostra che le
+portate attuali siano ottimali.
+
+# Esperimenti implementati ma senza un esito verificabile
+
+## Quattro linee genetiche separate
+
+Il commit `a3a86da` implementò quattro linee indipendenti (`Igni`, `Aqua`,
+`Terra`, `Aer`) e una reinizializzazione parziale delle linee ferme. Il commit fu
+poi escluso da `master` tramite reset.
+
+Non è stato trovato un benchmark dell'esperimento. Non va quindi usato per
+affermare che quattro linee siano inefficaci o che la diversità non sia il
+problema.
+
+## Roster permanente
+
+La branch `roster` contiene i commit `798aec7`, `b4a9008` e `06eddc9`. La
+popolazione diventava un roster persistente, con protezione iniziale delle reti
+giovani e ricambio di una parte delle reti consolidate.
+
+Nel repository non sono stati trovati log che sostengano i numeri aggiunti nella
+precedente versione di questo documento: massimo 20, mediana 10, risultati a
+148, 206 o 521 gare, oppure la tabella sul ricambio effettivo. Questi numeri sono
+stati rimossi. Senza la fonte originale, il roster non può essere classificato
+come successo o fallimento e non consente di escludere la diversità come causa.
+
+## Malus d'impatto e azzeramento degli eliminati
+
+Il commit `2013c8a` reintrodusse un malus proporzionale alla velocità d'impatto e
+rimosse il bonus del freno. Il suo stesso messaggio annota sia il precedente
+comportamento di “schiantarsi piano” sia una nuova scappatoia: fermarsi e farsi
+ritirare dall'idle timeout.
+
+Il commit `11700ab` azzera invece il risultato di chi manca uno dei due timeout.
+Questa seconda variante esiste sulla branch `impact-malus` e corrisponde anche
+alle modifiche applicative non committate presenti mentre questo documento viene
+revisionato. Non è stato trovato un risultato prestazionale, quindi non viene
+classificata qui come fallita. Il codice non è stato modificato durante la
+revisione del documento.
+
+# Informazioni non ricostruibili
+
+Prima dell'esperimento multi-layout erano state eliminate cinque branch di
+prove ed erano stati eseguiti vari tentativi di enhancement o refactoring con
+Claude Opus 5.0. Non sono disponibili abbastanza artefatti per descriverne
+modifiche e risultati senza inventare dettagli.
+
+Se vengono recuperati commit, screenshot o log, questi tentativi potranno essere
+aggiunti indicando esplicitamente la fonte.
+
+# Cosa si può concludere oggi
+
+- Il compito è almeno risolvibile: più reti hanno completato un percorso.
+- Il training da zero non è affidabile: esistono reset rimasti senza vittoria
+  per 200 e 359 gare.
+- Diverse ricompense intermedie hanno creato incentivi ingannevoli, ma non è
+  dimostrato che ogni possibile segnale intermedio fallisca.
+- La valutazione su tre layout non ha superato il gate concordato e ha ridotto
+  di tre volte la frequenza di riproduzione.
+- Xavier e rimozione del bonus del freno non sono stati isolati dal resto
+  dell'esperimento multi-layout.
+- Gli esperimenti disponibili non dimostrano che la diversità genetica sia
+  irrilevante: i risultati quantitativi attribuiti al roster non sono
+  verificabili.
+- Il fatto che la rete abbia 543 parametri e riceva un risultato complessivo non
+  rende matematicamente impossibile l'ottimizzazione evolutiva.
+
+Restano ipotesi da verificare, non diagnosi acquisite: convergenza prematura,
+fitness raro o ingannevole, perdita di linee utili, rumore dovuto al layout e
+mutazioni che rompono abilità coordinate.
+
+# Regole per aggiungere una nuova prova
+
+Ogni nuova voce deve riportare:
+
+1. commit o patch esatta;
+2. configurazione usata;
+3. seed, numero massimo di gare e criterio di successo;
+4. risultati di ogni seed, non soltanto il migliore;
+5. indicazione delle altre modifiche attive nello stesso test;
+6. distinzione fra osservazione e spiegazione ipotizzata.
+
+Una singola vittoria dimostra che una configurazione può riuscire, non che sia
+più affidabile. Un singolo fallimento dimostra che può fallire, non ne stima la
+probabilità. I benchmark lunghi vanno eseguiti soltanto dopo smoke test brevi con
+output frequente e arresto anticipato.

@@ -67,16 +67,12 @@ describe('persistence storage keys', () => {
         expect((winnerPayload as { version?: unknown }).version).toBe(9)
     })
 
-    // "Never randomise the course" is stored as the string "Infinity", which is the one
-    // setting whose round trip is not obviously lossless.
     it('round-trips an infinite course interval', () => {
         saveSettings({ generationsPerCourse: Number.POSITIVE_INFINITY })
 
         expect(loadSettings().generationsPerCourse).toBe(Number.POSITIVE_INFINITY)
     })
 
-    // Zero is a legitimate choice and a falsy one, so it is the value most likely to be
-    // read back as "nothing stored" by a careless parser.
     it('round-trips a brake bonus of zero', () => {
         saveSettings({ brakeBonus: 0 })
 
@@ -89,8 +85,6 @@ describe('persistence storage keys', () => {
         expect(loadSettings().brakeBonus).toBe(DEFAULTS.brakeBonus)
     })
 
-    // The interval is a choice from a list, so a stored value that is not on the list is
-    // not clamped to a neighbour: it never came from the slider and cannot be honoured.
     it('falls back to the default when the stored course interval is not one of the choices', () => {
         values.set('generations-per-course', '7')
 

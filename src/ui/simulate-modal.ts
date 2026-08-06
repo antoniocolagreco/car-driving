@@ -1,42 +1,23 @@
 import { ELEMENT_IDS, findElement } from './dom'
 
-/**
- * The modal shown while the simulation runs with no rendering at all.
- *
- * It is written to once per finished race, never per frame: the whole reason the mode
- * exists is that drawing is what costs the time, so this panel must not put any of it
- * back. `app.ts` owns the run itself and only reports results here.
- */
+/** Headless-run modal, updated once per completed race. */
 
-/** One finished race, as the modal shows it. */
 export type RaceReport = {
-    /** Race number within this run, starting at 1. */
     readonly index: number
     readonly overtakes: number
-    /** Seconds of simulated race time, on the same clock the champion record uses. */
     readonly seconds: number
 }
 
 export type SimulateModal = {
-    /** Opens the modal and clears the previous run's results. */
     open(): void
-    /** Adds one finished race and updates the counters. */
     reportRace(report: RaceReport): void
-    /** Closes the modal. Safe to call when it is already closed. */
     close(): void
 }
 
-/**
- * How many finished races stay in the list. A long run would otherwise grow one row per
- * race forever, and the rows nobody scrolls back to still cost layout on every insert.
- */
+/** Bounds DOM work during long runs. */
 const MAX_VISIBLE_RACES = 60
 
-/**
- * Wires the modal. `onStopRequested` fires once per opening: the run has to finish the
- * race it is in before the normal UI returns, so the button reports that it was heard
- * and then does nothing more.
- */
+/** Wires a modal whose stop request takes effect after the current race. */
 export const createSimulateModal = (
     onStopRequested: () => void,
     signal: AbortSignal,
@@ -65,8 +46,7 @@ export const createSimulateModal = (
 
     stopButton?.addEventListener('click', requestStop, { signal })
 
-    // Esc fires `cancel` and would close the dialog on the spot, leaving the run going
-    // behind a UI that is drawing nothing. Treat it as the Stop button instead.
+    // Treat Esc as Stop so the headless run cannot continue behind a closed dialog.
     dialog?.addEventListener(
         'cancel',
         (event: Event) => {
@@ -81,8 +61,6 @@ export const createSimulateModal = (
             return
         }
         const row = document.createElement('li')
-        // `min-w-0` plus the truncation below is what keeps a long row from widening the
-        // list and adding a horizontal scrollbar to a box that only scrolls vertically.
         row.className = 'flex min-w-0 justify-between gap-2 px-1 py-0.5 odd:bg-white/5'
 
         const label = document.createElement('span')

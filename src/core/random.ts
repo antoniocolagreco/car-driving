@@ -1,22 +1,15 @@
-/**
- * Randomness used across the simulation. Traffic generation goes through
- * `createRandom` so a given seed always reproduces the same road layout, which
- * makes runs comparable across generations. Neural network initialization and
- * mutation use the unseeded helpers below, since genetic diversity there is
- * supposed to differ on every run.
- */
+/** Seeded randomness for traffic; network initialization and mutation remain unseeded. */
 
-/** A seeded pseudo-random number generator. */
 export type Random = {
     /** Next value in [0, 1). */
     next(): number
     /** Next integer in [min, max). */
     nextInt(min: number, max: number): number
-    /** Returns a new array with the same items in random order; does not mutate `items`. */
+    /** Returns a shuffled copy. */
     shuffle<T>(items: readonly T[]): T[]
 }
 
-/** Hashes a string down to a 32-bit non-negative integer, used to turn a text seed into a numeric one. */
+/** Hashes a text seed to 32 bits. */
 const hashString = (value: string): number => {
     let hash = 0
     for (let i = 0; i < value.length; i++) {
@@ -27,12 +20,7 @@ const hashString = (value: string): number => {
     return Math.abs(hash)
 }
 
-/**
- * Creates a seeded random generator: the same seed (string or number) always
- * produces the same sequence of `next()`/`nextInt()`/`shuffle()` results.
- * Implemented as a linear congruential generator (LCG), which is fast and
- * good enough for traffic placement — no cryptographic properties needed.
- */
+/** Creates a deterministic linear congruential generator. */
 export const createRandom = (seed: string | number): Random => {
     let state = typeof seed === 'string' ? hashString(seed) : seed
 
@@ -55,10 +43,9 @@ export const createRandom = (seed: string | number): Random => {
     return { next, nextInt, shuffle }
 }
 
-/** Uniform random value in [-1, 1), used to initialize and mutate network weights/biases. */
+/** Uniform random value in `[-1, 1)`. */
 export const randomSymmetric = (): number => Math.random() * 2 - 1
 
-/** Tailwind-derived color palette used to tell traffic cars apart at a glance. */
 export const PALETTE = {
     red: '#dc2626',
     orange: '#ea580c',
@@ -79,7 +66,7 @@ export const PALETTE = {
     rose: '#e11d48',
 } as const
 
-/** Picks a random color from `PALETTE`, used to give each traffic car a distinct body color. */
+/** Picks a color from `PALETTE`. */
 export const randomColor = (): string => {
     const values = Object.values(PALETTE)
     return values[Math.floor(Math.random() * values.length)]

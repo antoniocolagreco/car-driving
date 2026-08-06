@@ -27,7 +27,7 @@ import {
     hasClearedCourse,
     hasMissedOvertakeDeadline,
     isStuck,
-    recordOvertakeTimeout,
+    eliminate,
     selectBest,
     selectParents,
     updateStats,
@@ -51,105 +51,71 @@ import {
     isCompatibleNetwork,
 } from './population'
 
-/**
- * The orchestrator: wires the road, the population and the traffic together and
- * advances all of them by one fixed physics step at a time. This is the file to
- * read to understand the whole simulation, so `step` below is written to be read
- * top to bottom as the numbered sequence it implements, not as clever code.
- *
- * Mutability rule: `SimulationState` is one long-lived mutable
- * record, stepped in place 60 times a second; only its `readonly` fields (`road`)
- * never change after creation.
- */
+/** Owns the mutable race state and advances it in fixed physics steps. */
 
-/** The settings a user can change from the UI; a new population is built from these on `restart`. */
 export type SimulationSettings = {
     readonly carsQuantity: number
     readonly mutationRate: number
     readonly hiddenLayers: readonly number[]
-    /**
-     * How many consecutive generations share one course layout. `Infinity` keeps the very
-     * first layout forever, which is the one value that makes a whole run's scores
-     * comparable. See `COURSE_INTERVALS`.
-     */
+    /** `Infinity` keeps the first layout forever. */
     readonly generationsPerCourse: number
-    /**
-     * What one brake press is worth, counted in overtakes, to a car that also passed
-     * somebody. Unlike everything else here it takes effect immediately rather than at the
-     * next restart: it decides only how the field is RANKED, so applying it to the round
-     * being watched costs nothing and answers the question the slider was moved to ask.
-     * See `BRAKE_BONUSES`.
-     */
+    /** Live ranking bonus for discovering the brake after an overtake. */
     readonly brakeBonus: number
 }
 
-/** Everything the render and UI layers need to draw one frame and describe the race. */
 export type SimulationState = {
     readonly road: Road
     cars: RacingCar[]
     traffic: Car[]
     aliveCars: RacingCar[]
-    /** The car the camera follows: the leader while racing, the winner once the round ends. */
+    /** Camera target. */
     activeCar?: RacingCar
     bestCar?: RacingCar
-    /** The player's car: always part of `cars`, driven by hand only while asked. */
+    /** Always part of `cars`; manual control is optional. */
     playerCar?: RacingCar
-    /** 1-based generation counter for the UI. */
     generation: number
-    /** The best network so far: `parents[0]`, and the one the UI persists. */
+    /** `parents[0]`, persisted by the UI. */
     winner?: Network
-    /** The networks the next generation is bred from, best first. */
+    /** Breeding pool, best first. */
     parents: Network[]
-    /** The veterans archive, ordered by `rankRoster`. See `core/veterans.ts`. */
+    /** Archive ordered by `rankRoster`. */
     veterans: Network[]
-    /** The record holder, entered in every race while it is set. */
+    /** Record holder entered in each compatible race. */
     champion?: Network
     gameOver: boolean
-    /** True when a car passed every traffic car: the course is beaten, not merely survived. */
+    /** True after the first car passes all traffic. */
     courseCleared: boolean
-    /** The first car to clear the course; retained throughout the victory celebration. */
+    /** First finisher, retained through the victory parade. */
     courseWinner?: RacingCar
-    /** Seconds elapsed since `courseWinner` cleared the course. */
     victorySeconds: number
-    /** Seconds spent on the game-over screen so far. */
     gameOverSeconds: number
-    /** Seconds of simulated time in the current round. */
     elapsedSeconds: number
-    /** Manual mode is armed, but physics stays frozen until the first driving input. */
+    /** Manual mode is armed but frozen until the first driving input. */
     waitingForManualInput: boolean
-    /** True while the player's car is controlled by the keyboard rather than its network. */
     manualDriving: boolean
 }
 
-/** The evolutionary loop: owns `state` and advances it, one fixed step at a time. */
 export type Simulation = {
     readonly state: SimulationState
-    /** Advances the world by one fixed step. */
     step(dt: number): void
     /** Starts a new generation. Keeps the current winner unless one is given. */
     restart(winner?: Network): void
     updateSettings(settings: SimulationSettings): void
-    /** Starts a fresh round under manual control, initially frozen. */
+    /** Starts a fresh manual round, initially frozen. */
     startManualDriving(controls: Controls): void
     /** Releases a manually armed round after the first driving key is pressed. */
     beginManualDriving(): void
-    /** Gives the player's car back to its neural network without restarting the round. */
+    /** Returns the player's car to neural control without restarting. */
     stopManualDriving(): void
-    /** Promotes the current best network immediately. */
     promoteBest(): Network | undefined
-    /** Sets the record holder that races in every round from the next one on. */
+    /** Sets the record holder for subsequent rounds. */
     setChampion(champion: Network | undefined): void
 }
 
-/**
- * A completed course: everything the UI needs to decide whether this run is the new
- * record. `core/` does not know what a record is, it only reports the finish.
- */
+/** Completed-course data reported to the UI. */
 export type CourseResult = {
     readonly network: Network
-    /** Race seconds from the start line to passing the last traffic car. */
     readonly seconds: number
-    /** How many traffic cars it passed, which for a finished course is all of them. */
     readonly overtakes: number
 }
 
@@ -160,7 +126,6 @@ type ConsolidationState = {
     gradients: NetworkGradients
 }
 
-/** Turns `SimulationSettings` plus the networks entered by name into `PopulationOptions`. */
 const toPopulationOptions = (
     settings: SimulationSettings,
     parents: readonly Network[],
@@ -175,13 +140,7 @@ const toPopulationOptions = (
     champion,
 })
 
-/**
- * A segment is only relevant to a car if it could possibly be touched by one of
- * its fixed perception areas: a cheap y-distance test against the deepest zone,
- * checked before polygon clipping. This avoids scanning distant obstacles for every car.
- * The deepest zone rather than each zone's own range, deliberately — this is a broad
- * phase, and it may only ever discard segments that NO zone could have seen.
- */
+/** Broad-phase y check; it may discard only segments beyond every sensor zone. */
 const isWithinRange = (segment: Segment, position: Vec2): boolean => {
     const reach = SENSOR_MAX_RANGE + RACING_CAR.height / 2
     const nearestY = Math.min(segment.a.y, segment.b.y) - reach
@@ -189,7 +148,6 @@ const isWithinRange = (segment: Segment, position: Vec2): boolean => {
     return position.y >= nearestY && position.y <= farthestY
 }
 
-/** True when any edge of `polygon` crosses any of `segments` — a car-shaped polygon vs. a flat obstacle list. */
 const polygonHitsSegments = (polygon: readonly Vec2[], segments: readonly Segment[]): boolean => {
     const edges = polygonSegments(polygon)
     for (const edge of edges) {
@@ -202,12 +160,7 @@ const polygonHitsSegments = (polygon: readonly Vec2[], segments: readonly Segmen
     return false
 }
 
-/**
- * Counts how many values in `ascendingYs` (sorted ascending) are strictly
- * greater than `y`, via binary search. Used to count overtakes without an
- * O(cars x traffic) scan every step: the traffic list is sorted once per step,
- * and every car answers "how many traffic cars are behind me" in O(log n).
- */
+/** Counts values greater than `y` in a sorted array by binary search. */
 const countGreaterThan = (ascendingYs: readonly number[], y: number): number => {
     let low = 0
     let high = ascendingYs.length
@@ -222,7 +175,7 @@ const countGreaterThan = (ascendingYs: readonly number[], y: number): number => 
     return ascendingYs.length - low
 }
 
-/** The car with the smallest y among `cars` — furthest along the road, since forward is -y. */
+/** Furthest car along the road; forward is negative y. */
 const leader = (cars: readonly RacingCar[]): RacingCar | undefined =>
     cars.reduce<RacingCar | undefined>(
         (best, car) =>
@@ -230,39 +183,25 @@ const leader = (cars: readonly RacingCar[]): RacingCar | undefined =>
         undefined,
     )
 
-/**
- * Builds the pure evolutionary-loop simulation: no DOM, no canvas, no
- * localStorage. The winner network flows in through `options.winner` and
- * back out through `options.onGenerationEnd` — `app.ts` is what actually reads
- * and writes localStorage with it.
- */
+/** Builds the core simulation without DOM, canvas or storage access. */
 export const createSimulation = (
     settings: SimulationSettings,
     options?: {
         readonly winner?: Network
-        /** The stored veterans archive, restored across runs. */
         readonly veterans?: readonly Network[]
-        /** The stored record holder, entered in every race from the first one on. */
         readonly champion?: Network
         readonly trafficSeed?: string | number
-        /** Fired when a generation ends, with the network worth persisting. */
         readonly onGenerationEnd?: (winner: Network | undefined) => void
-        /** Fired when a round ended with the course beaten, once, with the finisher's run. */
+        /** Fired once when a round produces a finisher. */
         readonly onCourseFinished?: (result: CourseResult) => void
-        /** Fired when a generation ends, with the archive as it now stands. */
         readonly onVeteransChanged?: (veterans: readonly Network[]) => void
     },
 ): Simulation => {
     let currentSettings = settings
-    /** While set, the player's car is driven by these instead of by its network. */
     let manualControls: Controls | undefined
-    /** Whether a human actually held the wheel at any point during the current round. */
     let playerWasDriven = false
-    /** Every demonstrated state/action pair in this manual round, in chronological order. */
     let manualExperiences: TrainingExample[] = []
-    /** Rotates realtime replay across old examples without random omissions. */
     let realtimeReplayCursor = 0
-    /** Full-dataset training accumulated at unchanged weights, one exact epoch at a time. */
     let consolidation: ConsolidationState | undefined
     const trafficSeed = options?.trafficSeed
     const onGenerationEnd = options?.onGenerationEnd
@@ -293,16 +232,11 @@ export const createSimulation = (
         manualDriving: false,
     }
 
-    /**
-     * How the field is ranked right now: the live brake bonus, and the size of the course
-     * so the ranking can tell a car that finished from one that merely tied on points.
-     */
     const rankingRules = (): RankingRules => ({
         brakeBonus: currentSettings.brakeBonus,
         trafficCount: state.traffic.length,
     })
 
-    /** True once `racingCar` has passed the last traffic car of the current course. */
     const hasFinished = (racingCar: RacingCar): boolean =>
         hasClearedCourse(racingCar.stats, state.traffic.length)
 
@@ -314,19 +248,9 @@ export const createSimulation = (
         return segments
     }
 
-    /**
-     * Starts a new generation. Keeps the current winner unless one is given.
-     *
-     * The course is seeded by the generation number divided by
-     * `settings.generationsPerCourse`, so a block of consecutive generations shares one
-     * layout and the next block draws a new one. Fully reproducible for a whole run, and
-     * varied enough that a winner has to re-earn its place on layouts it has never seen,
-     * so what survives is the skill and not the memory. `COURSE_INTERVALS` documents what
-     * both ends of that setting cost.
-     */
+    /** Starts a generation; each interval-sized block shares a deterministic layout. */
     const restart = (winner?: Network): void => {
-        // A winner handed in from outside (a restored backup) replaces the whole
-        // parent pool: the user asked for that network, not for its old rivals.
+        // An explicitly supplied winner replaces the existing parent pool.
         const requestedParents: readonly Network[] = winner ? [winner] : state.parents
         const parents: Network[] = requestedParents.filter((parent) =>
             isCompatibleNetwork(parent, currentSettings.hiddenLayers),
@@ -334,8 +258,6 @@ export const createSimulation = (
 
         state.generation += 1
 
-        // Recomputed every round rather than held: the ordering depends on medians that
-        // the previous round has just moved.
         const racingVeterans: Network[] = selectRacers(state.veterans, currentSettings.carsQuantity)
 
         const options = toPopulationOptions(
@@ -346,17 +268,14 @@ export const createSimulation = (
         )
         state.cars = createPopulation(road, options)
 
-        // The player's car is always in the field: one more competitor, drawn, colliding,
-        // scored and able to win the winnership. Whether a keyboard or its own network
-        // holds the wheel is decided by `startManualDriving` / `stopManualDriving`.
+        // The player remains a scored competitor under either manual or neural control.
         state.playerCar = createPlayerCar(road, options)
         state.cars.push(state.playerCar)
         playerWasDriven = false
         manualExperiences = []
         realtimeReplayCursor = 0
         consolidation = undefined
-        // Dividing by `Infinity` is what makes the "never randomise" setting free: every
-        // generation floors to seed 0, so the course stays exactly the one the run opened on.
+        // Division by Infinity keeps the seed at zero for the fixed-layout setting.
         state.traffic = generateTraffic(
             road,
             SIMULATION.trafficRows,
@@ -378,7 +297,6 @@ export const createSimulation = (
         state.manualDriving = manualControls !== undefined
     }
 
-    // The first generation, right away.
     restart(options?.winner)
 
     const rememberExperience = (experience: TrainingExample): void => {
@@ -389,7 +307,7 @@ export const createSimulation = (
         manualExperiences.push(experience)
     }
 
-    /** Current example plus a deterministic rotating slice of the previous experience. */
+    /** Current example plus a rotating, deterministic replay slice. */
     const realtimeBatch = (current: TrainingExample): TrainingExample[] => {
         const batch: TrainingExample[] = [current]
         const olderCount: number = manualExperiences.length - 1
@@ -417,7 +335,7 @@ export const createSimulation = (
         }
     }
 
-    /** Processes at most `budget` examples; weights change only after a whole epoch. */
+    /** Processes at most `budget` examples; applies gradients only after a full epoch. */
     const processConsolidation = (budget: number): void => {
         if (!consolidation) {
             return
@@ -445,7 +363,7 @@ export const createSimulation = (
         }
     }
 
-    /** Guarantees that all configured full-dataset epochs finish before persistence. */
+    /** Completes all consolidation epochs before the network is persisted. */
     const completeConsolidation = (network: Network): void => {
         beginConsolidation(network)
         if (!consolidation || consolidation.network !== network) {
@@ -457,26 +375,11 @@ export const createSimulation = (
         processConsolidation(remainingExamples)
     }
 
-    /**
-     * Writes this round into the history of every network that drove it, then admits
-     * the round's best to the archive and drops whoever no longer fits.
-     *
-     * Every car, not only the good ones. A history made of successes measures nothing:
-     * the median exists to say what a network does on a TYPICAL course, and the courses
-     * it fails are most of what makes a course typical.
-     *
-     * Recording comes before admission so a newly admitted network arrives already
-     * holding the race that earned it, rather than with an empty record and a median of
-     * zero that would place it below everybody on the way in.
-     *
-     * The time is what records the finish, and every finisher gets one rather than only
-     * the car that got there first. The last overtake of a cleared course IS the last
-     * traffic car, so that timestamp is the finish line; second across it still crossed it.
-     */
+    /** Records every result before admitting and reranking archive members. */
     const recordRaceResults = (): void => {
         for (const racingCar of state.cars) {
             recordRace(racingCar.network, {
-                overtakes: racingCar.stats.overtakes,
+                overtakes: racingCar.stats.eliminated ? 0 : racingCar.stats.overtakes,
                 seconds: hasFinished(racingCar) ? racingCar.stats.lastOvertakeAtSeconds : undefined,
             })
         }
@@ -490,15 +393,10 @@ export const createSimulation = (
         onVeteransChanged?.(state.veterans)
     }
 
-    /** Finalizes parent selection and enters the game-over phase exactly once. */
     const finishGeneration = (): void => {
         const roundWinner: RacingCar | undefined = state.bestCar
 
-        // The demonstration is trained in before a single result is written down, so that
-        // everything below files the race under the network that will actually drive the
-        // next one. Consolidation rewrites the weights, and with them the content-addressed
-        // id, so running it afterwards would leave the archive saved with the weights that
-        // raced while the copy in memory carried the trained ones.
+        // Consolidate before recording so history and content id describe the persisted weights.
         if (roundWinner && playerWasDriven && roundWinner === state.playerCar) {
             completeConsolidation(roundWinner.network)
         }
@@ -508,27 +406,12 @@ export const createSimulation = (
         if (roundWinner) {
             roundWinner.network.generation += 1
 
-            // Whoever wins the round takes the seat for the next one. Nothing protects an
-            // incumbent here, because scores from different layouts are not comparable
-            // anyway; what stops a good network from being lost to one bad draw is the
-            // archive, which keeps it racing on its median rather than on this round.
-            //
-            // The player's network is ranked here like any other competitor. It used to
-            // take over the whole pool whenever a human won, which threw away three
-            // working lineages on the strength of one lap somebody drove by hand; winning
-            // already makes it `parents[0]`, which is elitism plus the entire refining
-            // band, and that is what "the next generation is bred from your driving" means.
+            // A winning player takes first place without erasing the other parent lineages.
             const ranked: Network[] = selectParents(state.cars, PARENT_COUNT, rankingRules()).map(
                 (car) => car.network,
             )
 
-            // The head of the pool is whoever the round crowned, and when the course was
-            // cleared that is the first car across the line rather than the highest score.
-            // The two can disagree: every finisher passed the same traffic, so the round
-            // score separates them only by the brake bonus, and a later finisher that
-            // happened to touch the brake must not displace the car that got there first.
-            // Below the head, the ordinary ranking. When nobody cleared the course the
-            // round winner already leads that ranking and this changes nothing.
+            // A finisher leads by crossing time even if a later finisher has a higher bonus score.
             state.parents = [
                 roundWinner.network,
                 ...ranked.filter((network) => network !== roundWinner.network),
@@ -536,11 +419,7 @@ export const createSimulation = (
             state.winner = state.parents[0]
         }
 
-        // A human demonstration that beat the course is therefore reported in its
-        // consolidated form: the network that goes on to drive, not the half-trained one it
-        // held while the player was steering.
-        // `lastOvertakeAtSeconds` is the finish line here, since the last overtake of a
-        // cleared course IS the last traffic car: the victory parade is not part of it.
+        // The finish time is the last overtake, excluding the victory parade.
         if (state.courseCleared && state.courseWinner) {
             onCourseFinished?.({
                 network: state.courseWinner.network,
@@ -555,16 +434,8 @@ export const createSimulation = (
     }
 
     /**
-     * Re-casts the followed car's perception against the current poses of everything
-     * around it. Only the followed car, because this exists for what is drawn on screen:
-     * it changes no controls, no network input and no score.
-     *
-     * A crashed car is skipped on purpose. Collision is detected once the bodies already
-     * overlap, so a wreck sits partly through whatever it hit, and against the guard rail
-     * that puts the sensor origin outside the road with the whole radar drawn beyond the
-     * barrier. Leaving the reading untouched keeps the last one taken before the impact,
-     * which is both inside the road and the more informative picture: what the car saw on
-     * its way in.
+     * Recasts only the followed car for rendering. Wrecks retain their last valid reading
+     * because collision overlap can place the sensor origin beyond a barrier.
      */
     const refreshFollowedSensors = (): void => {
         const followedCar: RacingCar | undefined = state.activeCar
@@ -584,19 +455,14 @@ export const createSimulation = (
 
     const step = (dt: number): void => {
         if (state.waitingForManualInput) {
-            // The race has not started, but the car is already on the grid with its radar
-            // on screen. Without this the panel would keep showing the empty state the car
-            // was built with, reporting clear road straight through the traffic ahead.
+            // Manual rounds show a valid radar before the first input releases physics.
             refreshFollowedSensors()
             return
         }
 
         state.elapsedSeconds += dt
 
-        // Victory is a live five-second parade. The simulation keeps stepping below,
-        // while the winner is protected from collision/timeout retirement and remains
-        // the camera target. When the parade expires, retire only the other cars: the
-        // winner keeps driving, alive, until the next generation replaces the field.
+        // Finishers remain protected and moving throughout the victory parade.
         if (state.courseCleared && !state.gameOver) {
             state.victorySeconds += dt
             if (
@@ -615,10 +481,7 @@ export const createSimulation = (
                 processConsolidation(examplesPerStep)
             }
             if (state.victorySeconds >= SIMULATION.victoryCelebrationSeconds) {
-                // Everybody who did not make it is stopped where they stand, and stopped
-                // is all it is: the race ended around them rather than under them, so no
-                // retirement is recorded against them. Every car that crossed the line
-                // drives on, however many of them there are.
+                // Stop non-finishers without turning the parade cutoff into a timeout result.
                 for (const racingCar of state.aliveCars) {
                     if (!hasFinished(racingCar)) {
                         crash(racingCar.car)
@@ -635,27 +498,15 @@ export const createSimulation = (
             }
         }
 
-        // 1. Build the full obstacle list once for this step: every traffic car's
-        // polygon edges, plus the two road borders. Every car below reuses this
-        // instead of rebuilding it per perception zone, per car.
-        //
-        // The guard rails belong in this list, for perception as much as for the
-        // collision test. A car that cannot see the wall it is about to hit is not a
-        // car being simulated, and hiding an obstacle from the sensors to make the
-        // readings look tidier only moves the problem into the crash counter.
+        // 1. Build traffic and guard-rail segments once for sensing and collision.
         const obstacles: Segment[] = currentObstacleSegments()
 
-        // Traffic y-positions, sorted once, so "how many traffic cars are
-        // behind me" (used below, per car) is a binary search instead of a
-        // full scan of the traffic list for every one of potentially hundreds
-        // of cars.
+        // Sort once so each overtake count is an O(log n) lookup.
         const trafficYsAscending = state.traffic
             .map((trafficCar) => trafficCar.position.y)
             .sort((a, b) => a - b)
 
-        // 2. Drive every living car through exactly one physics step. Sensors
-        // are cast once per car here and reused for both driving and scoring
-        // — never cast a second time, which is what the old scoring code did.
+        // 2. Step each racer; reuse one sensor cast for control and scoring.
         for (const racingCar of state.aliveCars) {
             const { car, network, stats } = racingCar
 
@@ -667,9 +518,7 @@ export const createSimulation = (
             racingCar.sensorState = sensorState
 
             const inputs = networkInputs(car, sensorState.readings)
-            // The network runs even for a manually driven car: its outputs are ignored,
-            // but the visualizer reads the caches `feedForward` fills, so driving by hand
-            // shows you what the winner's brain would have done in the same spot.
+            // Keep visualization caches live while manual controls override the outputs.
             const outputs = feedForward(network, inputs)
             const humanControls = racingCar === state.playerCar ? manualControls : undefined
             if (humanControls) {
@@ -682,8 +531,7 @@ export const createSimulation = (
                     playerWasDriven = true
                 }
                 if (playerWasDriven && !state.courseCleared) {
-                    // Once the demonstration begins, keep every frame — including deliberate
-                    // coasting — and rehearse old observations in a rotating realtime batch.
+                    // Record coasting too; it is a deliberate control target.
                     const experience: TrainingExample = {
                         inputs: [...inputs],
                         targets: [
@@ -694,8 +542,7 @@ export const createSimulation = (
                     }
                     rememberExperience(experience)
                     trainBatch(network, realtimeBatch(experience), LEARNING_RATE)
-                    // Batch replay leaves visualizer caches on its last historical sample.
-                    // Restore the live observation without applying another update.
+                    // Restore live visualization caches after replay.
                     feedForward(network, inputs)
                 }
             } else {
@@ -714,55 +561,36 @@ export const createSimulation = (
             }
             updateStats(stats, sample, dt)
 
-            // Read after the stats are updated, so a car is protected from the very step
-            // on which it passes the last traffic car rather than from the next one. A
-            // finished race cannot be taken back: whoever crossed the line keeps driving,
-            // exempt from all three retirements, until the round closes.
+            // Protect a finisher starting on the exact step of its final overtake.
             const finished: boolean = hasFinished(racingCar)
 
-            // A crash costs nothing beyond what it takes away by itself: the wreck stops
-            // overtaking, and everyone still driving passes it in the only currency there is.
             if (collided && !finished) {
                 crash(car)
             }
 
-            // Retire cars that fail the independent minimum-progress timeout.
-            if (!finished && isStuck(stats)) {
-                crash(car)
-            }
-
-            // A car must keep overtaking, not merely moving. Missing the deadline retires it
-            // AND marks the result ineligible, so it cannot win or reproduce however many
-            // overtakes it had banked before it stopped racing.
-            if (!finished && hasMissedOvertakeDeadline(stats)) {
-                recordOvertakeTimeout(stats)
+            // Missing either deadline invalidates the result and retires the car.
+            if (!finished && (isStuck(stats) || hasMissedOvertakeDeadline(stats))) {
+                eliminate(stats)
                 crash(car)
             }
         }
 
-        // 3. Traffic drives itself forward at a fixed throttle, unaffected by
-        // the racing cars — it keeps moving even through the game-over screen.
+        // 3. Traffic moves independently, including during overlays.
         for (const trafficCar of state.traffic) {
             stepCar(trafficCar, dt)
         }
 
-        // 4. Retire whoever is still alive at the round's time ceiling. The idle
-        // timeout above only catches cars that stop making progress; a car that
-        // keeps driving down the empty road past the last traffic row makes
-        // progress forever, so without this the generation would never end.
-        // Reaching the ceiling is retirement, not an additional scoring event.
+        // 4. Enforce the round ceiling for cars that keep making non-finishing progress.
         if (!state.courseCleared && state.elapsedSeconds >= SIMULATION.maxRoundSeconds) {
             for (const racingCar of state.aliveCars) {
                 crash(racingCar.car)
             }
         }
 
-        // 5. Recompute who is still racing.
+        // 5. Recompute the live field.
         state.aliveCars = state.cars.filter((racingCar) => !racingCar.car.crashed)
 
-        // 6. Find the best car across the WHOLE population, crashed cars
-        // included — an eligible car keeps the overtakes earned before impact — and
-        // flag it for the renderer/HUD.
+        // 6. Rank the whole population and flag the displayed winner.
         state.bestCar = state.courseCleared
             ? state.courseWinner
             : selectBest(state.cars, rankingRules())
@@ -770,11 +598,7 @@ export const createSimulation = (
             racingCar.winner = racingCar === state.bestCar
         }
 
-        // 7. The camera follows the leader while cars remain; once nobody is
-        // left racing it follows the winner instead. While a human is driving, it stays
-        // on their car for as long as they are alive — the point of watching is what you
-        // are doing, not who happens to be ahead.
-        // Watch the player's car while a human is driving it; otherwise follow the leader.
+        // 7. Prefer the manual player, then the live leader, then the round winner.
         const humanCar = manualControls ? state.playerCar : undefined
         state.activeCar =
             state.courseCleared && state.courseWinner
@@ -785,21 +609,10 @@ export const createSimulation = (
                     ? leader(state.aliveCars)
                     : state.bestCar
 
-        // Driving decisions intentionally use the observation from the beginning of the
-        // step. Rendering that same polygon after the car has moved leaves it one frame
-        // behind, up to 10 px at top speed, so the followed car is re-cast against the
-        // final poses here.
+        // Recast after movement so the rendered radar does not lag the car by one step.
         refreshFollowedSensors()
 
-        // 8. Somebody passed every traffic car: remember who crossed first and begin a
-        // five-second celebration. The field keeps running during it, and even if every
-        // car stops first, the generation cannot close before the banner has had its time.
-        //
-        // Crossing the line is what is looked for here, rather than the round's best score.
-        // The two are not the same question: the brake bonus is worth ten overtakes, so it
-        // can lift a car that stopped one short of the finish above a car that actually
-        // finished, which would both crown the wrong winner and hide the finish entirely.
-        // Whoever passed the last traffic car earliest is the winner, and that is all.
+        // 8. Detect the earliest finisher directly; bonus-adjusted score is not a finish.
         if (!state.courseCleared) {
             let firstAcross: RacingCar | undefined
             for (const racingCar of state.cars) {
@@ -824,7 +637,7 @@ export const createSimulation = (
             }
         }
 
-        // 9. Outside a victory celebration, an empty field closes immediately.
+        // 9. Close an empty non-victory round, then advance overlays.
         if (state.aliveCars.length === 0 && !state.gameOver && !state.courseCleared) {
             finishGeneration()
         }
@@ -837,8 +650,7 @@ export const createSimulation = (
     }
 
     const updateSettings = (nextSettings: SimulationSettings): void => {
-        // Applied on the next `restart`, not immediately: changing the cars
-        // quantity or hidden layers must not disrupt the round in progress.
+        // Population settings apply at the next restart.
         currentSettings = nextSettings
     }
 
@@ -858,7 +670,6 @@ export const createSimulation = (
     const startManualDriving = (controls: Controls): void => {
         manualControls = controls
         restart()
-        // Keep the camera on the player at its assigned lane on the shared start line.
         if (state.playerCar) {
             state.activeCar = state.playerCar
         }
@@ -878,11 +689,7 @@ export const createSimulation = (
         state.waitingForManualInput = false
     }
 
-    /**
-     * Takes effect from the next round, not this one. The record is set by a car that is
-     * currently on the track, and adding its network to the grid it is already racing on
-     * would put the same weights in two bodies at once.
-     */
+    /** Applies next round to avoid entering the same network twice in the current field. */
     const setChampion = (champion: Network | undefined): void => {
         state.champion = champion
     }

@@ -2,21 +2,10 @@ import { normalize, toHex, toHexDualColorRange } from '@core/math'
 import type { Layer, Network } from '@core/neural-network'
 import { SENSOR_ZONE, SENSOR_ZONE_ORDER, type SensorZoneId } from '@core/sensor'
 
-/**
- * Visualizes a neural network on a 2D canvas: every layer is drawn as neurons
- * (circles) connected by lines (weights). Colours encode value: red for
- * negative, green for positive. A connection's opacity encodes how much it
- * actually mattered this frame, not just how strong the weight is.
- *
- * Reads `Layer.inputs`/`outputs`, the caches `feedForward` populates on its
- * way through the network — this module never runs the network itself, it
- * only shows the result of the last time something else did.
- */
+/** Draws cached network activations; color encodes sign and connection alpha encodes contribution. */
 
-/** Labels drawn above the three output neurons, in throttle/brake/steering order. */
 const OUTPUT_LABELS = ['Throttle', 'Brake', 'Steering'] as const
 
-/** Compact labels drawn below the network inputs in their exact left-to-right order. */
 const SENSOR_INPUT_LABELS: Readonly<Record<SensorZoneId, string>> = {
     [SENSOR_ZONE.LEFT_SIDE]: 'LEFT',
     [SENSOR_ZONE.LEFT_LATERAL]: 'L90',
@@ -35,19 +24,13 @@ const INPUT_LABELS: readonly string[] = [
     'SPEED',
 ]
 
-/** Radius of a neuron circle, in px. */
 const NODE_SIZE = 15
 
-/**
- * Draws the whole network: one row of neurons per layer, output layer at the
- * bottom. Layers are drawn from last to first because the bottom (output) row
- * is the one that carries the throttle/brake/steering labels.
- */
+/** Draws one neuron row per layer with outputs at the bottom. */
 export const drawNetwork = (ctx: CanvasRenderingContext2D, network: Network): void => {
     const width = ctx.canvas.clientWidth
     const height = ctx.canvas.clientHeight
 
-    // 10% margin top and bottom so neurons never touch the canvas edge.
     const margin = Math.floor(height * 0.1)
     const heightSlice = Math.floor(height - margin * 2) / network.layers.length
 
@@ -72,10 +55,6 @@ export const drawNetwork = (ctx: CanvasRenderingContext2D, network: Network): vo
     }
 }
 
-/**
- * Draws one layer: its connections, then its input neurons (only for the
- * first layer) and its output neurons.
- */
 const drawLayer = (
     ctx: CanvasRenderingContext2D,
     layer: Layer,
@@ -88,20 +67,13 @@ const drawLayer = (
 ): void => {
     const { biases, inputs, outputs, weights } = layer
 
-    // Horizontal spacing that spreads neurons evenly, +1 so none sits on the edge.
     const inputSlice = width / (inputs.length + 1)
     const outputSlice = width / (outputs.length + 1)
 
     const yInput = yStart
     const yOutput = yEnd
 
-    // PHASE 1: draw every connection (line) between an input and an output
-    // neuron. Each line is one weight of the network:
-    //   - thickness = |weight| (1 to 6 px): stronger weights draw thicker lines.
-    //   - colour = sign of the weight: green excitatory, red inhibitory.
-    //   - alpha = |input x weight|: the actual contribution to the output this
-    //     frame, so a transparent line means "this connection exists but isn't
-    //     carrying any signal right now", not "this weight is small".
+    // Connection width encodes weight magnitude; alpha encodes `|input * weight|`.
     for (let i = 0; i < inputs.length; i++) {
         for (let j = 0; j < outputs.length; j++) {
             ctx.beginPath()
@@ -124,10 +96,7 @@ const drawLayer = (
         }
     }
 
-    // PHASE 2: input neurons, only drawn for the first layer (every other
-    // layer's inputs are the previous layer's outputs, already drawn as
-    // that layer's output row). Fill colour is a red/black/green gradient
-    // over the activation value, [-1, 1].
+    // Only the first layer needs a separate input row.
     if (isFirstLayer) {
         for (let index = 0; index < inputs.length; index++) {
             const x = inputSlice * (index + 1)
@@ -138,7 +107,6 @@ const drawLayer = (
             ctx.arc(x, yInput, NODE_SIZE, 0, Math.PI * 2)
             ctx.fill()
 
-            // Yellow outline, purely for visibility against the line clutter.
             ctx.beginPath()
             ctx.setLineDash([])
             ctx.strokeStyle = '#ff0'
@@ -158,11 +126,7 @@ const drawLayer = (
         }
     }
 
-    // PHASE 3: output neurons. Fill colour is the same red/black/green
-    // gradient, this time over the output value. The ring around each neuron
-    // is the "bias ring": yellow when the neuron is active (its output beats
-    // its own bias), otherwise green or red depending on the sign of the
-    // bias itself — a lazy (high-bias) neuron reads red-ringed even at rest.
+    // Bias rings are yellow when active and otherwise encode the bias sign.
     for (let index = 0; index < outputs.length; index++) {
         const x = outputSlice * (index + 1)
 
@@ -185,7 +149,6 @@ const drawLayer = (
             biasColor = '#F00'
         }
 
-        // A fresh path for the bias ring, so it never blends into the fill.
         ctx.beginPath()
         ctx.strokeStyle = biasColor
         ctx.lineWidth = ringWidth
