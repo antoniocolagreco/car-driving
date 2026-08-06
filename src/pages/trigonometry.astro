@@ -8,7 +8,9 @@ import DefaultLayout from '../layouts/default-layout.astro'
         const container = document.querySelector('#trigonometry-container') as
             | HTMLDivElement
             | undefined
-        if (container) init(container)
+        if (container) {
+            init(container)
+        }
     })
 </script>
 

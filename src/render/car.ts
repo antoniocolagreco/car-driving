@@ -1,7 +1,7 @@
 import { type Polygon, type Vec2, carPolygon, vec } from '@core/geometry'
 import { type Car, carShape } from '@core/car'
 import { clamp } from '@core/math'
-import { type SensorState, type SensorZone } from '@core/sensor'
+import type { SensorState, SensorZone } from '@core/sensor'
 
 /** Stateless car, marker and radar drawing. */
 

@@ -46,7 +46,9 @@ const iconSize = 15
     let app: { start: () => void; destroy: () => void } | null = null
     const boot = () => {
         const appContainer = document.querySelector('#app-container') as HTMLElement | null
-        if (!appContainer) return
+        if (!appContainer) {
+            return
+        }
         app?.destroy?.()
         app = createSimulationApp(appContainer)
         app.start()

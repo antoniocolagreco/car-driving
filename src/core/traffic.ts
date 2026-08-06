@@ -7,7 +7,12 @@ import { type Road, lanePosition } from './road'
 const TRAFFIC_COLOR = '#1c1917'
 
 type TrafficPatternKind =
-    'left' | 'middle' | 'right' | 'left-middle' | 'left-right' | 'right-middle'
+    | 'left'
+    | 'middle'
+    | 'right'
+    | 'left-middle'
+    | 'left-right'
+    | 'right-middle'
 export type TrafficPattern = {
     readonly name: string
     readonly difficulty: 'easy' | 'medium' | 'hard' | 'veryHard'

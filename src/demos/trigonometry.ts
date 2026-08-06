@@ -370,25 +370,25 @@ const drawCoordinateSystem = (ctx: CanvasRenderingContext2D, canvasData: CanvasD
     for (let index = 0; index < canvasData.right + 10; index += 10) {
         drawLine(ctx, {
             positions: [vec(index, canvasData.bottom), vec(index, canvasData.top)],
-            color: Boolean(index % 100) ? '#eee' : '#ddd',
+            color: index % 100 ? '#eee' : '#ddd',
         })
     }
     for (let index = 0; index > canvasData.left - 10; index -= 10) {
         drawLine(ctx, {
             positions: [vec(index, canvasData.bottom), vec(index, canvasData.top)],
-            color: Boolean(index % 100) ? '#eee' : '#ddd',
+            color: index % 100 ? '#eee' : '#ddd',
         })
     }
     for (let index = 0; index > canvasData.top - 10; index -= 10) {
         drawLine(ctx, {
             positions: [vec(canvasData.left, index), vec(canvasData.right, index)],
-            color: Boolean(index % 100) ? '#eee' : '#ddd',
+            color: index % 100 ? '#eee' : '#ddd',
         })
     }
     for (let index = 0; index < canvasData.bottom + 10; index += 10) {
         drawLine(ctx, {
             positions: [vec(canvasData.left, index), vec(canvasData.right, index)],
-            color: Boolean(index % 100) ? '#eee' : '#ddd',
+            color: index % 100 ? '#eee' : '#ddd',
         })
     }
 

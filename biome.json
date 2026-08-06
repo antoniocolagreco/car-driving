@@ -1,0 +1,81 @@
+{
+    "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+    "vcs": {
+        "clientKind": "git",
+        "enabled": true,
+        "useIgnoreFile": true
+    },
+    "files": {
+        "ignoreUnknown": false,
+        "includes": ["**", "!**/.astro"]
+    },
+    "html": {
+        "experimentalFullSupportEnabled": true
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 100,
+        "lineEnding": "lf"
+    },
+    "css": {
+        "parser": {
+            "tailwindDirectives": true
+        },
+        "formatter": {
+            "quoteStyle": "single"
+        }
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single",
+            "semicolons": "asNeeded",
+            "trailingCommas": "all",
+            "bracketSpacing": true,
+            "bracketSameLine": false
+        }
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "correctness": {
+                "noUnusedVariables": "warn",
+                "noUnusedFunctionParameters": "warn"
+            },
+            "style": {
+                "useFilenamingConvention": {
+                    "level": "error",
+                    "options": {
+                        "filenameCases": ["kebab-case"]
+                    }
+                },
+                "useBlockStatements": "error"
+            },
+            "suspicious": {
+                "noExplicitAny": "error"
+            },
+            "a11y": {
+                "noSvgWithoutTitle": "off",
+                "useButtonType": "off",
+                "useAnchorContent": "off",
+                "useValidAnchor": "off",
+                "noLabelWithoutControl": "off"
+            }
+        }
+    },
+    "overrides": [
+        {
+            "includes": ["**/*.astro"],
+            "linter": {
+                "rules": {
+                    "correctness": {
+                        "noUnusedVariables": "off",
+                        "noUnusedImports": "off",
+                        "noUnusedFunctionParameters": "off"
+                    }
+                }
+            }
+        }
+    ]
+}

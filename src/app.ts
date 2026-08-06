@@ -1,5 +1,5 @@
 import { SIMULATION } from '@core/config'
-import { type Network } from '@core/neural-network'
+import type { Network } from '@core/neural-network'
 import { isCompatibleNetwork } from '@core/population'
 import {
     type CourseResult,
@@ -8,7 +8,7 @@ import {
     createSimulation,
 } from '@core/simulation'
 import { createCanvasLayer } from '@render/canvas'
-import { type RadarMode } from '@render/car'
+import type { RadarMode } from '@render/car'
 import { createFrameLoop } from '@render/frame-loop'
 import { drawNetwork } from '@render/network'
 import { drawScene } from '@render/scene'
